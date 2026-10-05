@@ -139,14 +139,18 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "app-core"
 version = "0.0.0"
 dependencies = [
+ "app-core",
  "async-trait",
+ "audio-io",
  "axum",
  "chrono",
  "curriculum",
+ "futures-util",
  "game",
  "llm-client",
  "serde",
  "serde_json",
+ "speech",
  "storage",
  "sysinfo",
  "tempfile",
@@ -155,6 +159,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "ts-rs",
+ "tutor-engine",
 ]
 
 [[package]]

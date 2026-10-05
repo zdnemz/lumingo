@@ -36,6 +36,7 @@ mod rewards;
 pub mod session;
 mod settings;
 mod units;
+pub mod voice;
 
 pub use clock::{Clock, SystemClock};
 pub use config::{CoreConfig, default_curriculum_dir, default_data_dir};

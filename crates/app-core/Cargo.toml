@@ -9,26 +9,38 @@ description = "Lifecycle, settings, typed commands and events, providers, curric
 
 [dependencies]
 async-trait = "0.1.92"
+audio-io = { version = "0.0.0", path = "../audio-io" }
 # "clock" reads the local calendar day for streaks. storage itself takes every date from its caller.
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
 curriculum = { version = "0.0.0", path = "../curriculum", features = ["ts"] }
+futures-util = "0.3.34"
 game = { version = "0.0.0", path = "../game" }
 llm-client = { version = "0.0.0", path = "../llm-client" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+speech = { version = "0.0.0", path = "../speech" }
 storage = { version = "0.0.0", path = "../storage" }
 # Only the memory reading of sysinfo is used; the other components are off.
 sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
 thiserror = "2.0.21"
-tokio = { version = "1.53.2", features = ["rt", "sync", "time", "fs"] }
+tokio = { version = "1.53.2", features = ["rt", "sync", "time", "fs", "macros"] }
 tokio-util = "0.7.19"
 tracing = "0.1.44"
 ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
+tutor-engine = { version = "0.0.0", path = "../tutor-engine" }
+
+[features]
+# Fakes for the voice loop (a scripted language model, a manual clock, fake
+# speech engines and a fake audio backend). They are for tests of this crate and
+# of tools/tutor-cli. No release build enables this feature.
+test-support = ["audio-io/test-support"]
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+# Lets the integration tests in tests/ use the voice fakes.
+app-core = { path = ".", features = ["test-support"] }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
 tempfile = "3.27.0"
 tokio = { version = "1.53.2", features = ["macros", "net", "rt-multi-thread", "time"] }
