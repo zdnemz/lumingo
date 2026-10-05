@@ -1,0 +1,14 @@
+Lumingo
+Copyright 2026 zdnemz and Lumingo contributors
+
+This product includes software and content developed for the Lumingo project.
+
+- Source code is licensed under the Apache License, Version 2.0 (see LICENSE).
+- Curriculum content written for this project is licensed under the
+  Creative Commons Attribution-ShareAlike 4.0 International license
+  (see LICENSE-CONTENT).
+
+Third-party components keep their own licenses. The list of what is used, and
+under which terms, is kept in docs/LICENSE_REGISTER.md. This file is extended
+with the required attribution lines each time a third-party item that needs
+attribution is added.
