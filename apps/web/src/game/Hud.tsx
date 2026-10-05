@@ -34,14 +34,16 @@ export function Hud({ streak, sparks, rank, rankProgress, restTokens }: HudProps
   const rankName = t(RANK_KEYS[Math.min(Math.max(rank, 1), 6)] ?? "game.rank.1");
   return (
     <section className="hud" aria-label={t("game.hud")}>
-      <p className="hud__item" aria-label={t("game.streak.value", { count: streak })}>
+      <p className="hud__item">
         <Sprite name="icon-flame" scale={3} className="hud__flame" />
+        <span className="sr-only">{t("game.streak.value", { count: streak })}</span>
         <span className="hud__value" aria-hidden="true">
           {streak}
         </span>
       </p>
-      <p className="hud__item" aria-label={t("game.sparks.value", { count: sparks })}>
+      <p className="hud__item">
         <Sprite name="icon-gem" scale={3} className="hud__gem" />
+        <span className="sr-only">{t("game.sparks.value", { count: sparks })}</span>
         <span className="hud__value" aria-hidden="true">
           {sparks}
         </span>
