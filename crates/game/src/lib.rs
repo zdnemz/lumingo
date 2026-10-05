@@ -8,6 +8,8 @@
 
 mod ranks;
 mod sparks;
+mod unlocks;
 
 pub use ranks::{RANK_THRESHOLDS, RankInfo, rank_for};
 pub use sparks::{SparkSource, award};
+pub use unlocks::{Cosmetic, CosmeticKind, UNLOCKS, unlocked_at_rank, unlocked_for_sparks};
