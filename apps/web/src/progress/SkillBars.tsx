@@ -69,8 +69,8 @@ export function SkillBars({ estimates }: { estimates: readonly SkillEstimate[] }
               label={skill}
               tone={entry.skill}
             />
-            <p className="skills__sentence">{sentence}</p>
             <Badge tone="estimate">{t("common.estimate")}</Badge>
+            <p className="skills__sentence">{sentence}</p>
           </li>
         );
       })}
