@@ -1,0 +1,14 @@
+[package]
+name = "audio-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Capture, resampling, playback queue, microphone gate, devices and lifecycle for Lumingo"
+
+[dependencies]
+rtrb = "0.4.0"
+
+[lints]
+workspace = true

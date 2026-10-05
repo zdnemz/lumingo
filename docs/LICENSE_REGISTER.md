@@ -44,6 +44,7 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | sha2, base64 | Content-Security-Policy script hashes | MIT OR Apache-2.0 | ok |
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
+| rtrb | Lock-free single-producer single-consumer ring buffer in `audio-io` (0.4.0). Its `unsafe` is inside the crate, audited by its authors; `audio-io` itself forbids unsafe. | MIT OR Apache-2.0 | ok |
 
 ## 4. JavaScript packages
 

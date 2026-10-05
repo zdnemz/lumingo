@@ -1,0 +1,10 @@
+//! Capture, playback, resampling, the microphone gate, device handling and
+//! session lifecycle for Lumingo.
+//!
+//! Everything here is plain logic that runs against fake devices in tests. The
+//! real `cpal` backend is behind the off-by-default `cpal-backend` feature.
+#![forbid(unsafe_code)]
+
+mod ring;
+
+pub use ring::{CaptureConsumer, CaptureCounters, CaptureProducer, CaptureSnapshot, capture_ring};
