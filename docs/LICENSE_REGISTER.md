@@ -32,9 +32,9 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 
 | Crate | Use | License | Status |
 |---|---|---|---|
-| axum | HTTP API and WebSocket in `apps/server` | MIT | ok |
+| axum | HTTP API and WebSocket in `apps/server`; scripted provider server in the `llm-client` tests | MIT | ok |
 | tokio, tokio-util | Async runtime and cancellation | MIT | ok |
-| tower, http-body-util, tokio-tungstenite, futures-util | Server tests | MIT | ok |
+| tower, http-body-util, tokio-tungstenite | Server tests | MIT | ok |
 | rust-embed | Embeds the exported UI in the executable | MIT | ok |
 | ts-rs | Generates TypeScript types from Rust API types | MIT | ok |
 | serde, serde_json | Serialisation | MIT OR Apache-2.0 | ok |
@@ -44,6 +44,15 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | sha2, base64 | Content-Security-Policy script hashes | MIT OR Apache-2.0 | ok |
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
+| futures-util | Streams in `llm-client` and the server tests | MIT OR Apache-2.0 | ok |
+| async-trait | Async trait methods of `LlmClient` | MIT OR Apache-2.0 | ok |
+| url | URL and host parsing for the allowlist | MIT OR Apache-2.0 | ok |
+| reqwest | HTTP client for LLM calls in `llm-client`; built without default features, so no bundled TLS provider and no system proxy | MIT OR Apache-2.0 | ok |
+| hyper, hyper-util, tokio-native-tls | Transport under reqwest | MIT | ok |
+| hyper-tls | TLS connector under reqwest | MIT/Apache-2.0 | ok |
+| native-tls | TLS backend choice: Schannel on Windows (no library to install), Security framework on macOS, OpenSSL on Linux | MIT OR Apache-2.0 | ok |
+| schannel | Windows binding used by native-tls | MIT | ok |
+| openssl, openssl-sys, openssl-probe | Linux binding used by native-tls. They link the system OpenSSL library and do not bundle it; building needs its headers | Apache-2.0, MIT, MIT OR Apache-2.0 | ok |
 
 ## 4. JavaScript packages
 
@@ -90,7 +99,6 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
 | SQLx, SQLite | Storage | MIT OR Apache-2.0, public domain | verify |
-| reqwest | LLM HTTP client | MIT OR Apache-2.0 | verify |
 | jsonschema | Local validation of structured output and units | MIT | verify |
 | harper-core | Rule-based grammar findings | Apache-2.0 | verify |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |
