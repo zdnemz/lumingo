@@ -37,6 +37,10 @@ pub struct Recording {
     /// The model name stored with every analysis.
     pub model: String,
     pub app_version: String,
+    /// True when the scenario's unit is in the storage index (`AppCore` writes
+    /// it there at start-up). A session row refers to its unit, so a unit that
+    /// is not indexed must not be named: the session is then stored without it.
+    pub link_unit: bool,
     pub clock: Clock,
 }
 
@@ -94,8 +98,8 @@ impl Recorder {
             .create(&NewSession {
                 profile_id: recording.profile_id,
                 kind: storage::SessionKind::Conversation,
-                unit_id: scenario.unit_id.clone(),
-                activity_id: scenario.activity_id.clone(),
+                unit_id: scenario.unit_id.clone().filter(|_| recording.link_unit),
+                activity_id: scenario.activity_id.clone().filter(|_| recording.link_unit),
                 mode: Some(session_mode(scenario.context.mode)),
                 provider_profile_id: recording.provider_profile_id,
                 app_version: recording.app_version.clone(),

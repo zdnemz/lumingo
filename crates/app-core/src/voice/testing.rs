@@ -14,8 +14,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use audio_io::fake::FakeBackend;
 use audio_io::{
-    AudioBackend, AudioStream, DeviceError, DeviceInfo, DeviceRegistry, Direction, InputCallback,
-    MemoryPrefs, OutputCallback, StreamErrorCallback, StreamFormat,
+    AudioBackend, AudioStream, DeviceError, DeviceId, DeviceInfo, DeviceRegistry, Direction,
+    InputCallback, MemoryPrefs, OutputCallback, StreamErrorCallback, StreamFormat,
 };
 use llm_client::{
     Capabilities, FinishReason, LadderLevel, LlmClient, LlmError, StreamEvent, StreamSummary,
@@ -143,7 +143,8 @@ pub struct ScriptedLlm {
     steps: Mutex<VecDeque<Step>>,
     clock: Option<Arc<ManualClock>>,
     seen: Mutex<Vec<TextRequest>>,
-    cancelled: Arc<AtomicUsize>,
+    tokens: Mutex<Vec<CancellationToken>>,
+    closed_early: Arc<AtomicUsize>,
     structured_delay: Mutex<Duration>,
     structured_calls: AtomicUsize,
 }
@@ -154,7 +155,8 @@ impl ScriptedLlm {
             steps: Mutex::new(steps.into()),
             clock,
             seen: Mutex::new(Vec::new()),
-            cancelled: Arc::new(AtomicUsize::new(0)),
+            tokens: Mutex::new(Vec::new()),
+            closed_early: Arc::new(AtomicUsize::new(0)),
             structured_delay: Mutex::new(Duration::ZERO),
             structured_calls: AtomicUsize::new(0),
         })
@@ -178,9 +180,18 @@ impl ScriptedLlm {
         lock(&self.seen).len()
     }
 
-    /// Streams that ended because their token was cancelled.
+    /// Calls whose cancellation token has been cancelled.
     pub fn cancellations(&self) -> usize {
-        self.cancelled.load(Ordering::SeqCst)
+        lock(&self.tokens)
+            .iter()
+            .filter(|token| token.is_cancelled())
+            .count()
+    }
+
+    /// Reply streams that were dropped before they delivered their last event:
+    /// the connection the real client would have closed.
+    pub fn closed_early(&self) -> usize {
+        self.closed_early.load(Ordering::SeqCst)
     }
 
     pub fn structured_calls(&self) -> usize {
@@ -196,13 +207,13 @@ impl LlmClient for ScriptedLlm {
         cancel: CancellationToken,
     ) -> Result<TextStream, LlmError> {
         lock(&self.seen).push(request);
+        lock(&self.tokens).push(cancel.clone());
         let step = lock(&self.steps).pop_front();
         match step {
             None => Err(LlmError::Transport(TransportKind::Connect)),
             Some(Step::Fail(kind)) => Err(kind.error()),
             Some(Step::Hang) => {
                 cancel.cancelled().await;
-                self.cancelled.fetch_add(1, Ordering::SeqCst);
                 Err(LlmError::Cancelled)
             }
             Some(Step::Empty(finish)) => Ok(TextStream::new(futures_util::stream::iter(vec![Ok(
@@ -213,7 +224,7 @@ impl LlmClient for ScriptedLlm {
                 }),
             )]))),
             Some(Step::Reply(script)) => {
-                let counter = Arc::clone(&self.cancelled);
+                let closed_early = Arc::clone(&self.closed_early);
                 Ok(TextStream::new(futures_util::stream::unfold(
                     ReplyState {
                         deltas: script.deltas.into(),
@@ -223,7 +234,7 @@ impl LlmClient for ScriptedLlm {
                         finish: script.finish,
                         clock: self.clock.clone(),
                         cancel,
-                        counter,
+                        closed_early,
                         done: false,
                     },
                     next_event,
@@ -287,8 +298,16 @@ struct ReplyState {
     finish: FinishReason,
     clock: Option<Arc<ManualClock>>,
     cancel: CancellationToken,
-    counter: Arc<AtomicUsize>,
+    closed_early: Arc<AtomicUsize>,
     done: bool,
+}
+
+impl Drop for ReplyState {
+    fn drop(&mut self) {
+        if !self.done {
+            self.closed_early.fetch_add(1, Ordering::SeqCst);
+        }
+    }
 }
 
 async fn next_event(mut state: ReplyState) -> Option<(Result<StreamEvent, LlmError>, ReplyState)> {
@@ -301,7 +320,6 @@ async fn next_event(mut state: ReplyState) -> Option<(Result<StreamEvent, LlmErr
     {
         tokio::select! {
             () = state.cancel.cancelled() => {
-                state.counter.fetch_add(1, Ordering::SeqCst);
                 state.done = true;
                 return Some((Err(LlmError::Cancelled), state));
             }
@@ -313,7 +331,6 @@ async fn next_event(mut state: ReplyState) -> Option<(Result<StreamEvent, LlmErr
         }
     }
     if state.cancel.is_cancelled() {
-        state.counter.fetch_add(1, Ordering::SeqCst);
         state.done = true;
         return Some((Err(LlmError::Cancelled), state));
     }
@@ -352,6 +369,7 @@ pub struct FakeStt {
     clock: Option<Arc<ManualClock>>,
     finalise: Duration,
     fed: usize,
+    heard_sound: bool,
     /// Fails the load of the engine instead.
     fail_start: bool,
 }
@@ -363,6 +381,7 @@ impl FakeStt {
             clock,
             finalise,
             fed: 0,
+            heard_sound: false,
             fail_start: false,
         }
     }
@@ -382,11 +401,13 @@ impl SttEngine for FakeStt {
             ));
         }
         self.fed = 0;
+        self.heard_sound = false;
         Ok(())
     }
 
     fn feed(&mut self, samples: &[f32]) -> Result<(), SttError> {
         self.fed += samples.len();
+        self.heard_sound |= samples.iter().any(|s| s.abs() > 0.0);
         Ok(())
     }
 
@@ -397,12 +418,12 @@ impl SttEngine for FakeStt {
         if let Some(clock) = &self.clock {
             clock.advance(self.finalise);
         }
-        // The one-second warm-up the worker runs after load has no scripted
-        // transcript; it gets an empty one.
-        let text = if self.fed <= 16_000 {
-            String::new()
-        } else {
+        // The warm-up the worker runs after load is a second of silence. It has
+        // no scripted transcript and does not use one up.
+        let text = if self.heard_sound {
             self.transcripts.pop_front().unwrap_or_default()
+        } else {
+            String::new()
         };
         Ok(Transcript {
             text,
@@ -639,17 +660,25 @@ impl AudioBackend for HeldBackend {
     }
 }
 
+/// The fake audio set-up of a test.
+pub struct FakeAudio {
+    pub registry: Arc<DeviceRegistry>,
+    pub backend: HeldBackend,
+    pub microphone: DeviceId,
+    pub speaker: DeviceId,
+}
+
 /// A registry over a held fake backend with a default microphone (16 kHz mono)
 /// and a default speaker (48 kHz stereo), so conversion runs on both sides.
-pub fn fake_audio() -> (Arc<DeviceRegistry>, HeldBackend) {
+pub fn fake_audio() -> FakeAudio {
     let inner = FakeBackend::new();
-    inner.add_device(
+    let microphone = inner.add_device(
         "Fake microphone",
         Direction::Input,
         StreamFormat::new(16_000, 1),
         true,
     );
-    inner.add_device(
+    let speaker = inner.add_device(
         "Fake speaker",
         Direction::Output,
         StreamFormat::new(48_000, 2),
@@ -663,5 +692,10 @@ pub fn fake_audio() -> (Arc<DeviceRegistry>, HeldBackend) {
         Arc::new(backend.clone()),
         Box::new(MemoryPrefs::default()),
     ));
-    (registry, backend)
+    FakeAudio {
+        registry,
+        backend,
+        microphone,
+        speaker,
+    }
 }

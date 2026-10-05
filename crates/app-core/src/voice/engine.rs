@@ -95,6 +95,10 @@ pub struct VoiceStats {
     pub stale_audio: u64,
     pub recorder_dropped: u64,
     pub ptt_dropped: u64,
+    /// Tutor audio waiting in the playback queue right now.
+    pub playback_queued: Duration,
+    /// Device samples the output stream has played since the session began.
+    pub samples_played: u64,
     pub audio: Option<SessionStats>,
     pub stt: Option<SttWorkerStats>,
     pub tts: Option<TtsWorkerStats>,
@@ -129,6 +133,7 @@ struct Shared {
     listener_cancel: CancelFlag,
     push_to_talk: Option<PushToTalk>,
     frames: Option<SyncSender<FrameMsg>>,
+    playback: Option<Arc<dyn PlaybackPort>>,
     resources: Mutex<Option<Resources>>,
 }
 
@@ -258,6 +263,10 @@ impl VoiceHandle {
             ptt_dropped: Counters::get(&c.ptt_dropped),
             ..VoiceStats::default()
         };
+        if let Some(playback) = &self.shared.playback {
+            stats.playback_queued = playback.queued();
+            stats.samples_played = playback.samples_played();
+        }
         if let Some(resources) = lock(&self.shared.resources).as_ref() {
             stats.audio = resources.session.as_ref().map(AudioSession::stats);
             stats.stt = resources.stt.as_ref().map(|w| w.stats());
@@ -438,6 +447,7 @@ impl VoiceLoop {
             listener_cancel,
             push_to_talk,
             frames: frames_tx,
+            playback: playback.clone(),
             resources: Mutex::new(Some(resources)),
         });
         let orchestrator = Orchestrator {

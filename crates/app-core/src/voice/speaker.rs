@@ -156,9 +156,11 @@ impl Speaker {
                     Counters::bump(&self.counters.stale_audio);
                     return TtsSinkResult::Accepted;
                 };
+                // The instant is read just before the hand-over, so converting the
+                // chunk to the device rate counts as output start, not as TTS time.
+                let at = self.clock.now();
                 match self.playback.enqueue(&chunk) {
                     Ok(EnqueueOutcome::Queued) => {
-                        let at = self.clock.now();
                         self.note(notes, TtsNote::Audio { at });
                         TtsSinkResult::Accepted
                     }
