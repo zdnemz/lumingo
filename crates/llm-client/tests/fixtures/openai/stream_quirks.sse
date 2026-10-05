@@ -1,0 +1,17 @@
+: keep-alive
+
+data: {"id":"gen-1","object":"chat.completion.chunk","created":1760000001,"model":"vendor/model-x","choices":[{"index":0,"delta":{"role":"assistant","content":null,"reasoning_content":"The learner greeted me, so"},"finish_reason":null}]}
+
+: OPENROUTER PROCESSING
+
+data: {"id":"gen-1","object":"chat.completion.chunk","created":1760000001,"model":"vendor/model-x","choices":[{"index":0,"delta":{"content":null,"reasoning_content":" I should answer kindly."},"finish_reason":null}]}
+
+data: {"id":"gen-1","object":"chat.completion.chunk","created":1760000001,"model":"vendor/model-x","choices":[]}
+
+data: {"id":"gen-1","object":"chat.completion.chunk","created":1760000001,"model":"vendor/model-x","choices":[{"index":0,"delta":{"content":"Good"},"finish_reason":null}]}
+
+: keep-alive
+
+data: {"id":"gen-1","object":"chat.completion.chunk","created":1760000001,"model":"vendor/model-x","choices":[{"index":0,"delta":{"content":" morning!"},"finish_reason":null}]}
+
+data: {"id":"gen-1","object":"chat.completion.chunk","created":1760000001,"model":"vendor/model-x","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"usage":{"prompt_tokens":30,"completion_tokens":9}}

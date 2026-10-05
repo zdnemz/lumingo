@@ -1,0 +1,18 @@
+{
+  "id": "chatcmpl-Jsn001",
+  "object": "chat.completion",
+  "created": 1760000011,
+  "model": "gpt-test",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"title\":\"A short test\",\"word_count\":3,\"is_ok\":true}",
+        "refusal": null
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 80, "completion_tokens": 20, "total_tokens": 100 }
+}

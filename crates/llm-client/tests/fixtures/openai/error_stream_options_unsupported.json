@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Unknown field: stream_options",
+    "type": "invalid_request_error",
+    "param": "stream_options",
+    "code": null
+  }
+}

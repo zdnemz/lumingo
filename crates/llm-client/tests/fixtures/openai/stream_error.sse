@@ -1,0 +1,4 @@
+data: {"id":"chatcmpl-Err001","object":"chat.completion.chunk","created":1760000004,"model":"gpt-test","choices":[{"index":0,"delta":{"role":"assistant","content":"Partial"},"finish_reason":null}]}
+
+data: {"error":{"message":"The server had an error while processing your request. Sorry about that! Key sk-live-ZZZZYYYYXXXXWWWW1234.","type":"server_error","code":null}}
+
