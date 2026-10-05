@@ -168,6 +168,8 @@ pub struct FileReport {
     pub kind: FileKind,
     /// The unit id or rubric id, when the document had one.
     pub id: Option<String>,
+    /// SHA-256 of the file bytes, lower-case hex, when the caller read them from a file.
+    pub checksum: Option<String>,
     pub findings: Vec<Finding>,
     pub skipped: Vec<Skipped>,
 }

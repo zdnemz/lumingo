@@ -41,7 +41,7 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | referencing, jsonschema-regex, jsonschema-value, fluent-uri, fancy-regex, email_address, uuid-simd, vsimd, outref, data-encoding, micromap, fraction, num-cmp, bytecount, ahash, strum, unicode-general-category | Dependencies of jsonschema. Checked 2026-10-05. | MIT, or MIT OR Apache-2.0, or Apache-2.0 (unicode-general-category) | ok |
 | borrow-or-share | Dependency of fluent-uri, which jsonschema uses for references. Its LICENSE file is MIT No Attribution, which asks for less than MIT. It is allowed through a per-crate exception in `deny.toml`. Checked 2026-10-05, version 0.2.4. | MIT-0 | ok |
 | serde, serde_json | Serialisation | MIT OR Apache-2.0 | ok |
-| clap | Command-line options | MIT OR Apache-2.0 | ok |
+| clap | Command-line options of `apps/server` and `tools/content-cli` | MIT OR Apache-2.0 | ok |
 | anyhow, thiserror | Errors | MIT OR Apache-2.0 | ok |
 | tracing, tracing-subscriber | Logging | MIT | ok |
 | sha2, base64 | Content-Security-Policy script hashes. sha2 also gives the SHA-256 checksum of each unit file in `crates/curriculum`. | MIT OR Apache-2.0 | ok |
