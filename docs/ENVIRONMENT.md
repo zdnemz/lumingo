@@ -19,6 +19,11 @@ Recorded on 2026-10-05.
 | npm | 10.9.4 | `npm -v` |
 | pnpm | 10.28.0 | `pnpm -v` |
 | Test browser | Chromium 141.0.7390.37 (headless) | `chrome --version` |
+| Next.js | 16.3.8 (Turbopack, static export) | `pnpm --dir apps/web exec next --version` |
+| React, React DOM | 19.3.0 | `apps/web/package.json` |
+| TypeScript | 5.9.3 | `pnpm --dir apps/web exec tsc --version` |
+| ESLint | 9.39.5 | `pnpm --dir apps/web exec eslint --version` |
+| Vitest | 5.0.3 | `pnpm --dir apps/web exec vitest --version` |
 
 Limits of this machine. It has no audio devices and no audio development
 headers, and it cannot reach Hugging Face, GitHub release downloads, or the
@@ -43,7 +48,12 @@ machine that produced the results.
 | pnpm | not recorded | `pnpm -v` |
 | Browsers used for testing | not recorded | each browser's About page |
 
-## 3. Toolchain pin
+## 3. Version choices that are not the newest
+
+- TypeScript is pinned to 5.9 because `typescript-eslint` accepts versions below 6.1 only.
+- ESLint is pinned to 9 because `eslint-plugin-react` 7.37 calls an API that ESLint 10 removed.
+
+## 4. Toolchain pin
 
 `rust-toolchain.toml` pins Rust to 1.97.0 with rustfmt and clippy. The pin is
 changed in its own commit, and this file is updated in the same commit.
