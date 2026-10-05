@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Tutoring logic for Lumingo: sessions, turns, prompts and the free modes"
 
 [dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
 
 [lints]
 workspace = true
