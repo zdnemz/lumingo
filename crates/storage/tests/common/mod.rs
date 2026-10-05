@@ -2,7 +2,10 @@
 // Each test binary uses a different subset of these helpers.
 #![allow(dead_code)]
 
-use storage::{Database, L1HelpMode, NewProfile, Profile, Timestamp, UiLanguage};
+use storage::{
+    Database, InputMode, L1HelpMode, NewProfile, NewSession, NewTurn, Profile, Session,
+    SessionKind, Timestamp, Turn, TurnRole, UiLanguage,
+};
 use tempfile::TempDir;
 
 /// A fresh database in its own temporary directory. Keep the `TempDir` alive for
@@ -31,4 +34,42 @@ pub async fn make_profile(db: &Database) -> Profile {
         })
         .await
         .expect("create profile")
+}
+
+pub async fn make_session(db: &Database, profile_id: i64, kind: SessionKind) -> Session {
+    db.sessions()
+        .create(&NewSession {
+            profile_id,
+            kind,
+            unit_id: None,
+            activity_id: None,
+            mode: None,
+            provider_profile_id: None,
+            app_version: "0.0.0-test".to_owned(),
+            started_at: ts(10),
+        })
+        .await
+        .expect("create session")
+}
+
+pub fn new_turn(session_id: i64, role: TurnRole, text: &str, at: i64) -> NewTurn {
+    NewTurn {
+        session_id,
+        role,
+        input_mode: InputMode::Text,
+        text: text.to_owned(),
+        stt_text: None,
+        edited_by_learner: false,
+        speech_ms: None,
+        pause_ms: None,
+        word_count: None,
+        created_at: ts(at),
+    }
+}
+
+pub async fn make_turn(db: &Database, session_id: i64, role: TurnRole, text: &str) -> Turn {
+    db.turns()
+        .append(&new_turn(session_id, role, text, 20))
+        .await
+        .expect("append turn")
 }

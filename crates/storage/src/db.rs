@@ -6,7 +6,9 @@ use std::time::Duration;
 
 use sqlx::migrate::{MigrateError, Migration, MigrationType, Migrator};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
-use sqlx::{ConnectOptions, Connection, SqlSafeStr, SqliteConnection, SqlitePool};
+use sqlx::{
+    ConnectOptions, Connection, SqlSafeStr, Sqlite, SqliteConnection, SqlitePool, Transaction,
+};
 
 use crate::error::{Result, StorageError};
 
@@ -176,6 +178,15 @@ impl Database {
     /// The single write connection, for statements that change one row.
     pub(crate) fn writer(&self) -> &SqlitePool {
         &self.write
+    }
+
+    /// Starts a write transaction that takes SQLite's write lock immediately.
+    ///
+    /// A deferred transaction that starts as a read and later upgrades fails at
+    /// once with "database is locked" when another connection wrote in between,
+    /// without waiting for the busy timeout. Taking the lock up front waits.
+    pub(crate) async fn begin_write(&self) -> Result<Transaction<'static, Sqlite>> {
+        Ok(self.write.begin_with("BEGIN IMMEDIATE").await?)
     }
 }
 
