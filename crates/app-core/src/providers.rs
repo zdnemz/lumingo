@@ -105,6 +105,24 @@ impl ProviderHub {
         self.read().infos.iter().find(|p| p.is_active).cloned()
     }
 
+    /// The profiles as an export may show them: name, protocol, address and
+    /// model. Not the key, and not whether there is one or how it ends.
+    pub(crate) fn exportable(&self) -> Vec<serde_json::Value> {
+        self.read()
+            .infos
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "name": p.name,
+                    "protocol": p.protocol,
+                    "base_url": p.base_url,
+                    "model": p.model,
+                    "source": p.source,
+                })
+            })
+            .collect()
+    }
+
     fn list(&self) -> ProviderList {
         let state = self.read();
         ProviderList {

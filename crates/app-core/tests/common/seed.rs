@@ -33,6 +33,42 @@ pub async fn test_core_with_unit() -> TestCore {
     TestCore { core, dir, clock }
 }
 
+/// The words the tests look for in the database file after a delete.
+pub const LEARNER_TEXT: &str = "ZEBRAQUILL writes a sentence";
+
+/// A learner turn holding [`LEARNER_TEXT`] with a kept recording: the file
+/// exists on disk, inside the data directory. Returns the file's path.
+pub async fn seed_turn_with_recording(core: &AppCore, session_id: i64) -> std::path::PathBuf {
+    let at = core.clock().now();
+    let turn = core
+        .database()
+        .turns()
+        .append(&storage::NewTurn {
+            session_id,
+            role: storage::TurnRole::Learner,
+            input_mode: storage::InputMode::Voice,
+            text: LEARNER_TEXT.to_owned(),
+            stt_text: None,
+            edited_by_learner: false,
+            speech_ms: Some(1200),
+            pause_ms: Some(100),
+            word_count: Some(4),
+            created_at: at,
+        })
+        .await
+        .expect("turn");
+    let relative = format!("audio/turn-{}.wav", turn.id);
+    let file = core.config().data_dir.join(&relative);
+    std::fs::create_dir_all(file.parent().unwrap()).expect("audio dir");
+    std::fs::write(&file, b"RIFF....WAVE").expect("recording");
+    core.database()
+        .audio_clips()
+        .add(turn.id, &relative, 1200, &at)
+        .await
+        .expect("clip");
+    file
+}
+
 /// A session with one scored attempt and its evidence, plus unit progress and
 /// mastery rows. Returns the session and the attempt.
 pub async fn seed_session_with_attempt(core: &AppCore, kind: SessionKind) -> (Session, Attempt) {
@@ -81,7 +117,7 @@ pub async fn seed_session_with_attempt(core: &AppCore, kind: SessionKind) -> (Se
         .add(&NewEvidence {
             attempt_id: attempt.id,
             kind: EvidenceKind::ResponseText,
-            content: Some("I am from Jakarta".to_owned()),
+            content: Some(format!("I am from Jakarta. {LEARNER_TEXT}")),
             data: None,
             created_at: at,
         })

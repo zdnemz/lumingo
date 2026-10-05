@@ -177,9 +177,11 @@ async fn evidence_of_an_attempt_is_returned_and_unknown_attempts_are_not_found()
     assert_eq!(shown.dimension, "accuracy");
     assert_eq!(shown.evidence.len(), 1);
     assert_eq!(shown.evidence[0].kind, EvidenceKind::ResponseText);
-    assert_eq!(
-        shown.evidence[0].content.as_deref(),
-        Some("I am from Jakarta")
+    assert!(
+        shown.evidence[0]
+            .content
+            .as_deref()
+            .is_some_and(|text| text.starts_with("I am from Jakarta"))
     );
 
     let missing = t.core.attempt_evidence(9999).await.unwrap_err();

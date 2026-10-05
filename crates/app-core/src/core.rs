@@ -177,6 +177,15 @@ impl AppCore {
         &self.bus
     }
 
+    /// Publishes a fresh `Snapshot` to every client, for changes that replace
+    /// state wholesale: new settings, or all data deleted.
+    pub fn publish_snapshot(&self) {
+        self.bus.publish(|seq| ServerEvent::Snapshot {
+            seq,
+            state: self.snapshot(),
+        });
+    }
+
     /// Publishes a heartbeat.
     pub fn publish_heartbeat(&self) {
         self.bus.publish(|seq| ServerEvent::Heartbeat {
@@ -229,6 +238,7 @@ impl AppCore {
             .settings
             .write()
             .unwrap_or_else(PoisonError::into_inner) = new.clone();
+        self.publish_snapshot();
         Ok(new)
     }
 }

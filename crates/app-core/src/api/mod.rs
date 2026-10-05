@@ -5,6 +5,8 @@
 //! fails when the checked-in files differ.
 
 mod common;
+mod data;
+mod diagnostics;
 mod events;
 mod game;
 pub(crate) mod mirror;
@@ -15,6 +17,10 @@ mod state;
 mod units;
 
 pub use common::{ApiErrorBody, ErrorCode, Feature, HardwareProfile, L1HelpMode, UiLanguage};
+pub use data::{DeleteDataResult, DeleteSessionResult, ExportBundle};
+pub use diagnostics::{
+    CurriculumDiagnostics, DiagnosticsReport, LatencyStat, LlmCallStats, Percentiles,
+};
 pub use events::ServerEvent;
 pub use game::{
     CosmeticKind, CosmeticSlot, CosmeticView, EquipRequest, EquippedView, GameState,

@@ -25,6 +25,8 @@ pub mod api;
 pub mod clock;
 pub mod config;
 mod core;
+mod data;
+mod diagnostics;
 pub mod error;
 pub mod events;
 pub mod hardware;
