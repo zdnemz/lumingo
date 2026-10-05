@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  rust:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        shell: bash
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Generated TypeScript types are up to date
+        shell: bash
+        run: |
+          # The tests above regenerate apps/web/src/generated. A diff or a new
+          # file means someone changed a Rust API type without committing it.
+          git add --intent-to-add apps/web/src/generated
+          git diff --exit-code -- apps/web/src/generated
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Licenses
+        run: cargo deny check licenses
