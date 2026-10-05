@@ -1,0 +1,14 @@
+{
+  "dimension_scores": [
+    {
+      "dimension": "accuracy",
+      "band": "3",
+      "evidence_quotes": ["I like it"],
+      "reason": "Mostly correct."
+    }
+  ],
+  "content_points": [{ "point": "says what they like", "covered": true, "quote": "I like it" }],
+  "on_task": true,
+  "feedback_en": "You said what you like clearly. Next time add a reason.",
+  "feedback_l1": "Kamu menyebut apa yang kamu suka dengan jelas. Lain kali tambahkan alasan."
+}

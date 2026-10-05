@@ -1,0 +1,10 @@
+{
+  "id": "msg_01Kk11",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-test",
+  "content": [{ "type": "text", "text": "{\"title\":\"A short te" }],
+  "stop_reason": "max_tokens",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 80, "output_tokens": 8 }
+}

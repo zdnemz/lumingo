@@ -1,0 +1,14 @@
+{
+  "id": "msg_01Hh8",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-test",
+  "content": [
+    { "type": "thinking", "thinking": "", "signature": "EqQBCgIYAhIM" },
+    { "type": "text", "text": "{\"title\":\"A short test\"," },
+    { "type": "text", "text": "\"word_count\":3,\"is_ok\":true}" }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 80, "output_tokens": 20 }
+}

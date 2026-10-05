@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:contract:practice_items:1.0",
+  "title": "practice_items",
+  "description": "Generated extra practice. One flat item shape for all three item types, because unions are the least portable schema feature across providers. Fields that do not apply to an item type are sent empty and ignored. The app converts each item into a typed activity and runs the same validators as for authored items.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "objective_id",
+          "grammar_id",
+          "stem",
+          "options",
+          "answer_index",
+          "text",
+          "answers",
+          "tokens",
+          "answer",
+          "explanation_en",
+          "explanation_l1"
+        ],
+        "properties": {
+          "type": { "type": "string", "enum": ["mcq", "gap_fill", "reorder"] },
+          "objective_id": { "type": "string" },
+          "grammar_id": { "type": "string" },
+          "stem": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" } },
+          "answer_index": { "type": "integer" },
+          "text": { "type": "string" },
+          "answers": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+          "tokens": { "type": "array", "items": { "type": "string" } },
+          "answer": { "type": "string" },
+          "explanation_en": { "type": "string" },
+          "explanation_l1": { "type": "string" }
+        }
+      }
+    }
+  }
+}

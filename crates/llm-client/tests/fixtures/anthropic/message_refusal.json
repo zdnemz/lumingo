@@ -1,0 +1,11 @@
+{
+  "id": "msg_01Jj10",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-test",
+  "content": [{ "type": "text", "text": "I can" }],
+  "stop_reason": "refusal",
+  "stop_sequence": null,
+  "stop_details": { "type": "refusal", "category": null, "explanation": null },
+  "usage": { "input_tokens": 30, "output_tokens": 3 }
+}

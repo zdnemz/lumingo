@@ -1,0 +1,6 @@
+data: {"id":"chatcmpl-Len001","object":"chat.completion.chunk","created":1760000002,"model":"gpt-test","choices":[{"index":0,"delta":{"role":"assistant","content":"First sentence. Second sentence is cut off in the mid"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-Len001","object":"chat.completion.chunk","created":1760000002,"model":"gpt-test","choices":[{"index":0,"delta":{},"finish_reason":"length"}]}
+
+data: [DONE]
+

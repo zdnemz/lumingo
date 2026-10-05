@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-Len002",
+  "object": "chat.completion",
+  "created": 1760000014,
+  "model": "gpt-test",
+  "choices": [
+    {
+      "index": 0,
+      "message": { "role": "assistant", "content": "{\"title\":\"A short te", "refusal": null },
+      "finish_reason": "length"
+    }
+  ],
+  "usage": { "prompt_tokens": 80, "completion_tokens": 8, "total_tokens": 88 }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "chatcmpl-Tool001",
+  "object": "chat.completion",
+  "created": 1760000012,
+  "model": "gpt-test",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_abc123",
+            "type": "function",
+            "function": {
+              "name": "probe_test",
+              "arguments": "{\"title\":\"From a tool\",\"word_count\":3,\"is_ok\":true}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": { "prompt_tokens": 90, "completion_tokens": 22, "total_tokens": 112 }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "msg_01Gg7",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-test",
+  "content": [{ "type": "text", "text": "ok" }],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 12, "output_tokens": 1 }
+}

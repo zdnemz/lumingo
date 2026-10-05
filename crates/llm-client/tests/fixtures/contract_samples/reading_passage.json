@@ -1,0 +1,16 @@
+{
+  "title": "A day with Ana",
+  "passage": "Ana wakes up at six. She eats rice and drinks tea. Then she walks to school.",
+  "glossary": [
+    { "word": "wakes up", "gloss_l1": "bangun", "example": "He wakes up late on Sunday." }
+  ],
+  "questions": [
+    {
+      "stem": "What does Ana eat?",
+      "options": ["Rice", "Bread", "Fish"],
+      "answer_index": 0,
+      "explanation_en": "The text says she eats rice.",
+      "explanation_l1": "Teks menyebut dia makan nasi."
+    }
+  ]
+}

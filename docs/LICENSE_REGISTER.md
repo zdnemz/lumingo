@@ -32,7 +32,7 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 
 | Crate | Use | License | Status |
 |---|---|---|---|
-| axum | HTTP API and WebSocket in `apps/server` | MIT | ok |
+| axum | HTTP API and WebSocket in `apps/server`; scripted provider server in the `llm-client` tests | MIT | ok |
 | tokio, tokio-util | Async runtime and cancellation. `storage` also uses its file functions for the pre-upgrade backup. | MIT | ok |
 | tower, http-body-util, tokio-tungstenite, futures-util | Server tests | MIT | ok |
 | rust-embed | Embeds the exported UI in the executable | MIT | ok |
@@ -52,6 +52,17 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | chrono | `Timestamp` and `LocalDate` in `crates/storage`, built without the clock and time-zone features | MIT OR Apache-2.0 | ok |
 | tempfile | One temporary database file per test in `crates/storage` (dev only) | MIT OR Apache-2.0 | ok |
 | foldhash, ICU crates (`icu_*`, `idna`, `url`) and other small transitive crates of sqlx | Hashing, URL parsing | Zlib, Unicode-3.0, MIT OR Apache-2.0 | ok |
+| futures-util | Streams in `llm-client` and the server tests | MIT OR Apache-2.0 | ok |
+| async-trait | Async trait methods of `LlmClient` | MIT OR Apache-2.0 | ok |
+| url | URL and host parsing for the allowlist | MIT OR Apache-2.0 | ok |
+| reqwest | HTTP client for LLM calls in `llm-client`; built without default features, so no bundled TLS provider and no system proxy | MIT OR Apache-2.0 | ok |
+| hyper, hyper-util, tokio-native-tls | Transport under reqwest | MIT | ok |
+| hyper-tls | TLS connector under reqwest | MIT/Apache-2.0 | ok |
+| native-tls | TLS backend choice: Schannel on Windows (no library to install), Security framework on macOS, OpenSSL on Linux | MIT OR Apache-2.0 | ok |
+| schannel | Windows binding used by native-tls | MIT | ok |
+| openssl, openssl-sys, openssl-probe | Linux binding used by native-tls. They link the system OpenSSL library and do not bundle it; building needs its headers | Apache-2.0, MIT, MIT OR Apache-2.0 | ok |
+| toml (with toml_parser, toml_writer, toml_datetime, serde_spanned, winnow) | Reads and writes `providers.toml` in `llm-client` | MIT OR Apache-2.0; winnow MIT | ok |
+| tempfile (with fastrand) | Temporary directories in `llm-client` tests | MIT OR Apache-2.0 | ok |
 
 ## 4. JavaScript packages
 
@@ -97,8 +108,6 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
-| reqwest | LLM HTTP client | MIT OR Apache-2.0 | verify |
-| jsonschema | Local validation of structured output and units | MIT | verify |
 | harper-core | Rule-based grammar findings | Apache-2.0 | verify |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |
 | Supertonic 3 | TTS candidate | Model: OpenRAIL-M. Code: MIT. | review: read the use restrictions in full and show them before download |
