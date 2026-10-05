@@ -7,10 +7,15 @@
 mod common;
 mod events;
 pub(crate) mod mirror;
+mod providers;
 mod settings;
 mod state;
 
 pub use common::{ApiErrorBody, ErrorCode, Feature, HardwareProfile, L1HelpMode, UiLanguage};
 pub use events::ServerEvent;
+pub use providers::{
+    ProbeFailure, ProbeFailureKind, ProbeReport, ProviderCapabilities, ProviderInfo, ProviderList,
+    ProviderProtocol, ProviderSource, SaveProviderRequest, SecretText,
+};
 pub use settings::{AdaptiveTiming, Settings};
 pub use state::StateSnapshot;

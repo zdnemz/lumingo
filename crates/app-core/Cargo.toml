@@ -29,5 +29,6 @@ ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
 workspace = true
 
 [dev-dependencies]
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
 tempfile = "3.27.0"
-tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.53.2", features = ["macros", "net", "rt-multi-thread", "time"] }

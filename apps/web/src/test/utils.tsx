@@ -42,6 +42,7 @@ export const SNAPSHOT: StateSnapshot = {
     adaptive_timing: "auto",
     keep_recordings: false,
   },
+  provider: null,
   hardware: {
     ram_total_bytes: 16_000_000_000,
     logical_cores: 8,

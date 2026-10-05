@@ -15,6 +15,7 @@ use crate::clock::Clock;
 use crate::config::CoreConfig;
 use crate::error::{CoreError, CoreResult};
 use crate::events::EventBus;
+use crate::providers::ProviderHub;
 use crate::session::SessionService;
 use crate::{hardware, settings};
 
@@ -34,6 +35,7 @@ pub struct AppCore {
     /// Serialises settings writes, so two saves cannot interleave their two
     /// database writes.
     pub(crate) settings_write: Mutex<()>,
+    pub(crate) providers: ProviderHub,
     pub(crate) hardware: HardwareProfile,
     pub(crate) shutdown: CancellationToken,
     pub(crate) sessions: OnceLock<Arc<dyn SessionService>>,
@@ -63,6 +65,7 @@ impl AppCore {
                 .await
                 .map_err(|_| CoreError::Internal("the hardware probe did not finish".to_owned()))?,
         };
+        let providers = ProviderHub::load(&config, &db, &config.clock.now()).await?;
         Ok(Arc::new(Self {
             config,
             db,
@@ -71,6 +74,7 @@ impl AppCore {
             profile_id: AtomicI64::new(profile.id),
             settings: RwLock::new(loaded),
             settings_write: Mutex::new(()),
+            providers,
             hardware,
             shutdown: CancellationToken::new(),
             sessions: OnceLock::new(),
@@ -148,6 +152,7 @@ impl AppCore {
             dev_mode: self.config.dev_mode,
             uptime_ms: self.uptime_ms(),
             settings,
+            provider: self.providers.active(),
             hardware: self.hardware.clone(),
             unavailable: Feature::ALL
                 .into_iter()

@@ -28,6 +28,7 @@ mod core;
 pub mod error;
 pub mod events;
 pub mod hardware;
+mod providers;
 pub mod session;
 mod settings;
 
