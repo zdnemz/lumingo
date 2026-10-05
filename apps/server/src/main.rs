@@ -1,1 +1,110 @@
-fn main() {}
+use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::Arc;
+
+use anyhow::{Context, Result, bail};
+use clap::Parser;
+use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
+use tracing_subscriber::EnvFilter;
+use tutor_server::events::EventHub;
+use tutor_server::security::Guard;
+use tutor_server::{AppState, build_router, run_heartbeat};
+
+/// How many consecutive ports are tried when the first one is taken.
+const PORT_ATTEMPTS: u16 = 100;
+
+#[derive(Debug, Parser)]
+#[command(name = "tutor-server", version, about = "Lumingo local server")]
+struct Args {
+    /// First port to try. If it is taken, the next free one is used.
+    #[arg(long, default_value_t = 8765)]
+    port: u16,
+    /// Do not open the default browser.
+    #[arg(long)]
+    no_open: bool,
+    /// Development mode: allow exactly one extra origin, the `next dev` address.
+    #[arg(long)]
+    dev: bool,
+    /// The one origin allowed in development mode.
+    #[arg(long, default_value = "http://localhost:3000", requires = "dev")]
+    dev_origin: String,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .init();
+    let args = Args::parse();
+
+    let (listener, port) = bind_loopback(args.port).await?;
+    let dev_origin = args.dev.then(|| args.dev_origin.clone());
+    let guard = Arc::new(
+        Guard::new(port, dev_origin.clone()).context("could not create the session secret")?,
+    );
+    let shutdown = CancellationToken::new();
+    let state = Arc::new(AppState {
+        hub: EventHub::new(args.dev),
+        guard,
+        shutdown: shutdown.clone(),
+        dev_mode: args.dev,
+    });
+
+    let address = format!("http://127.0.0.1:{port}");
+    println!("Lumingo is running at {address}");
+    if let Some(origin) = &dev_origin {
+        println!("Development mode: requests from {origin} are allowed.");
+    }
+    if !args.no_open && !args.dev && webbrowser::open(&address).is_err() {
+        tracing::warn!("could not open the default browser; open the address above yourself");
+    }
+
+    tokio::spawn(run_heartbeat(Arc::clone(&state)));
+    let app = build_router(state);
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(shutdown))
+        .await
+        .context("the server stopped with an error")?;
+    tracing::info!("server stopped");
+    Ok(())
+}
+
+/// Binds the first free port at or after `first`, on the loopback address only.
+async fn bind_loopback(first: u16) -> Result<(TcpListener, u16)> {
+    for offset in 0..PORT_ATTEMPTS {
+        let Some(port) = first.checked_add(offset) else {
+            break;
+        };
+        match TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await {
+            Ok(listener) => return Ok((listener, port)),
+            Err(err) if err.kind() == std::io::ErrorKind::AddrInUse => {}
+            Err(err) => return Err(err).context("could not bind the loopback address"),
+        }
+    }
+    bail!("no free port found from {first} onward")
+}
+
+/// Completes on Ctrl+C or, on Windows, when the console window is closed, then
+/// tells every task to stop.
+async fn shutdown_signal(shutdown: CancellationToken) {
+    #[cfg(windows)]
+    {
+        use tokio::signal::windows;
+        match windows::ctrl_close() {
+            Ok(mut close) => {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {}
+                    _ = close.recv() => {}
+                }
+            }
+            Err(_) => {
+                let _ = tokio::signal::ctrl_c().await;
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+    shutdown.cancel();
+}
