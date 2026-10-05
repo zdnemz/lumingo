@@ -1,0 +1,939 @@
+{
+  "schema_version": "1.0",
+  "id": "a1-u01",
+  "level": "A1",
+  "sequence": 1,
+  "title": {
+    "en": "Hello! Nice to meet you",
+    "id": "Halo! Senang bertemu dengan Anda"
+  },
+  "theme": "greetings_and_introductions",
+  "estimated_minutes": 60,
+  "prerequisites": [],
+  "objectives": [
+    {
+      "id": "o1-greet",
+      "skill": "speaking_interaction",
+      "can_do": {
+        "en": "I can greet someone and say goodbye with simple words.",
+        "id": "Saya bisa menyapa seseorang dan berpamitan dengan kata-kata sederhana."
+      },
+      "cefr_scale_ref": "Overall oral interaction"
+    },
+    {
+      "id": "o2-introduce",
+      "skill": "speaking_production",
+      "can_do": {
+        "en": "I can say my name and where I am from.",
+        "id": "Saya bisa menyebutkan nama saya dan dari mana saya berasal."
+      },
+      "cefr_scale_ref": "Overall oral production"
+    },
+    {
+      "id": "o3-understand",
+      "skill": "listening",
+      "can_do": {
+        "en": "I can understand simple greetings and questions about my name and my city when people speak slowly.",
+        "id": "Saya bisa memahami sapaan sederhana serta pertanyaan tentang nama dan kota saya jika orang berbicara pelan."
+      },
+      "cefr_scale_ref": "Overall oral comprehension"
+    },
+    {
+      "id": "o4-th-sound",
+      "skill": "pronunciation",
+      "can_do": {
+        "en": "I can say the 'th' sound in 'thank you'.",
+        "id": "Saya bisa mengucapkan bunyi 'th' dalam 'thank you'."
+      },
+      "cefr_scale_ref": "Phonological control"
+    },
+    {
+      "id": "o5-read-intro",
+      "skill": "reading",
+      "can_do": {
+        "en": "I can read a very short message in which people give their names and say where they are from.",
+        "id": "Saya bisa membaca pesan sangat singkat berisi orang-orang yang menyebutkan nama dan asal mereka."
+      },
+      "cefr_scale_ref": "Overall reading comprehension"
+    },
+    {
+      "id": "o6-write-intro",
+      "skill": "writing",
+      "can_do": {
+        "en": "I can write two or three short sentences to introduce myself.",
+        "id": "Saya bisa menulis dua atau tiga kalimat pendek untuk memperkenalkan diri."
+      },
+      "cefr_scale_ref": "Overall written production"
+    }
+  ],
+  "targets": {
+    "vocabulary": [
+      {
+        "id": "v-hello",
+        "lemma": "hello",
+        "pos": "interjection",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "halo"
+        },
+        "example": "Hello! I'm Dewi."
+      },
+      {
+        "id": "v-hi",
+        "lemma": "hi",
+        "pos": "interjection",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "hai"
+        },
+        "example": "Hi, Arif."
+      },
+      {
+        "id": "v-good-morning",
+        "lemma": "good morning",
+        "pos": "phrase",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "selamat pagi"
+        },
+        "example": "Good morning, teacher."
+      },
+      {
+        "id": "v-good-afternoon",
+        "lemma": "good afternoon",
+        "pos": "phrase",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "selamat siang, selamat sore"
+        },
+        "example": "Good afternoon. How are you?"
+      },
+      {
+        "id": "v-good-evening",
+        "lemma": "good evening",
+        "pos": "phrase",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "selamat malam (saat bertemu)"
+        },
+        "example": "Good evening, Mr. Hadi."
+      },
+      {
+        "id": "v-goodbye",
+        "lemma": "goodbye",
+        "pos": "interjection",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "selamat tinggal"
+        },
+        "example": "Goodbye! See you tomorrow."
+      },
+      {
+        "id": "v-see-you",
+        "lemma": "see you",
+        "pos": "phrase",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "sampai jumpa"
+        },
+        "example": "See you in class!"
+      },
+      {
+        "id": "v-name",
+        "lemma": "name",
+        "pos": "noun",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "nama"
+        },
+        "example": "My name is Arif."
+      },
+      {
+        "id": "v-nice-to-meet-you",
+        "lemma": "nice to meet you",
+        "pos": "phrase",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "senang bertemu dengan Anda"
+        },
+        "example": "Nice to meet you, Dewi."
+      },
+      {
+        "id": "v-from",
+        "lemma": "from",
+        "pos": "preposition",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "dari"
+        },
+        "example": "I'm from Bandung."
+      },
+      {
+        "id": "v-thank-you",
+        "lemma": "thank you",
+        "pos": "phrase",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "terima kasih"
+        },
+        "example": "I'm fine, thank you."
+      },
+      {
+        "id": "v-fine",
+        "lemma": "fine",
+        "pos": "adjective",
+        "level_tag": "A1",
+        "gloss": {
+          "id": "baik, baik-baik saja"
+        },
+        "example": "I'm fine."
+      }
+    ],
+    "grammar": [
+      {
+        "id": "g-be-i-am",
+        "name": "be: I am / I'm",
+        "pattern": "I am + name. I'm + name. My name is + name.",
+        "note": {
+          "en": "English needs the verb 'am' here. Say 'I am Rina' or 'I'm Rina'. 'I Rina' is not correct.",
+          "id": "Bahasa Inggris membutuhkan kata kerja 'am' di sini. Katakan 'I am Rina' atau 'I'm Rina'. 'I Rina' tidak benar."
+        }
+      },
+      {
+        "id": "g-be-from",
+        "name": "be + from",
+        "pattern": "I'm from + place.",
+        "note": {
+          "en": "Use 'from' before the name of your city or country.",
+          "id": "Gunakan 'from' sebelum nama kota atau negara Anda."
+        }
+      },
+      {
+        "id": "g-question-chunks",
+        "name": "Fixed questions: name and origin",
+        "pattern": "What's your name? Where are you from? How are you?",
+        "note": {
+          "en": "Learn these three questions as whole sentences for now. You will study how questions are built later.",
+          "id": "Hafalkan tiga pertanyaan ini sebagai kalimat utuh dulu. Cara menyusun pertanyaan akan dipelajari nanti."
+        }
+      }
+    ],
+    "functions": [
+      "greeting",
+      "introducing_oneself",
+      "saying_goodbye"
+    ],
+    "pronunciation": [
+      {
+        "id": "p-th-voiceless",
+        "focus": "The voiceless 'th' sound, as in 'thank'",
+        "phonemes": [
+          "TH"
+        ],
+        "examples": [
+          "thank",
+          "three",
+          "think"
+        ]
+      }
+    ]
+  },
+  "presentation": [
+    {
+      "id": "pr-greetings-by-time",
+      "kind": "explanation",
+      "text": {
+        "en": "Say 'Good morning' before 12:00, 'Good afternoon' from 12:00 until about 6 p.m., and 'Good evening' after that. 'Hello' and 'Hi' are fine at any time. 'Hi' is more casual.",
+        "id": "Ucapkan 'Good morning' sebelum pukul 12.00, 'Good afternoon' dari pukul 12.00 sampai sekitar pukul 18.00, dan 'Good evening' setelah itu. 'Hello' dan 'Hi' bisa dipakai kapan saja. 'Hi' lebih santai."
+      },
+      "examples": [
+        {
+          "en": "Good morning, Dewi!",
+          "id": "Selamat pagi, Dewi!"
+        },
+        {
+          "en": "Good evening. I'm Arif.",
+          "id": "Selamat malam. Saya Arif."
+        }
+      ]
+    },
+    {
+      "id": "pr-good-night",
+      "kind": "tip",
+      "text": {
+        "en": "'Good night' is not a greeting. Use it only when you leave at night or go to bed. When you meet someone at night, say 'Good evening'.",
+        "id": "'Good night' bukan sapaan. Gunakan hanya saat berpamitan di malam hari atau hendak tidur. Saat bertemu seseorang di malam hari, ucapkan 'Good evening'."
+      }
+    },
+    {
+      "id": "pr-i-am",
+      "kind": "explanation",
+      "text": {
+        "en": "'I'm' is the short form of 'I am'. 'I'm Rina' and 'My name is Rina' mean the same thing. In Indonesian you can say 'Saya Rina', but in English you must keep 'am': 'I am Rina'.",
+        "id": "'I'm' adalah bentuk singkat dari 'I am'. 'I'm Rina' dan 'My name is Rina' artinya sama. Dalam bahasa Indonesia kita bisa berkata 'Saya Rina', tetapi dalam bahasa Inggris 'am' harus tetap ada: 'I am Rina'."
+      },
+      "examples": [
+        {
+          "en": "I'm Dewi. I'm from Bandung.",
+          "id": "Saya Dewi. Saya dari Bandung."
+        },
+        {
+          "en": "My name is Arif.",
+          "id": "Nama saya Arif."
+        }
+      ]
+    },
+    {
+      "id": "pr-th-sound",
+      "kind": "tip",
+      "text": {
+        "en": "For 'th' in 'thank', put the tip of your tongue lightly between your teeth and push air out. Do not stop the air. If you stop the air, it sounds like 't' and 'thank' becomes 'tank'.",
+        "id": "Untuk bunyi 'th' pada 'thank', letakkan ujung lidah dengan ringan di antara gigi lalu hembuskan udara. Jangan hentikan aliran udaranya. Jika udara terhenti, bunyinya menjadi 't' dan 'thank' terdengar seperti 'tank'."
+      }
+    }
+  ],
+  "dialogues": [
+    {
+      "id": "d-new-classmates",
+      "title": "New classmates",
+      "context": {
+        "en": "Two new students meet before an evening English class.",
+        "id": "Dua siswa baru bertemu sebelum kelas bahasa Inggris malam dimulai."
+      },
+      "turns": [
+        {
+          "speaker": "Dewi",
+          "text": "Good evening! I'm Dewi. What's your name?"
+        },
+        {
+          "speaker": "Arif",
+          "text": "Hi, Dewi. My name is Arif."
+        },
+        {
+          "speaker": "Dewi",
+          "text": "Nice to meet you, Arif."
+        },
+        {
+          "speaker": "Arif",
+          "text": "Nice to meet you too. Where are you from?"
+        },
+        {
+          "speaker": "Dewi",
+          "text": "I'm from Bandung. And you?"
+        },
+        {
+          "speaker": "Arif",
+          "text": "I'm from Makassar."
+        },
+        {
+          "speaker": "Dewi",
+          "text": "How are you today?"
+        },
+        {
+          "speaker": "Arif",
+          "text": "I'm fine, thank you. And you?"
+        },
+        {
+          "speaker": "Dewi",
+          "text": "I'm fine too. See you in class!"
+        },
+        {
+          "speaker": "Arif",
+          "text": "See you!"
+        }
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "id": "a01-listen-question",
+      "type": "mcq",
+      "skill": "listening",
+      "objective_ids": [
+        "o3-understand"
+      ],
+      "instructions": {
+        "en": "Listen. What does the speaker ask?",
+        "id": "Dengarkan. Apa yang ditanyakan pembicara?"
+      },
+      "scoring": "deterministic",
+      "audio_text": "Good morning! I'm Dewi. What's your name?",
+      "stem": "Dewi: \"What's your ___?\"",
+      "options": [
+        "name",
+        "city",
+        "class"
+      ],
+      "answer_index": 0,
+      "explanation": {
+        "en": "She says 'What's your name?', so she asks about your name.",
+        "id": "Dia berkata 'What's your name?', jadi dia menanyakan nama Anda."
+      }
+    },
+    {
+      "id": "a02-greeting-by-time",
+      "type": "mcq",
+      "skill": "vocabulary",
+      "objective_ids": [
+        "o1-greet"
+      ],
+      "instructions": {
+        "en": "Choose the best greeting.",
+        "id": "Pilih sapaan yang paling tepat."
+      },
+      "scoring": "deterministic",
+      "stem": "At 8 p.m., to your teacher: \"___\"",
+      "options": [
+        "Good morning.",
+        "Good evening.",
+        "Good night."
+      ],
+      "answer_index": 1,
+      "explanation": {
+        "en": "At night we greet people with 'Good evening'. 'Good night' is only for leaving or going to bed.",
+        "id": "Di malam hari kita menyapa dengan 'Good evening'. 'Good night' hanya untuk berpamitan atau hendak tidur."
+      }
+    },
+    {
+      "id": "a03-gap-am",
+      "type": "gap_fill",
+      "skill": "grammar",
+      "objective_ids": [
+        "o2-introduce"
+      ],
+      "instructions": {
+        "en": "Type the missing words.",
+        "id": "Ketik kata yang hilang."
+      },
+      "scoring": "deterministic",
+      "text": "Hello! I ___ Arif. I am ___ Makassar.",
+      "answers": [
+        [
+          "am"
+        ],
+        [
+          "from"
+        ]
+      ],
+      "explanation": {
+        "en": "Use 'am' after 'I'. Use 'from' before a place.",
+        "id": "Gunakan 'am' setelah 'I'. Gunakan 'from' sebelum nama tempat."
+      }
+    },
+    {
+      "id": "a04-reorder-name",
+      "type": "reorder",
+      "skill": "grammar",
+      "objective_ids": [
+        "o2-introduce"
+      ],
+      "instructions": {
+        "en": "Put the words in order.",
+        "id": "Susun kata-kata berikut menjadi kalimat."
+      },
+      "scoring": "deterministic",
+      "tokens": [
+        "name",
+        "My",
+        "Dewi",
+        "is"
+      ],
+      "answer": "My name is Dewi",
+      "explanation": {
+        "en": "The order is: My name + is + your name.",
+        "id": "Urutannya: My name + is + nama Anda."
+      }
+    },
+    {
+      "id": "a05-match-phrases",
+      "type": "match",
+      "skill": "vocabulary",
+      "objective_ids": [
+        "o1-greet"
+      ],
+      "instructions": {
+        "en": "Match each phrase with its meaning.",
+        "id": "Pasangkan setiap frasa dengan artinya."
+      },
+      "scoring": "deterministic",
+      "pairs": [
+        {
+          "left": "Good morning",
+          "right": "Selamat pagi"
+        },
+        {
+          "left": "Thank you",
+          "right": "Terima kasih"
+        },
+        {
+          "left": "See you",
+          "right": "Sampai jumpa"
+        },
+        {
+          "left": "Nice to meet you",
+          "right": "Senang bertemu dengan Anda"
+        }
+      ]
+    },
+    {
+      "id": "a06-dictation-from",
+      "type": "dictation",
+      "skill": "listening",
+      "objective_ids": [
+        "o3-understand"
+      ],
+      "instructions": {
+        "en": "Listen and type the sentence.",
+        "id": "Dengarkan lalu ketik kalimatnya."
+      },
+      "scoring": "deterministic",
+      "audio_text": "Where are you from?",
+      "accepted_answers": [
+        "Where are you from?"
+      ]
+    },
+    {
+      "id": "a07-read-aloud-thanks",
+      "type": "read_aloud",
+      "skill": "pronunciation",
+      "objective_ids": [
+        "o4-th-sound"
+      ],
+      "instructions": {
+        "en": "Read the sentences aloud.",
+        "id": "Bacalah kalimat berikut dengan suara keras."
+      },
+      "scoring": "pron",
+      "text": "Thank you. Nice to meet you.",
+      "focus_phonemes": [
+        "TH",
+        "IY"
+      ]
+    },
+    {
+      "id": "a08-pairs-th",
+      "type": "minimal_pairs",
+      "skill": "pronunciation",
+      "objective_ids": [
+        "o4-th-sound"
+      ],
+      "instructions": {
+        "en": "Listen. Which word do you hear?",
+        "id": "Dengarkan. Kata mana yang Anda dengar?"
+      },
+      "scoring": "deterministic",
+      "mode": "listen_choose",
+      "pairs": [
+        {
+          "a": "thank",
+          "b": "tank",
+          "focus": "TH and T"
+        },
+        {
+          "a": "three",
+          "b": "tree",
+          "focus": "TH and T"
+        },
+        {
+          "a": "think",
+          "b": "sink",
+          "focus": "TH and S"
+        }
+      ]
+    },
+    {
+      "id": "a09-shadow-dialogue",
+      "type": "shadowing",
+      "skill": "pronunciation",
+      "objective_ids": [
+        "o1-greet",
+        "o4-th-sound"
+      ],
+      "instructions": {
+        "en": "Listen to each line and repeat it.",
+        "id": "Dengarkan setiap baris lalu tirukan."
+      },
+      "scoring": "none",
+      "dialogue_id": "d-new-classmates"
+    },
+    {
+      "id": "a10-speak-introduce",
+      "type": "guided_speaking",
+      "skill": "speaking_production",
+      "objective_ids": [
+        "o2-introduce",
+        "o1-greet"
+      ],
+      "instructions": {
+        "en": "Speak for about ten seconds.",
+        "id": "Berbicaralah selama kira-kira sepuluh detik."
+      },
+      "scoring": "rubric",
+      "prompt": {
+        "en": "Introduce yourself. Say a greeting, your name, and where you are from.",
+        "id": "Perkenalkan diri Anda. Ucapkan sapaan, nama Anda, dan dari mana Anda berasal."
+      },
+      "content_points": [
+        "a greeting",
+        "the speaker's name",
+        "where the speaker is from"
+      ],
+      "rubric_id": "rubric-a1-spoken-production",
+      "model_answers": [
+        {
+          "band": "below",
+          "text": "Dewi. Bandung."
+        },
+        {
+          "band": "at",
+          "text": "Hello. My name is Dewi. I'm from Bandung."
+        },
+        {
+          "band": "above",
+          "text": "Good morning! My name is Dewi and I'm from Bandung, in West Java. Nice to meet you."
+        }
+      ],
+      "min_words": 5,
+      "max_words": 40
+    },
+    {
+      "id": "a11-roleplay-classmate",
+      "type": "roleplay",
+      "skill": "speaking_interaction",
+      "objective_ids": [
+        "o1-greet",
+        "o2-introduce",
+        "o3-understand"
+      ],
+      "instructions": {
+        "en": "Talk with your new classmate.",
+        "id": "Berbicaralah dengan teman sekelas baru Anda."
+      },
+      "scoring": "none",
+      "scenario": {
+        "en": "It is your first day at an English class. A classmate says hello to you.",
+        "id": "Ini hari pertama Anda di kelas bahasa Inggris. Seorang teman sekelas menyapa Anda."
+      },
+      "tutor_role": "Sam, a friendly new classmate who speaks slowly and uses short sentences",
+      "learner_role": "Yourself",
+      "goals": [
+        "Greet your classmate",
+        "Say your name",
+        "Ask for the classmate's name",
+        "Say where you are from",
+        "Say goodbye"
+      ],
+      "target_grammar_ids": [
+        "g-be-i-am",
+        "g-be-from",
+        "g-question-chunks"
+      ],
+      "target_vocab_ids": [
+        "v-hello",
+        "v-name",
+        "v-nice-to-meet-you",
+        "v-from",
+        "v-see-you"
+      ],
+      "max_turns": 8,
+      "mode": "fluency"
+    },
+    {
+      "id": "a12-write-introduce",
+      "type": "guided_writing",
+      "skill": "writing",
+      "objective_ids": [
+        "o6-write-intro"
+      ],
+      "instructions": {
+        "en": "Write two or three sentences.",
+        "id": "Tulislah dua atau tiga kalimat."
+      },
+      "scoring": "rubric",
+      "prompt": {
+        "en": "Write a short message to a new classmate. Say hello, give your name, and say where you are from.",
+        "id": "Tulis pesan singkat untuk teman sekelas baru. Ucapkan salam, sebutkan nama Anda, dan dari mana Anda berasal."
+      },
+      "content_points": [
+        "a greeting",
+        "the writer's name",
+        "where the writer is from"
+      ],
+      "rubric_id": "rubric-a1-written-production",
+      "model_answers": [
+        {
+          "band": "below",
+          "text": "hello arif makassar"
+        },
+        {
+          "band": "at",
+          "text": "Hello! I am Arif. I am from Makassar."
+        },
+        {
+          "band": "above",
+          "text": "Hi! My name is Arif and I'm from Makassar. Nice to meet you. See you in class!"
+        }
+      ],
+      "min_words": 6,
+      "max_words": 40
+    },
+    {
+      "id": "a13-read-budi",
+      "type": "mcq",
+      "skill": "reading",
+      "objective_ids": [
+        "o5-read-intro"
+      ],
+      "instructions": {
+        "en": "Read the message and answer.",
+        "id": "Bacalah pesan berikut lalu jawab."
+      },
+      "scoring": "deterministic",
+      "passage": "Hi! My name is Budi. I'm from Medan. Nice to meet you.",
+      "stem": "Budi: \"I'm from ___.\"",
+      "options": [
+        "Bandung",
+        "Medan",
+        "Makassar"
+      ],
+      "answer_index": 1,
+      "explanation": {
+        "en": "Budi writes 'I'm from Medan'.",
+        "id": "Budi menulis 'I'm from Medan'."
+      }
+    },
+    {
+      "id": "a14-read-set-class-chat",
+      "type": "reading_set",
+      "skill": "reading",
+      "objective_ids": [
+        "o5-read-intro"
+      ],
+      "instructions": {
+        "en": "Read the class chat. Then answer the questions.",
+        "id": "Bacalah obrolan kelas berikut. Lalu jawab pertanyaannya."
+      },
+      "scoring": "deterministic",
+      "passage": "Class chat\n\nSari: Hello! My name is Sari. I am from Surabaya. Nice to meet you!\nRudi: Hi, Sari! I am Rudi. I am from Medan. Nice to meet you too.\nMrs. Lina: Good evening! I am Mrs. Lina. I am from Jakarta. I am your teacher. How are you today?\nSari: I am fine, thank you!\nRudi: I am fine too. See you in class!",
+      "questions": [
+        {
+          "stem": "Rudi: \"I am from ___.\"",
+          "options": [
+            "Surabaya",
+            "Medan",
+            "Jakarta"
+          ],
+          "answer_index": 1,
+          "explanation": {
+            "en": "Rudi: I am from Medan.",
+            "id": "Rudi menulis: I am from Medan."
+          }
+        },
+        {
+          "stem": "The teacher:",
+          "options": [
+            "Sari",
+            "Rudi",
+            "Mrs. Lina"
+          ],
+          "answer_index": 2,
+          "explanation": {
+            "en": "Mrs. Lina: I am your teacher.",
+            "id": "Mrs. Lina menulis: I am your teacher."
+          }
+        },
+        {
+          "stem": "Mrs. Lina: \"Good ___!\"",
+          "options": [
+            "morning",
+            "afternoon",
+            "evening"
+          ],
+          "answer_index": 2,
+          "explanation": {
+            "en": "Mrs. Lina: Good evening!",
+            "id": "Mrs. Lina menulis: Good evening!"
+          }
+        },
+        {
+          "stem": "Sari: \"I am ___, thank you!\"",
+          "options": [
+            "fine",
+            "from",
+            "nice"
+          ],
+          "answer_index": 0,
+          "explanation": {
+            "en": "Sari: I am fine, thank you!",
+            "id": "Sari menulis: I am fine, thank you!"
+          }
+        }
+      ]
+    },
+    {
+      "id": "a15-listen-set-putu",
+      "type": "listening_set",
+      "skill": "listening",
+      "objective_ids": [
+        "o3-understand"
+      ],
+      "instructions": {
+        "en": "Listen to Putu. Then answer the questions.",
+        "id": "Dengarkan Putu. Lalu jawab pertanyaannya."
+      },
+      "scoring": "deterministic",
+      "audio_text": "Hello! My name is Putu. I am from Bali. I am a new student. Nice to meet you!",
+      "replays_allowed": 2,
+      "questions": [
+        {
+          "stem": "Putu: \"I am from ___.\"",
+          "options": [
+            "Bali",
+            "Bandung",
+            "Medan"
+          ],
+          "answer_index": 0,
+          "explanation": {
+            "en": "Putu: I am from Bali.",
+            "id": "Putu berkata: I am from Bali."
+          }
+        },
+        {
+          "stem": "Putu: \"I am a new ___.\"",
+          "options": [
+            "teacher",
+            "student",
+            "class"
+          ],
+          "answer_index": 1,
+          "explanation": {
+            "en": "Putu: I am a new student.",
+            "id": "Putu berkata: I am a new student."
+          }
+        },
+        {
+          "stem": "Putu: \"Nice to ___ you!\"",
+          "options": [
+            "see",
+            "meet",
+            "thank"
+          ],
+          "answer_index": 1,
+          "explanation": {
+            "en": "Putu: Nice to meet you!",
+            "id": "Putu berkata: Nice to meet you!"
+          }
+        }
+      ]
+    },
+    {
+      "id": "a16-fix-missing-am",
+      "type": "error_correction",
+      "skill": "writing",
+      "objective_ids": [
+        "o6-write-intro"
+      ],
+      "instructions": {
+        "en": "This sentence has one mistake. Write it correctly.",
+        "id": "Kalimat ini memiliki satu kesalahan. Tulis ulang dengan benar."
+      },
+      "scoring": "deterministic",
+      "sentence": "I Dewi.",
+      "accepted_answers": [
+        "I am Dewi.",
+        "I'm Dewi."
+      ],
+      "error_category": "copula",
+      "explanation": {
+        "en": "English needs 'am' after 'I': I am Dewi.",
+        "id": "Bahasa Inggris membutuhkan 'am' setelah 'I': I am Dewi."
+      }
+    },
+    {
+      "id": "a17-fix-missing-from",
+      "type": "error_correction",
+      "skill": "writing",
+      "objective_ids": [
+        "o6-write-intro"
+      ],
+      "instructions": {
+        "en": "This sentence has one mistake. Write it correctly.",
+        "id": "Kalimat ini memiliki satu kesalahan. Tulis ulang dengan benar."
+      },
+      "scoring": "deterministic",
+      "sentence": "I am Bandung.",
+      "accepted_answers": [
+        "I am from Bandung.",
+        "I'm from Bandung."
+      ],
+      "error_category": "missing_word",
+      "explanation": {
+        "en": "Use 'from' before a place: I am from Bandung.",
+        "id": "Gunakan 'from' sebelum nama tempat: I am from Bandung."
+      }
+    }
+  ],
+  "checkpoint": {
+    "pass_score": 0.7,
+    "activity_ids": [
+      "a02-greeting-by-time",
+      "a03-gap-am",
+      "a15-listen-set-putu",
+      "a14-read-set-class-chat",
+      "a10-speak-introduce",
+      "a12-write-introduce",
+      "a16-fix-missing-am"
+    ]
+  },
+  "generation_policy": {
+    "allowed_types": [
+      "mcq",
+      "gap_fill",
+      "reorder"
+    ],
+    "max_items_per_session": 6,
+    "max_level": "A1",
+    "allowed_grammar_ids": [
+      "g-be-i-am",
+      "g-be-from",
+      "g-question-chunks"
+    ]
+  },
+  "review_items": [
+    {
+      "kind": "vocab",
+      "ref": "v-good-evening"
+    },
+    {
+      "kind": "vocab",
+      "ref": "v-nice-to-meet-you"
+    },
+    {
+      "kind": "vocab",
+      "ref": "v-from"
+    },
+    {
+      "kind": "vocab",
+      "ref": "v-see-you"
+    },
+    {
+      "kind": "grammar",
+      "ref": "g-be-i-am"
+    },
+    {
+      "kind": "pron",
+      "ref": "p-th-voiceless"
+    }
+  ],
+  "provenance": {
+    "authored_by": "blueprint author (example unit)",
+    "authoring_model": "claude-opus-5-5",
+    "review_status": "unreviewed",
+    "content_version": "0.2.0",
+    "sources": [
+      "Original content written for this project"
+    ],
+    "updated": "2026-10-05",
+    "notes": "Level tags were assigned from general knowledge and have not yet been checked against the CEFR-J Vocabulary Profile. content-cli must run that check before this unit ships."
+  }
+}
