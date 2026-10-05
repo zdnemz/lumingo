@@ -4,7 +4,8 @@
 export const PREFS_KEY = "lumingo.prefs.v1";
 
 export type MotionSetting = "system" | "on" | "off";
-export type ThemeSetting = "system" | "night" | "day";
+export type Theme = "night" | "day" | "forest" | "ember";
+export type ThemeSetting = "system" | Theme;
 export type Language = "id" | "en";
 
 export interface Preferences {
@@ -17,7 +18,7 @@ export interface Preferences {
 
 export interface ResolvedDisplay {
   motion: "on" | "off";
-  theme: "night" | "day";
+  theme: Theme;
   crt: "on" | "off";
   language: Language;
 }
@@ -30,7 +31,8 @@ export interface SystemHints {
 }
 
 export const MOTION_SETTINGS: readonly MotionSetting[] = ["system", "on", "off"];
-export const THEME_SETTINGS: readonly ThemeSetting[] = ["system", "night", "day"];
+export const THEMES: readonly Theme[] = ["night", "day", "forest", "ember"];
+export const THEME_SETTINGS: readonly ThemeSetting[] = ["system", ...THEMES];
 export const LANGUAGES: readonly Language[] = ["id", "en"];
 
 /** The first-run guess: Indonesian browsers get Indonesian, everyone else English. */
@@ -76,7 +78,7 @@ export function resolveMotion(setting: MotionSetting, prefersReducedMotion: bool
   return setting;
 }
 
-export function resolveTheme(setting: ThemeSetting, prefersDark: boolean): "night" | "day" {
+export function resolveTheme(setting: ThemeSetting, prefersDark: boolean): Theme {
   if (setting === "system") return prefersDark ? "night" : "day";
   return setting;
 }
@@ -130,4 +132,4 @@ export function savePreferences(win: Window, prefs: Preferences): void {
  * stay in step with resolveDisplay above, and the test file checks that it does.
  * If anything fails it chooses the still, safe option.
  */
-export const BOOT_SCRIPT = `(function(){var d=document.documentElement;try{var s={};try{s=JSON.parse(localStorage.getItem("${PREFS_KEY}")||"{}")||{}}catch(e){}var rm=matchMedia("(prefers-reduced-motion: reduce)").matches;var dk=matchMedia("(prefers-color-scheme: dark)").matches;var m=s.motion==="on"||s.motion==="off"?s.motion:"system";d.dataset.motion=m==="system"?(rm?"off":"on"):m;var t=s.theme==="night"||s.theme==="day"?s.theme:"system";d.dataset.theme=t==="system"?(dk?"night":"day"):t;d.dataset.crt=s.crt===true?"on":"off";var l=s.language==="id"||s.language==="en"?s.language:((navigator.language||"en").toLowerCase().indexOf("id")===0?"id":"en");d.lang=l}catch(e){d.dataset.motion="off"}})();`;
+export const BOOT_SCRIPT = `(function(){var d=document.documentElement;try{var s={};try{s=JSON.parse(localStorage.getItem("${PREFS_KEY}")||"{}")||{}}catch(e){}var rm=matchMedia("(prefers-reduced-motion: reduce)").matches;var dk=matchMedia("(prefers-color-scheme: dark)").matches;var m=s.motion==="on"||s.motion==="off"?s.motion:"system";d.dataset.motion=m==="system"?(rm?"off":"on"):m;var t=s.theme==="night"||s.theme==="day"||s.theme==="forest"||s.theme==="ember"?s.theme:"system";d.dataset.theme=t==="system"?(dk?"night":"day"):t;d.dataset.crt=s.crt===true?"on":"off";var l=s.language==="id"||s.language==="en"?s.language:((navigator.language||"en").toLowerCase().indexOf("id")===0?"id":"en");d.lang=l}catch(e){d.dataset.motion="off"}})();`;
