@@ -13,7 +13,7 @@ use sqlx::{
 use crate::error::{Result, StorageError};
 
 /// Newest schema version this build knows. The last entry of `MIGRATIONS`.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// How many `<db>.bak-<version>` files are kept next to the database.
 const KEPT_BACKUPS: usize = 2;
@@ -26,11 +26,18 @@ struct MigrationFile {
 
 /// Every migration, in order. Listed explicitly rather than read from a folder so
 /// a stray file can never change the schema, and so the SQL is part of the binary.
-const MIGRATIONS: &[MigrationFile] = &[MigrationFile {
-    version: 1,
-    description: "init",
-    sql: include_str!("../migrations/0001_init.sql"),
-}];
+const MIGRATIONS: &[MigrationFile] = &[
+    MigrationFile {
+        version: 1,
+        description: "init",
+        sql: include_str!("../migrations/0001_init.sql"),
+    },
+    MigrationFile {
+        version: 2,
+        description: "game",
+        sql: include_str!("../migrations/0002_game.sql"),
+    },
+];
 
 fn migrator(up_to: i64) -> Migrator {
     let migrations = MIGRATIONS

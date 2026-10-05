@@ -19,12 +19,14 @@ mod diagnostics;
 mod enums;
 mod error;
 mod estimates;
+mod game;
 mod models;
 mod profiles;
 mod providers;
 mod row;
 mod sessions;
 mod settings;
+mod streak;
 mod time;
 mod turns;
 
@@ -45,10 +47,15 @@ pub use diagnostics::{Diagnostics, LlmCall, NewLlmCall, NewPerfSample, PerfSampl
 pub use enums::*;
 pub use error::{Result, StorageError};
 pub use estimates::{Estimates, NewSkillEstimate, SkillEstimate};
+pub use game::{
+    ActivityRecorded, EquippedCosmetics, Game, MAX_XP_AWARD, NewXp, RestToken, StreakDay, Unlocked,
+    XpAward, XpBySource, XpEntry, XpTotals,
+};
 pub use models::{InstalledModel, Models};
 pub use profiles::{NewProfile, Profile, Profiles};
 pub use providers::{NewProviderProfile, ProviderProfile, Providers};
 pub use sessions::{NewSession, Session, Sessions};
 pub use settings::{Setting, Settings};
+pub use streak::StreakStatus;
 pub use time::{LocalDate, TimeError, Timestamp};
 pub use turns::{NewTurn, Turn, Turns};

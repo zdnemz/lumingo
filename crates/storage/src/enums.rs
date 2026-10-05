@@ -178,6 +178,24 @@ string_enum! {
 }
 
 string_enum! {
+    /// Where an XP award came from. The session kinds, so free-mode activity can
+    /// earn XP, plus `Bonus` for awards that belong to no session. XP is
+    /// cosmetic and never feeds an estimate.
+    XpSourceKind {
+        Lesson => "lesson",
+        Conversation => "conversation",
+        TextChat => "text_chat",
+        Writing => "writing",
+        Reading => "reading",
+        Drill => "drill",
+        Review => "review",
+        Checkpoint => "checkpoint",
+        Placement => "placement",
+        Bonus => "bonus",
+    }
+}
+
+string_enum! {
     /// Kind of call recorded in the technical log.
     LlmCallType {
         TutorTurn => "tutor_turn",
