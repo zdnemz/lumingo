@@ -18,6 +18,48 @@ pub async fn temp_db() -> (TempDir, Database) {
     (dir, db)
 }
 
+/// A second, independent connection to the same file with the same settings as
+/// the application's: foreign keys on. Tests use it for raw SQL that the typed
+/// repositories would refuse, and to play "another process".
+pub async fn raw_conn(db: &Database) -> sqlx::SqliteConnection {
+    use sqlx::ConnectOptions;
+    sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(db.path())
+        .foreign_keys(true)
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .connect()
+        .await
+        .expect("raw connection")
+}
+
+/// Number of rows in a table, read on a raw connection.
+pub async fn count(conn: &mut sqlx::SqliteConnection, table: &'static str) -> i64 {
+    let sql: &'static str = match table {
+        "turns" => "SELECT COUNT(*) FROM turns",
+        "turn_analysis" => "SELECT COUNT(*) FROM turn_analysis",
+        "error_events" => "SELECT COUNT(*) FROM error_events",
+        "generated_content" => "SELECT COUNT(*) FROM generated_content",
+        "audio_clips" => "SELECT COUNT(*) FROM audio_clips",
+        "pron_results" => "SELECT COUNT(*) FROM pron_results",
+        "assessment_attempts" => "SELECT COUNT(*) FROM assessment_attempts",
+        "assessment_evidence" => "SELECT COUNT(*) FROM assessment_evidence",
+        "pending_scoring" => "SELECT COUNT(*) FROM pending_scoring",
+        "skill_estimates" => "SELECT COUNT(*) FROM skill_estimates",
+        "perf_samples" => "SELECT COUNT(*) FROM perf_samples",
+        "sessions" => "SELECT COUNT(*) FROM sessions",
+        "xp_ledger" => "SELECT COUNT(*) FROM xp_ledger",
+        "streak_days" => "SELECT COUNT(*) FROM streak_days",
+        "rest_tokens" => "SELECT COUNT(*) FROM rest_tokens",
+        "unlockables" => "SELECT COUNT(*) FROM unlockables",
+        "equipped_cosmetics" => "SELECT COUNT(*) FROM equipped_cosmetics",
+        other => panic!("count() does not know the table {other}"),
+    };
+    sqlx::query_scalar(sql)
+        .fetch_one(conn)
+        .await
+        .expect("count rows")
+}
+
 /// A timestamp `n` seconds after a fixed start, so tests never read the clock.
 pub fn ts(n: i64) -> Timestamp {
     Timestamp::from_unix_seconds(1_790_000_000 + n).expect("valid timestamp")
