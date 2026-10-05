@@ -3,4 +3,5 @@
 //! scoring, and prompt logic never live in this crate.
 
 pub mod events;
+pub mod security;
 pub mod types;
