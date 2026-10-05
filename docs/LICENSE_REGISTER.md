@@ -33,7 +33,7 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | Crate | Use | License | Status |
 |---|---|---|---|
 | axum | HTTP API and WebSocket in `apps/server` | MIT | ok |
-| tokio, tokio-util | Async runtime and cancellation | MIT | ok |
+| tokio, tokio-util | Async runtime and cancellation. `storage` also uses its file functions for the pre-upgrade backup. | MIT | ok |
 | tower, http-body-util, tokio-tungstenite, futures-util | Server tests | MIT | ok |
 | rust-embed | Embeds the exported UI in the executable | MIT | ok |
 | ts-rs | Generates TypeScript types from Rust API types | MIT | ok |
@@ -44,6 +44,11 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | sha2, base64 | Content-Security-Policy script hashes | MIT OR Apache-2.0 | ok |
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
+| sqlx (sqlx-core, sqlx-sqlite) | SQLite access, connection pools and migrations in `crates/storage`. Runtime query functions only, no compile-time query macros. | MIT OR Apache-2.0 | ok |
+| libsqlite3-sys 0.37.0 and the bundled SQLite 3.51.3 | Builds SQLite from source inside `crates/storage` so no system library is needed | MIT (the crate). The bundled SQLite source states "The author disclaims copyright to this source code", which is public domain. | ok |
+| chrono | `Timestamp` and `LocalDate` in `crates/storage`, built without the clock and time-zone features | MIT OR Apache-2.0 | ok |
+| tempfile | One temporary database file per test in `crates/storage` (dev only) | MIT OR Apache-2.0 | ok |
+| foldhash, ICU crates (`icu_*`, `idna`, `url`) and other small transitive crates of sqlx | Hashing, URL parsing | Zlib, Unicode-3.0, MIT OR Apache-2.0 | ok |
 
 ## 4. JavaScript packages
 
@@ -89,7 +94,6 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
-| SQLx, SQLite | Storage | MIT OR Apache-2.0, public domain | verify |
 | reqwest | LLM HTTP client | MIT OR Apache-2.0 | verify |
 | jsonschema | Local validation of structured output and units | MIT | verify |
 | harper-core | Rule-based grammar findings | Apache-2.0 | verify |
