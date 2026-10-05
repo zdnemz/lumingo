@@ -14,7 +14,7 @@
 //! the start, because a stale partial file from an older version is the usual
 //! cause. A fresh file that fails the check is an error and nothing is kept.
 //!
-//! This code blocks. It runs a private single-thread runtime for the HTTP
+//! This code blocks. It runs its own single-thread runtime for the HTTP
 //! client, so call it from a dedicated thread, never from a Tokio worker.
 
 use std::fs::{self, File, OpenOptions};

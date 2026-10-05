@@ -269,7 +269,11 @@ impl ModelEntry {
     /// Says whether this entry may be downloaded. Nothing touches the network
     /// before this passes.
     pub fn check_downloadable(&self) -> Result<(), NotDownloadable> {
-        if self.license.trim().is_empty() || self.license_url.trim().is_empty() {
+        // "unknown" is how a candidate says its licence has not been read yet.
+        if self.license.trim().is_empty()
+            || self.license.trim().eq_ignore_ascii_case("unknown")
+            || self.license_url.trim().is_empty()
+        {
             return Err(NotDownloadable::NoLicence {
                 id: self.id.clone(),
             });
@@ -501,6 +505,16 @@ files = [{files}]
     fn a_missing_licence_is_refused() {
         let mut entry = parse_entry(&format!(r#"{{ path = "a", sha256 = "{HASH_A}" }}"#));
         entry.license_url.clear();
+        assert!(matches!(
+            entry.check_downloadable(),
+            Err(NotDownloadable::NoLicence { .. })
+        ));
+    }
+
+    #[test]
+    fn an_unknown_licence_is_refused() {
+        let mut entry = parse_entry(&format!(r#"{{ path = "a", sha256 = "{HASH_A}" }}"#));
+        entry.license = "Unknown".into();
         assert!(matches!(
             entry.check_downloadable(),
             Err(NotDownloadable::NoLicence { .. })
