@@ -10,6 +10,9 @@ mod cancel;
 mod endpoint;
 mod error;
 mod info;
+#[cfg(feature = "sherpa")]
+mod sherpa;
+mod sherpa_config;
 mod stt;
 mod stt_worker;
 mod tts;
@@ -24,6 +27,12 @@ pub use endpoint::{
 };
 pub use error::{SttError, TtsError, VadError, WorkerError};
 pub use info::EngineInfo;
+#[cfg(feature = "sherpa")]
+pub use sherpa::{SHERPA_ONNX_CRATE_VERSION, SherpaStt, SherpaTts, SherpaVad};
+pub use sherpa_config::{
+    SHERPA_VAD_FRAME_SAMPLES, SherpaConfigError, SherpaSttConfig, SherpaSttModel, SherpaTtsConfig,
+    SherpaTtsModel, SherpaVadConfig,
+};
 pub use stt::{SttEngine, Transcript, TranscriptWord};
 pub use stt_worker::{
     SttEvent, SttJob, SttWorker, SttWorkerConfig, SttWorkerStats, SubmitError as SttSubmitError,

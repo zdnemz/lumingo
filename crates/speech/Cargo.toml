@@ -11,6 +11,16 @@ description = "Speech engine traits and shared primitives for Lumingo"
 thiserror = "2.0.21"
 serde = { version = "1.0.229", features = ["derive"] }
 tracing = "0.1.44"
+# Pinned exactly: the adapter is written against this version's API, and the
+# build script downloads the native library of the same version. Off by default.
+sherpa-onnx = { version = "=1.13.8", optional = true }
+
+[features]
+default = []
+# Real VAD, STT and TTS adapters over sherpa-onnx, linked statically (the
+# sherpa-onnx default). UNVERIFIED: needs the native library, which the build
+# container cannot download. See crates/speech/README.md.
+sherpa = ["dep:sherpa-onnx"]
 
 [lints]
 workspace = true
