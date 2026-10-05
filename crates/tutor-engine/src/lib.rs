@@ -6,6 +6,7 @@ mod analysis;
 mod chunker;
 mod drafts;
 mod error;
+mod practice;
 mod prompt;
 mod review;
 mod session;
@@ -15,6 +16,7 @@ pub use analysis::*;
 pub use chunker::SentenceChunker;
 pub use drafts::{DraftComparison, DraftError, EarlierError, Resolution, compare_drafts};
 pub use error::{EngineError, Result};
+pub use practice::*;
 pub use prompt::{
     FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, MAX_NOTES, PronFinding, ReplyLimits,
     TUTOR_TURN_VERSION, TutorContext, bounded_history, reply_limits, system_prompt, user_message,

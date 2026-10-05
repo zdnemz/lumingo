@@ -225,3 +225,12 @@ pub async fn make_turn(db: &Database, session_id: i64, role: TurnRole, text: &st
         .await
         .expect("append turn")
 }
+
+/// The example unit of the curriculum, A1 unit 1.
+pub fn example_unit() -> curriculum::Unit {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../curriculum/examples/a1-u01.example.json");
+    curriculum::load_unit_file(&path)
+        .expect("the example unit loads")
+        .unit
+}
