@@ -1,0 +1,480 @@
+/* Pixel-art components.
+ *
+ * Borders are built from four one-pixel box-shadows, which leaves the corners
+ * notched like an 8-bit window. Shadows paint outside the box, so components
+ * that use them reserve space with a margin of one art pixel.
+ */
+
+:is(
+    .px-panel,
+    .px-btn,
+    .px-field,
+    .px-meter,
+    .px-badge,
+    .px-chip,
+    .px-switch__track,
+    .px-segmented__item,
+    .px-dialogbox,
+    .px-dialog,
+    .px-toast,
+    .px-tab
+  ) {
+  --edge-color: var(--color-border);
+  --shadow-edge:
+    calc(var(--px) * -1) 0 0 0 var(--edge-color),
+    var(--px) 0 0 0 var(--edge-color),
+    0 calc(var(--px) * -1) 0 0 var(--edge-color),
+    0 var(--px) 0 0 var(--edge-color);
+  --shadow-bevel:
+    inset 0 calc(var(--px) * -1) 0 0 var(--bevel-dark),
+    inset 0 var(--px) 0 0 var(--bevel-light);
+}
+
+/* ---- Layout helpers ---------------------------------------------------- */
+
+.px-container {
+  width: min(100% - var(--space-5) * 2, 72rem);
+  margin-inline: auto;
+}
+.px-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap, var(--space-4));
+}
+.px-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap, var(--space-3));
+}
+.px-grid {
+  display: grid;
+  gap: var(--gap, var(--space-4));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--min, 16rem)), 1fr));
+}
+
+/* ---- Panel ------------------------------------------------------------- */
+
+.px-panel {
+  position: relative;
+  margin: var(--px);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-edge), var(--shadow-bevel);
+}
+.px-panel--raised {
+  background: var(--color-surface-raised);
+  box-shadow:
+    var(--shadow-edge),
+    var(--shadow-bevel),
+    var(--px) calc(var(--px) * 2) 0 0 var(--color-shadow);
+}
+.px-panel--inset {
+  background: var(--color-bg-deep);
+  box-shadow: var(--shadow-edge), inset 0 var(--px) 0 0 var(--bevel-dark);
+}
+.px-panel[data-tone="listening"] { --edge-color: var(--color-skill-listening); }
+.px-panel[data-tone="speaking"] { --edge-color: var(--color-skill-speaking); }
+.px-panel[data-tone="reading"] { --edge-color: var(--color-skill-reading); }
+.px-panel[data-tone="writing"] { --edge-color: var(--color-skill-writing); }
+.px-panel[data-tone="success"] { --edge-color: var(--color-success); }
+.px-panel[data-tone="danger"] { --edge-color: var(--color-danger); }
+.px-panel[data-tone="warning"] { --edge-color: var(--color-warning); }
+.px-panel[data-tone="primary"] { --edge-color: var(--color-primary); }
+
+.px-panel__title {
+  margin-bottom: var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+  line-height: var(--leading-display);
+}
+
+/* ---- Button ------------------------------------------------------------ */
+
+.px-btn {
+  --btn-bg: var(--color-surface-raised);
+  --btn-bg-hover: var(--color-surface);
+  --btn-fg: var(--color-text);
+  --drop: calc(var(--px) * 2);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  min-width: var(--control-h);
+  margin: var(--px) var(--px) var(--drop);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: var(--shadow-edge), var(--shadow-bevel), 0 var(--drop) 0 0 var(--color-shadow);
+}
+.px-btn:hover {
+  background: var(--btn-bg-hover);
+}
+.px-btn:active {
+  --drop: var(--px);
+  transform: translateY(var(--px));
+  box-shadow:
+    var(--shadow-edge),
+    inset 0 var(--px) 0 0 var(--bevel-dark),
+    0 var(--drop) 0 0 var(--color-shadow);
+}
+.px-btn--primary {
+  --btn-bg: var(--color-primary);
+  --btn-bg-hover: var(--color-primary-hover);
+  --btn-fg: var(--color-on-primary);
+  --edge-color: var(--color-bg-deep);
+}
+.px-btn--primary:active {
+  background: var(--color-primary-pressed);
+}
+.px-btn--danger {
+  --btn-bg: var(--color-surface-raised);
+  --edge-color: var(--color-danger);
+  --btn-fg: var(--color-danger);
+}
+.px-btn--ghost {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--color-surface);
+  box-shadow: var(--shadow-edge);
+}
+.px-btn--small {
+  min-height: 44px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+.px-btn--block {
+  display: flex;
+  width: calc(100% - var(--px) * 2);
+}
+.px-btn[aria-disabled="true"],
+.px-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+.px-btn[aria-busy="true"] {
+  cursor: progress;
+}
+
+/* ---- Form fields ------------------------------------------------------- */
+
+.px-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+.px-hint {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.px-error {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
+.px-field {
+  display: block;
+  width: calc(100% - var(--px) * 2);
+  min-height: var(--control-h);
+  margin: var(--px);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: 0;
+  background: var(--color-bg-deep);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  box-shadow: var(--shadow-edge), inset 0 var(--px) 0 0 var(--bevel-dark);
+}
+.px-field::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+.px-field[aria-invalid="true"] {
+  --edge-color: var(--color-danger);
+}
+textarea.px-field {
+  min-height: calc(var(--control-h) * 3);
+  resize: vertical;
+  line-height: var(--leading-body);
+}
+
+/* ---- Meter (progress bar) ---------------------------------------------- */
+
+.px-meter {
+  --meter-color: var(--color-primary);
+  position: relative;
+  height: calc(var(--px) * 6);
+  margin: var(--px);
+  background: var(--color-bg-deep);
+  box-shadow: var(--shadow-edge), inset 0 var(--px) 0 0 var(--bevel-dark);
+  overflow: hidden;
+}
+.px-meter__fill {
+  height: 100%;
+  width: calc(var(--value, 0) * 1%);
+  background: var(--meter-color);
+}
+/* Segment lines make the bar read as blocks and give a second cue besides colour. */
+.px-meter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(var(--px) * 3),
+    var(--color-bg-deep) calc(var(--px) * 3) calc(var(--px) * 4)
+  );
+  pointer-events: none;
+}
+.px-meter[data-tone="listening"] { --meter-color: var(--color-skill-listening); }
+.px-meter[data-tone="speaking"] { --meter-color: var(--color-skill-speaking); }
+.px-meter[data-tone="reading"] { --meter-color: var(--color-skill-reading); }
+.px-meter[data-tone="writing"] { --meter-color: var(--color-skill-writing); }
+.px-meter[data-tone="success"] { --meter-color: var(--color-success); }
+.px-meter[data-tone="danger"] { --meter-color: var(--color-danger); }
+
+/* ---- Badge and chip ----------------------------------------------------- */
+
+.px-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--px);
+  padding: 0 var(--space-2);
+  min-height: calc(var(--px) * 6);
+  background: var(--color-bg-deep);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  line-height: 1;
+  box-shadow: var(--shadow-edge);
+}
+.px-badge[data-tone="estimate"] {
+  --edge-color: var(--color-warning);
+  color: var(--color-warning);
+}
+.px-badge[data-tone="success"] { --edge-color: var(--color-success); color: var(--color-success); }
+.px-badge[data-tone="danger"] { --edge-color: var(--color-danger); color: var(--color-danger); }
+.px-badge[data-tone="info"] { --edge-color: var(--color-info); color: var(--color-info); }
+
+/* A scored word or phoneme. The mark next to the symbol carries the meaning,
+ * so colour is never the only signal. */
+.px-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--px);
+  padding: var(--space-1) var(--space-2);
+  min-height: 44px;
+  background: var(--color-bg-deep);
+  color: var(--color-text);
+  font-family: var(--font-phonetic);
+  font-size: var(--text-md);
+  box-shadow: var(--shadow-edge);
+}
+.px-chip[data-tone="good"] { --edge-color: var(--color-success); }
+.px-chip[data-tone="close"] { --edge-color: var(--color-warning); }
+.px-chip[data-tone="off"] { --edge-color: var(--color-danger); }
+.px-chip__mark {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+}
+
+/* ---- Switch ------------------------------------------------------------- */
+
+.px-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-h);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  cursor: pointer;
+  text-align: left;
+}
+.px-switch__track {
+  position: relative;
+  flex: none;
+  width: calc(var(--px) * 18);
+  height: calc(var(--px) * 9);
+  margin: var(--px);
+  background: var(--color-bg-deep);
+  box-shadow: var(--shadow-edge), inset 0 var(--px) 0 0 var(--bevel-dark);
+}
+.px-switch__state {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  translate: 0 -50%;
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.px-switch__knob {
+  position: absolute;
+  top: var(--px);
+  left: var(--px);
+  width: calc(var(--px) * 7);
+  height: calc(var(--px) * 7);
+  background: var(--color-text-muted);
+  box-shadow: var(--shadow-bevel);
+}
+.px-switch[aria-checked="true"] .px-switch__track {
+  --edge-color: var(--color-primary);
+}
+.px-switch[aria-checked="true"] .px-switch__knob {
+  left: calc(100% - var(--px) * 8);
+  background: var(--color-primary);
+}
+.px-switch[aria-checked="true"] .px-switch__state {
+  right: auto;
+  left: var(--space-2);
+  color: var(--color-primary);
+}
+.px-switch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---- Segmented control (a radio group) ---------------------------------- */
+
+.px-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--px);
+  padding: 0;
+  border: 0;
+}
+.px-segmented__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-h);
+  min-width: var(--control-h);
+  margin: var(--px);
+  padding: var(--space-1) var(--space-4);
+  background: var(--color-bg-deep);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  cursor: pointer;
+  box-shadow: var(--shadow-edge);
+}
+.px-segmented__item:hover {
+  background: var(--color-surface);
+}
+.px-segmented__input:checked + .px-segmented__item {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  --edge-color: var(--color-bg-deep);
+}
+.px-segmented__input:focus-visible + .px-segmented__item {
+  outline: var(--px) solid var(--color-focus);
+  outline-offset: var(--px);
+}
+.px-segmented__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---- Tutor dialog box --------------------------------------------------- */
+
+.px-dialogbox {
+  position: relative;
+  margin: var(--px);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  line-height: var(--leading-body);
+  box-shadow: var(--shadow-edge), var(--shadow-bevel), var(--px) calc(var(--px) * 2) 0 0 var(--color-shadow);
+}
+.px-dialogbox__name {
+  position: absolute;
+  top: calc(var(--space-4) * -1);
+  left: var(--space-4);
+  padding: 0 var(--space-2);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  line-height: calc(var(--px) * 6);
+  box-shadow: var(--shadow-edge);
+  --edge-color: var(--color-bg-deep);
+}
+.px-dialogbox__next {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  width: calc(var(--px) * 4);
+  height: calc(var(--px) * 3);
+  background: var(--color-primary);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+/* ---- Modal dialog (native <dialog>) -------------------------------------- */
+
+.px-dialog {
+  max-width: min(100% - var(--space-5) * 2, 36rem);
+  padding: var(--space-5);
+  border: 0;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: var(--shadow-edge), var(--shadow-bevel), var(--px) calc(var(--px) * 2) 0 0 var(--color-shadow);
+}
+.px-dialog::backdrop {
+  background: rgb(11 10 26 / 0.72);
+}
+
+/* ---- Toast ---------------------------------------------------------------- */
+
+.px-toast-region {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  left: var(--space-4);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+  pointer-events: none;
+}
+.px-toast {
+  max-width: 28rem;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  pointer-events: auto;
+  box-shadow: var(--shadow-edge), var(--shadow-bevel), var(--px) calc(var(--px) * 2) 0 0 var(--color-shadow);
+}
+.px-toast[data-tone="success"] { --edge-color: var(--color-success); }
+.px-toast[data-tone="danger"] { --edge-color: var(--color-danger); }
+.px-toast[data-tone="info"] { --edge-color: var(--color-info); }
+
+/* ---- Sprites -------------------------------------------------------------- */
+
+.px-sprite {
+  display: inline-block;
+  flex: none;
+  image-rendering: pixelated;
+  shape-rendering: crispEdges;
+}
