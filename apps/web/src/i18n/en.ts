@@ -144,6 +144,21 @@ export const en = {
   "mic.pause": "Pause",
   "mic.resume": "Resume",
 
+  "write.marked": "Marked text",
+  "write.error": "Mistake {number} of {total}: {label}",
+  "write.fix": "Better: {correction}",
+  "write.why": "Why",
+  "write.close": "Close the explanation",
+  "write.revision": "Compared with your first draft",
+  "write.fixed": "Fixed: {count}",
+  "write.remaining": "Still there: {count}",
+  "write.new": "New: {count}",
+
+  "read.text": "Reading text",
+  "read.word": "Word with a meaning: {word}",
+  "read.gloss": "{word} means {gloss}",
+  "read.gloss.close": "Close the meaning",
+
   "common.close": "Close",
   "common.back": "Back",
   "common.estimate": "Estimate",

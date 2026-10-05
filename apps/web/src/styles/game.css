@@ -394,3 +394,62 @@
   flex-direction: column;
   gap: var(--space-2);
 }
+
+/* ---- Writing and reading -------------------------------------------------- */
+
+.annotated__text,
+.gloss__text {
+  max-width: var(--measure);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+  line-height: 1.7;
+}
+.annotated__mark,
+.gloss__word {
+  display: inline;
+  min-height: 0;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: var(--px);
+  text-underline-offset: var(--px);
+}
+.annotated__mark {
+  text-decoration-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 18%, transparent);
+}
+.annotated__mark[aria-expanded="true"] {
+  outline: var(--px) solid var(--color-danger);
+}
+.annotated__icon {
+  display: inline-block;
+  margin-left: var(--space-1);
+  color: var(--color-danger);
+  vertical-align: baseline;
+}
+.gloss__word {
+  text-decoration-color: var(--color-skill-reading);
+}
+.gloss__word[aria-expanded="true"] {
+  outline: var(--px) solid var(--color-skill-reading);
+}
+.gloss__sentence[data-current] {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  box-shadow: inset var(--px) 0 0 0 var(--color-primary);
+  padding-left: var(--space-2);
+}
+.annotated__label {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+  color: var(--color-danger);
+}
+.annotated__detail > *,
+.gloss__detail > * {
+  margin-block: var(--space-2);
+}

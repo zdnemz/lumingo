@@ -144,6 +144,21 @@ export const id = {
   "mic.pause": "Jeda",
   "mic.resume": "Lanjutkan",
 
+  "write.marked": "Teks yang ditandai",
+  "write.error": "Kesalahan {number} dari {total}: {label}",
+  "write.fix": "Lebih baik: {correction}",
+  "write.why": "Alasannya",
+  "write.close": "Tutup penjelasan",
+  "write.revision": "Dibandingkan dengan draf pertamamu",
+  "write.fixed": "Sudah benar: {count}",
+  "write.remaining": "Masih ada: {count}",
+  "write.new": "Baru: {count}",
+
+  "read.text": "Teks bacaan",
+  "read.word": "Kata dengan arti: {word}",
+  "read.gloss": "{word} artinya {gloss}",
+  "read.gloss.close": "Tutup artinya",
+
   "common.close": "Tutup",
   "common.back": "Kembali",
   "common.estimate": "Perkiraan",
