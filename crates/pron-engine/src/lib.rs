@@ -12,6 +12,9 @@ pub mod arpabet;
 pub mod calibration;
 pub mod gop;
 pub mod lexicon;
+pub mod model;
+#[cfg(feature = "ort-backend")]
+pub mod ort_backend;
 pub mod perf;
 pub mod phone_map;
 pub mod posteriors;
@@ -27,6 +30,7 @@ pub use arpabet::{Arpabet, Phone, PhoneClass, UnknownArpabet};
 pub use calibration::{Calibration, CalibrationError, LogisticCurve, Thresholds};
 pub use gop::{GopError, HeardColumn, PhoneGop, gop};
 pub use lexicon::{Lexicon, LexiconError};
+pub use model::{ModelError, PosteriorModel, UnavailableModel, normalise_waveform};
 pub use perf::{
     DecisionSource, Measurement, ModeDecision, ModeSetting, PerfError, PerformanceTier,
     PolicyConfig, Prediction, PronMode, SpeedProfile, Workload, Workloads, decide, headroom_ms,

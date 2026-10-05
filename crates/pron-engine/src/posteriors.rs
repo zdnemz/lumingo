@@ -3,6 +3,8 @@
 //! Alignment, GOP and scoring only see this type, so all of them are tested on
 //! synthetic matrices and never need a model.
 
+use serde::{Deserialize, Serialize};
+
 /// Why a matrix could not be built.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PosteriorsError {
@@ -17,6 +19,18 @@ pub enum PosteriorsError {
     NoLabels,
     #[error("value at frame {frame}, label {label} is NaN or +infinity")]
     NotFinite { frame: usize, label: usize },
+    #[error("the posteriors file is not valid JSON of the expected shape: {0}")]
+    Json(String),
+}
+
+/// The JSON form used by the `pron` command line to score a matrix that was
+/// produced elsewhere. `null` stands for probability zero (`-inf`), which JSON
+/// cannot spell.
+#[derive(Debug, Serialize, Deserialize)]
+struct PosteriorsFile {
+    frames: usize,
+    labels: usize,
+    log_posteriors: Vec<Option<f32>>,
 }
 
 /// Log posteriors, frames by labels, row-major. `-inf` is allowed (probability
@@ -68,6 +82,31 @@ impl LogPosteriors {
             }
         }
         Self::new(logits, frames, labels)
+    }
+
+    /// Reads the JSON form written by [`LogPosteriors::to_json`].
+    pub fn from_json(text: &str) -> Result<Self, PosteriorsError> {
+        let file: PosteriorsFile =
+            serde_json::from_str(text).map_err(|e| PosteriorsError::Json(e.to_string()))?;
+        let data = file
+            .log_posteriors
+            .into_iter()
+            .map(|v| v.unwrap_or(f32::NEG_INFINITY))
+            .collect();
+        Self::new(data, file.frames, file.labels)
+    }
+
+    pub fn to_json(&self) -> Result<String, PosteriorsError> {
+        let file = PosteriorsFile {
+            frames: self.frames,
+            labels: self.labels,
+            log_posteriors: self
+                .data
+                .iter()
+                .map(|v| (*v != f32::NEG_INFINITY).then_some(*v))
+                .collect(),
+        };
+        serde_json::to_string(&file).map_err(|e| PosteriorsError::Json(e.to_string()))
     }
 
     pub fn frames(&self) -> usize {
@@ -132,6 +171,23 @@ mod tests {
             LogPosteriors::new(vec![0.0, 0.0, 0.0, f32::INFINITY], 2, 2),
             Err(PosteriorsError::NotFinite { frame: 1, label: 1 })
         );
+    }
+
+    #[test]
+    fn json_round_trips_including_zero_probability() {
+        let m =
+            LogPosteriors::new(vec![-0.5, f32::NEG_INFINITY, -2.0, -3.5], 2, 2).expect("matrix");
+        let text = m.to_json().expect("json");
+        assert!(text.contains("null"));
+        assert_eq!(LogPosteriors::from_json(&text).expect("parses"), m);
+        assert!(matches!(
+            LogPosteriors::from_json("{\"frames\":1}"),
+            Err(PosteriorsError::Json(_))
+        ));
+        assert!(matches!(
+            LogPosteriors::from_json("{\"frames\":2,\"labels\":2,\"log_posteriors\":[0.0]}"),
+            Err(PosteriorsError::Shape { .. })
+        ));
     }
 
     #[test]
