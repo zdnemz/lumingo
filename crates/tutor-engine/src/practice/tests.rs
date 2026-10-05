@@ -71,7 +71,10 @@ fn a_valid_item_of_each_type_becomes_a_typed_generated_activity() {
     for raw in [mcq(), gap(), reorder()] {
         let activity = check(&raw, &unit, &[], &vocab).expect("valid item");
         assert_eq!(activity.id(), "gen-1");
-        assert_eq!(activity.common().objective_ids, [raw.objective_id.clone()]);
+        assert_eq!(
+            activity.common().objective_ids,
+            std::slice::from_ref(&raw.objective_id)
+        );
         assert_eq!(activity.common().scoring, Scoring::Deterministic);
     }
 }

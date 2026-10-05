@@ -30,6 +30,10 @@ pub enum TextReply {
     Fail(LlmError),
     /// A stream that ends with a refusal and no text.
     Refusal,
+    /// These deltas, then the stream breaks with this error.
+    Broken(Vec<&'static str>, LlmError),
+    /// A stream that ends normally with no text at all.
+    Empty,
 }
 
 /// A scripted `LlmClient`. Every reply is queued in advance; a call with
@@ -116,6 +120,17 @@ impl LlmClient for FakeLlm {
         };
         match reply {
             TextReply::Fail(error) => Err(error),
+            TextReply::Empty => Ok(TextStream::new(futures_util::stream::iter(vec![summary(
+                FinishReason::Stop,
+            )]))),
+            TextReply::Broken(parts, error) => {
+                let mut events: Vec<Result<StreamEvent, LlmError>> = parts
+                    .into_iter()
+                    .map(|p| Ok(StreamEvent::Delta(p.to_owned())))
+                    .collect();
+                events.push(Err(error));
+                Ok(TextStream::new(futures_util::stream::iter(events)))
+            }
             TextReply::Refusal => Ok(TextStream::new(futures_util::stream::iter(vec![summary(
                 FinishReason::Refusal,
             )]))),
@@ -136,12 +151,15 @@ impl LlmClient for FakeLlm {
         _cancel: CancellationToken,
     ) -> Result<StructuredOutput, LlmError> {
         self.structured_seen.lock().unwrap().push(request);
+        // An unqueued call fails like a provider would. Background tasks call this
+        // without the test waiting on them, so a panic here would only be noise;
+        // tests that depend on a call assert the call count.
         let reply = self
             .structured
             .lock()
             .unwrap()
             .pop_front()
-            .expect("no structured reply queued");
+            .unwrap_or_else(|| Err(LlmError::Protocol("no structured reply queued".into())));
         reply.map(|value| StructuredOutput {
             value,
             ladder_level: LadderLevel::NativeSchema,
@@ -233,4 +251,16 @@ pub fn example_unit() -> curriculum::Unit {
     curriculum::load_unit_file(&path)
         .expect("the example unit loads")
         .unit
+}
+
+/// Waits (bounded) until `check` is true. Background analysis finishes on its
+/// own schedule, and a test must not sleep for a fixed time.
+pub async fn wait_for(mut check: impl FnMut() -> bool) {
+    for _ in 0..200 {
+        if check() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the condition did not become true in time");
 }

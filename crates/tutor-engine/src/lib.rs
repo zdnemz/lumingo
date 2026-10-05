@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod analysis;
+mod chat;
 mod chunker;
 mod drafts;
 mod error;
@@ -14,6 +15,10 @@ mod support;
 mod topics;
 
 pub use analysis::*;
+pub use chat::{
+    ChatConfig, ChatDeps, ChatReply, ChatSummary, ChatTopic, ErrorPattern, MAX_TOPIC_CHARS,
+    ReplyOutcome, TextChat, clean_topic,
+};
 pub use chunker::SentenceChunker;
 pub use drafts::{DraftComparison, DraftError, EarlierError, Resolution, compare_drafts};
 pub use error::{EngineError, Result};
