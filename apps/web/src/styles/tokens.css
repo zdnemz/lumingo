@@ -1,0 +1,171 @@
+/* Design tokens for Lumingo's pixel-art theme.
+ *
+ * Two layers. Primitives (--px, --space-*, --text-*, ...) are the scale.
+ * Semantic colours (--color-*) are what components read, and each theme
+ * redefines them. Components never use a raw hex value.
+ *
+ * One "art pixel" is --px. Every border, shadow and gap is a multiple of it,
+ * so the whole interface stays on one grid.
+ */
+
+:root {
+  /* ---- Pixel grid ---------------------------------------------------- */
+  --px: 4px;
+
+  /* ---- Spacing (multiples of one art pixel) --------------------------- */
+  --space-1: calc(var(--px) * 1);
+  --space-2: calc(var(--px) * 2);
+  --space-3: calc(var(--px) * 3);
+  --space-4: calc(var(--px) * 4);
+  --space-5: calc(var(--px) * 6);
+  --space-6: calc(var(--px) * 8);
+  --space-7: calc(var(--px) * 12);
+  --space-8: calc(var(--px) * 16);
+
+  /* ---- Type ----------------------------------------------------------- */
+  /* Press Start 2P is for short labels, numbers, and titles. Pixelify Sans
+   * carries everything the learner has to read. Noto Sans Mono is the only
+   * bundled font with IPA glyphs, so phonemes use it. */
+  --font-display: "Press Start 2P", "Pixelify Sans", monospace;
+  --font-body: "Pixelify Sans", "Noto Sans Mono", ui-monospace, monospace;
+  --font-phonetic: "Noto Sans Mono", "Pixelify Sans", ui-monospace, monospace;
+
+  --text-xs: 16px;
+  --text-sm: 18px;
+  --text-md: 20px;
+  --text-lg: 24px;
+  --text-xl: 32px;
+  --display-3: 16px;
+  --display-2: 24px;
+  --display-1: 32px;
+  --leading-body: 1.5;
+  --leading-display: 1.6;
+  --measure: 62ch;
+
+  /* ---- Controls ------------------------------------------------------- */
+  --control-h: 48px; /* 44px is the minimum touch target */
+  --bw: var(--px); /* border width */
+
+  /* ---- Layers --------------------------------------------------------- */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+
+  /* ---- Motion timing (used only when motion is on) -------------------- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 400ms;
+  --ease-step: steps(4, end);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ---- Palette primitives (named, never used directly in components) -- */
+  --pal-night-950: #0b0a1a;
+  --pal-night-900: #14112b;
+  --pal-night-800: #1e1a40;
+  --pal-night-700: #2a2559;
+  --pal-lilac-400: #8f87e0;
+  --pal-lilac-200: #b9b2e6;
+  --pal-lilac-50: #f4f0ff;
+  --pal-lantern-400: #ffca3a;
+  --pal-lantern-600: #e0a800;
+  --pal-ink-800: #1b1230;
+  --pal-mint-400: #5ee0a0;
+  --pal-coral-400: #ff6b81;
+  --pal-amber-400: #ffb347;
+  --pal-sky-400: #5cc8ff;
+  --pal-violet-300: #b79cff;
+  --pal-parchment-200: #f5ecd0;
+  --pal-parchment-50: #fffaea;
+  --pal-indigo-900: #2b2350;
+  --pal-indigo-950: #1f1a3d;
+}
+
+/* ---- Theme: Night (default) -------------------------------------------- */
+:root,
+:root[data-theme="night"] {
+  color-scheme: dark;
+
+  --color-bg: var(--pal-night-900);
+  --color-bg-deep: var(--pal-night-950);
+  --color-surface: var(--pal-night-800);
+  --color-surface-raised: var(--pal-night-700);
+  --color-border: var(--pal-lilac-400);
+  --color-shadow: var(--pal-night-950);
+  --color-text: var(--pal-lilac-50);
+  --color-text-muted: var(--pal-lilac-200);
+  --color-link: #8fd3ff;
+
+  --color-primary: var(--pal-lantern-400);
+  --color-primary-hover: #ffd85e;
+  --color-primary-pressed: var(--pal-lantern-600);
+  --color-on-primary: var(--pal-ink-800);
+
+  --color-success: var(--pal-mint-400);
+  --color-danger: var(--pal-coral-400);
+  --color-warning: var(--pal-amber-400);
+  --color-info: var(--pal-sky-400);
+
+  --color-skill-listening: var(--pal-sky-400);
+  --color-skill-speaking: #ff7a8a;
+  --color-skill-reading: #6ee7a8;
+  --color-skill-writing: var(--pal-violet-300);
+
+  --color-focus: #fff27a;
+  --color-selection: var(--pal-lantern-400);
+  --color-on-selection: var(--pal-ink-800);
+
+  --bevel-light: rgb(255 255 255 / 0.1);
+  --bevel-dark: rgb(0 0 0 / 0.32);
+  --color-scanline: rgb(0 0 0 / 0.22);
+  --color-star: rgb(244 240 255 / 0.55);
+}
+
+/* ---- Theme: Day -------------------------------------------------------- */
+:root[data-theme="day"] {
+  color-scheme: light;
+
+  --color-bg: var(--pal-parchment-200);
+  --color-bg-deep: #e8dcb8;
+  --color-surface: var(--pal-parchment-50);
+  --color-surface-raised: #ffffff;
+  --color-border: var(--pal-indigo-900);
+  --color-shadow: rgb(43 35 80 / 0.35);
+  --color-text: var(--pal-indigo-950);
+  --color-text-muted: #4f4580;
+  --color-link: #2d3fb8;
+
+  --color-primary: #ffb703;
+  --color-primary-hover: #ffc83a;
+  --color-primary-pressed: #e09f00;
+  --color-on-primary: var(--pal-indigo-950);
+
+  --color-success: #0b7a4b;
+  --color-danger: #b4233b;
+  --color-warning: #8a5200;
+  --color-info: #0b6fa8;
+
+  --color-skill-listening: #0b6fa8;
+  --color-skill-speaking: #b4233b;
+  --color-skill-reading: #0b7a4b;
+  --color-skill-writing: #6d3fd1;
+
+  --color-focus: var(--pal-indigo-900);
+  --color-selection: var(--pal-indigo-900);
+  --color-on-selection: var(--pal-parchment-50);
+
+  --bevel-light: rgb(255 255 255 / 0.7);
+  --bevel-dark: rgb(43 35 80 / 0.16);
+  --color-scanline: rgb(43 35 80 / 0.1);
+  --color-star: rgb(43 35 80 / 0.25);
+}
+
+/* ---- Small screens: the art pixel gets smaller, not the touch targets --- */
+@media (max-width: 480px) {
+  :root {
+    --px: 3px;
+    --control-h: 48px;
+  }
+}
