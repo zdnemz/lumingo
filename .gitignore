@@ -1,0 +1,30 @@
+# Secrets and local provider profiles
+.env
+.env.*
+!.env.example
+providers.toml
+
+# Build output
+/target/
+**/node_modules/
+/apps/web/.next/
+/apps/web/out/
+/apps/web/next-env.d.ts
+*.tsbuildinfo
+
+# Models, learner recordings, private fixtures, local data
+/models/files/
+/models/cache/
+/benchmarks/fixtures/private/
+/benchmarks/fixtures/downloads/
+/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
