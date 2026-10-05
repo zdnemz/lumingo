@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:schema:errors:1.0",
+  "title": "Error catalog",
+  "description": "curriculum/catalogs/errors.json: one entry per error category of contracts/turn_analysis.schema.json. Each has a name in both languages, a one-sentence rule, a typical example with its correction, the Indonesian contrast when there is one, and two versions of the explanation: simple (A1 to B1) and full (B2 and above), each in English and Indonesian (docs/CURRICULUM_SPEC.md section 9, ROADMAP C-05). Inferred from those texts; the spec ships no schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "version", "categories"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "version": { "type": "integer", "minimum": 1 },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 28,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "bilingual": {
+      "description": "English and Indonesian are both required in this catalog.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "id"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "name", "rule", "example", "explanation"],
+      "properties": {
+        "category": {
+          "description": "A category of contracts/turn_analysis.schema.json. content-cli checks the name against the contract.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "name": { "$ref": "#/$defs/bilingual" },
+        "rule": {
+          "description": "The rule in one sentence.",
+          "$ref": "#/$defs/bilingual"
+        },
+        "example": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["wrong", "right"],
+          "properties": {
+            "wrong": { "type": "string", "minLength": 1 },
+            "right": { "type": "string", "minLength": 1 }
+          }
+        },
+        "indonesian_contrast": {
+          "description": "Where Indonesian works differently and causes this mistake. Written in Indonesian. Absent when there is no useful contrast.",
+          "type": "string",
+          "minLength": 1
+        },
+        "explanation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["simple", "full"],
+          "properties": {
+            "simple": { "$ref": "#/$defs/bilingual" },
+            "full": { "$ref": "#/$defs/bilingual" }
+          }
+        }
+      }
+    }
+  }
+}

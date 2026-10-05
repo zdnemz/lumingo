@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:schema:anchors:1.0",
+  "title": "Anchor tasks",
+  "description": "curriculum/catalogs/anchors.json: twelve productive tasks, two per level, each with three model answers (below, at, above) and one off-task answer. They qualify a scoring model (docs/ASSESSMENT_SPEC.md section 6) and are later placed inside a unit of their level. Inferred from docs/CURRICULUM_SPEC.md section 9 and docs/ASSESSMENT_SPEC.md section 6; the spec ships no schema. The task fields repeat those of guided_speaking and guided_writing in unit.schema.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "version", "anchors"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "version": {
+      "description": "Anchor set version. A qualification result is void when it changes.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "anchors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/anchor" }
+    }
+  },
+  "$defs": {
+    "level": { "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+    "local_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "maxLength": 64
+    },
+    "localized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "model_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["band", "text"],
+      "properties": {
+        "band": { "enum": ["below", "at", "above"] },
+        "text": { "type": "string", "minLength": 1 }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "level",
+        "type",
+        "prompt",
+        "content_points",
+        "rubric_id",
+        "model_answers",
+        "off_task_answer",
+        "min_words",
+        "max_words"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/local_id" },
+        "level": { "$ref": "#/$defs/level" },
+        "type": { "enum": ["guided_speaking", "guided_writing"] },
+        "prompt": { "$ref": "#/$defs/localized" },
+        "content_points": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "rubric_id": { "$ref": "#/$defs/local_id" },
+        "model_answers": {
+          "description": "Exactly one answer per band.",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/model_answer" }
+        },
+        "off_task_answer": {
+          "description": "A fluent answer that does not do the task. The scorer must mark it off task.",
+          "type": "string",
+          "minLength": 1
+        },
+        "min_words": { "type": "integer", "minimum": 1 },
+        "max_words": { "type": "integer", "minimum": 1 },
+        "unit_id": {
+          "description": "The unit that later uses this task, once it has been placed.",
+          "type": "string",
+          "pattern": "^(a1|a2|b1|b2|c1|c2)-u(0[1-9]|[12][0-9]|30)$"
+        }
+      }
+    }
+  }
+}

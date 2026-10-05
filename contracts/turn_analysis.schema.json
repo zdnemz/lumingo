@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:contract:turn_analysis:1.0",
+  "title": "turn_analysis",
+  "description": "Structured analysis of one or more learner turns. Uses only the JSON Schema subset that both protocol adapters can send as a native structured-output schema: every property required, additionalProperties false, no numeric or length constraints, no recursion, no unions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["turns"],
+  "properties": {
+    "turns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["turn_seq", "errors", "objective_evidence", "understood_tutor", "note_for_next_turn"],
+        "properties": {
+          "turn_seq": { "type": "integer" },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["category", "quote", "correction", "severity", "addressed_in_reply"],
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "verb_tense",
+                    "verb_form",
+                    "subject_verb_agreement",
+                    "copula",
+                    "article",
+                    "preposition",
+                    "plural_number",
+                    "pronoun",
+                    "word_order",
+                    "question_formation",
+                    "negation",
+                    "modal",
+                    "conditional",
+                    "passive",
+                    "relative_clause",
+                    "comparison",
+                    "quantifier_countability",
+                    "linking",
+                    "word_choice",
+                    "collocation",
+                    "word_form",
+                    "l1_transfer",
+                    "register",
+                    "missing_word",
+                    "extra_word",
+                    "spelling",
+                    "punctuation",
+                    "unclear_meaning"
+                  ]
+                },
+                "quote": { "type": "string" },
+                "correction": { "type": "string" },
+                "severity": { "type": "string", "enum": ["minor", "major", "blocking"] },
+                "addressed_in_reply": { "type": "boolean" }
+              }
+            }
+          },
+          "objective_evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["objective_id", "status", "quote"],
+              "properties": {
+                "objective_id": { "type": "string" },
+                "status": { "type": "string", "enum": ["demonstrated", "partial", "not_demonstrated"] },
+                "quote": { "type": "string" }
+              }
+            }
+          },
+          "understood_tutor": { "type": "string", "enum": ["yes", "partly", "no", "not_applicable"] },
+          "note_for_next_turn": { "type": "string" }
+        }
+      }
+    }
+  }
+}

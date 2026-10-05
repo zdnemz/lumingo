@@ -36,12 +36,15 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | tokio, tokio-util | Async runtime and cancellation. `storage` also uses its file functions for the pre-upgrade backup. | MIT | ok |
 | tower, http-body-util, tokio-tungstenite, futures-util | Server tests | MIT | ok |
 | rust-embed | Embeds the exported UI in the executable | MIT | ok |
-| ts-rs | Generates TypeScript types from Rust API types | MIT | ok |
+| ts-rs | Generates TypeScript types from Rust API types, and from the unit types behind the `ts` feature of `curriculum` | MIT | ok |
+| jsonschema | Checks unit files and catalogs against their JSON Schema in `crates/curriculum`. Default features are off, so it has no HTTP or file reference resolver and no TLS stack. Checked 2026-10-05, version 0.58.5. | MIT | ok |
+| referencing, jsonschema-regex, jsonschema-value, fluent-uri, fancy-regex, email_address, uuid-simd, vsimd, outref, data-encoding, micromap, fraction, num-cmp, bytecount, ahash, strum, unicode-general-category | Dependencies of jsonschema. Checked 2026-10-05. | MIT, or MIT OR Apache-2.0, or Apache-2.0 (unicode-general-category) | ok |
+| borrow-or-share | Dependency of fluent-uri, which jsonschema uses for references. Its LICENSE file is MIT No Attribution, which asks for less than MIT. It is allowed through a per-crate exception in `deny.toml`. Checked 2026-10-05, version 0.2.4. | MIT-0 | ok |
 | serde, serde_json | Serialisation | MIT OR Apache-2.0 | ok |
-| clap | Command-line options | MIT OR Apache-2.0 | ok |
+| clap | Command-line options of `apps/server` and `tools/content-cli` | MIT OR Apache-2.0 | ok |
 | anyhow, thiserror | Errors | MIT OR Apache-2.0 | ok |
 | tracing, tracing-subscriber | Logging | MIT | ok |
-| sha2, base64 | Content-Security-Policy script hashes | MIT OR Apache-2.0 | ok |
+| sha2, base64 | Content-Security-Policy script hashes. sha2 also gives the SHA-256 checksum of each unit file in `crates/curriculum`. | MIT OR Apache-2.0 | ok |
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
 | sqlx (sqlx-core, sqlx-sqlite) | SQLite access, connection pools and migrations in `crates/storage`. Runtime query functions only, no compile-time query macros. | MIT OR Apache-2.0 | ok |

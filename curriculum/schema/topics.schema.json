@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:schema:topics:1.0",
+  "title": "Topic banks",
+  "description": "curriculum/catalogs/topics.json: per level, conversation scenarios (tutor role, learner role and goals, like a roleplay), writing prompts (reader, purpose and content points) and reading topics, for the three free modes (docs/CURRICULUM_SPEC.md sections 1 and 9). Inferred from those texts; the spec ships no schema. Indonesian text is required from A1 to B1 and optional above; content-cli checks that.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "version", "levels"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "version": { "type": "integer", "minimum": 1 },
+    "levels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "A1": { "$ref": "#/$defs/level_bank" },
+        "A2": { "$ref": "#/$defs/level_bank" },
+        "B1": { "$ref": "#/$defs/level_bank" },
+        "B2": { "$ref": "#/$defs/level_bank" },
+        "C1": { "$ref": "#/$defs/level_bank" },
+        "C2": { "$ref": "#/$defs/level_bank" }
+      }
+    }
+  },
+  "$defs": {
+    "local_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "maxLength": 64
+    },
+    "localized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "level_bank": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conversations", "writing_prompts", "reading_topics"],
+      "properties": {
+        "conversations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/conversation" }
+        },
+        "writing_prompts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/writing_prompt" }
+        },
+        "reading_topics": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/reading_topic" }
+        }
+      }
+    },
+    "conversation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "scenario", "tutor_role", "learner_role", "goals"],
+      "properties": {
+        "id": { "$ref": "#/$defs/local_id" },
+        "title": { "$ref": "#/$defs/localized" },
+        "scenario": { "$ref": "#/$defs/localized" },
+        "tutor_role": { "type": "string", "minLength": 1 },
+        "learner_role": { "type": "string", "minLength": 1 },
+        "goals": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "writing_prompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "prompt", "reader", "purpose", "content_points"],
+      "properties": {
+        "id": { "$ref": "#/$defs/local_id" },
+        "prompt": { "$ref": "#/$defs/localized" },
+        "reader": { "type": "string", "minLength": 1 },
+        "purpose": { "type": "string", "minLength": 1 },
+        "content_points": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "reading_topic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "$ref": "#/$defs/local_id" },
+        "title": { "$ref": "#/$defs/localized" },
+        "kind": {
+          "description": "The kind of text the topic suggests, for example a message, a notice, a story or an article.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

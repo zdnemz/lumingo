@@ -22,7 +22,12 @@ allow = [
   "Unicode-3.0",
   "Unicode-DFS-2016",
 ]
-exceptions = []
+# MIT-0 is MIT without the attribution clause: it asks for less than MIT does. It is not on
+# the rule 2 list, so it is allowed for the one crate that needs it, with a register row.
+# borrow-or-share comes in through jsonschema (referencing, fluent-uri).
+exceptions = [
+  { crate = "borrow-or-share", allow = ["MIT-0"] },
+]
 
 [bans]
 multiple-versions = "warn"
