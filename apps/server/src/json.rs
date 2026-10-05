@@ -5,6 +5,7 @@
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
+use axum::http::StatusCode;
 use serde::de::DeserializeOwned;
 
 use crate::error::ApiError;
@@ -29,6 +30,11 @@ where
             )),
             Err(JsonRejection::JsonSyntaxError(_)) => {
                 Err(ApiError::invalid("the request body is not valid JSON"))
+            }
+            Err(JsonRejection::BytesRejection(rejection))
+                if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE =>
+            {
+                Err(ApiError::payload_too_large())
             }
             Err(JsonRejection::MissingJsonContentType(_)) => {
                 Err(ApiError::invalid("the request must be application/json"))

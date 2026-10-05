@@ -29,39 +29,60 @@ pub fn status_for(code: ErrorCode) -> StatusCode {
 
 /// An error ready to be sent.
 #[derive(Debug)]
-pub struct ApiError(ApiErrorBody);
+pub struct ApiError {
+    body: ApiErrorBody,
+    /// Overrides the status of the code, for the one case that has no code of
+    /// its own.
+    status: Option<StatusCode>,
+}
 
 impl ApiError {
     /// An unknown route under `/api`.
     pub fn not_found() -> Self {
-        Self(ApiErrorBody {
-            error: ErrorCode::NotFound,
-            message: "there is no such API route".to_owned(),
-        })
+        Self::coded(ErrorCode::NotFound, "there is no such API route")
+    }
+
+    fn coded(error: ErrorCode, message: &str) -> Self {
+        Self {
+            body: ApiErrorBody {
+                error,
+                message: message.to_owned(),
+            },
+            status: None,
+        }
+    }
+
+    /// A body above [`crate::MAX_BODY_BYTES`]: HTTP 413 with the usual body.
+    pub fn payload_too_large() -> Self {
+        Self {
+            status: Some(StatusCode::PAYLOAD_TOO_LARGE),
+            ..Self::coded(ErrorCode::InvalidInput, "the request body is too large")
+        }
     }
 
     /// A request the server could not read: bad JSON, a wrong field, a bad id.
     pub fn invalid(message: impl Into<String>) -> Self {
-        Self(ApiErrorBody {
-            error: ErrorCode::InvalidInput,
-            message: message.into(),
-        })
+        Self::coded(ErrorCode::InvalidInput, &message.into())
     }
 
     pub fn body(&self) -> &ApiErrorBody {
-        &self.0
+        &self.body
     }
 }
 
 impl From<CoreError> for ApiError {
     fn from(error: CoreError) -> Self {
-        Self(error.body())
+        Self {
+            body: error.body(),
+            status: None,
+        }
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (status_for(self.0.error), Json(self.0)).into_response()
+        let status = self.status.unwrap_or_else(|| status_for(self.body.error));
+        (status, Json(self.body)).into_response()
     }
 }
 
