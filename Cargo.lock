@@ -83,10 +83,14 @@ checksum = "1254ebf6529f3763c491acfb5ab6e960809e3c75a38584cc664f8c5667fb7107"
 name = "audio-io"
 version = "0.0.0"
 dependencies = [
+ "audio-io",
  "rtrb",
  "rubato",
+ "serde",
+ "serde_json",
  "speech",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

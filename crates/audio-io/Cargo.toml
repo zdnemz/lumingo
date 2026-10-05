@@ -12,6 +12,18 @@ speech = { path = "../speech" }
 thiserror = "2.0.21"
 rtrb = "0.4.0"
 rubato = "5.0.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tracing = "0.1.44"
+
+[features]
+# A fake audio backend for tests in other crates and for this crate's integration
+# tests. It is never part of a release build.
+test-support = []
+
+[dev-dependencies]
+# Lets the integration tests in tests/ use the fake backend.
+audio-io = { path = ".", features = ["test-support"] }
 
 [lints]
 workspace = true

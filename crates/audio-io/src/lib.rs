@@ -6,6 +6,9 @@
 #![forbid(unsafe_code)]
 
 mod capture;
+mod device;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fake;
 mod format;
 mod gate;
 mod playback;
@@ -14,6 +17,11 @@ mod ring;
 mod sync;
 
 pub use capture::{CapturePath, Pumped};
+pub use device::{
+    AudioBackend, AudioStream, Choice, DeviceError, DeviceId, DeviceInfo, DevicePrefs, DeviceRef,
+    DeviceRegistry, Direction, FilePrefs, InputCallback, MemoryPrefs, OutputCallback, PrefsError,
+    PrefsStore, ResolvedDevice, StreamErrorCallback,
+};
 pub use format::StreamFormat;
 pub use gate::{
     GateCounters, GateStats, HOLD_AFTER_PLAYBACK, MicGate, PlaybackActivity, PushToTalk, Route,
