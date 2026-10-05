@@ -63,6 +63,10 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | openssl, openssl-sys, openssl-probe | Linux binding used by native-tls. They link the system OpenSSL library and do not bundle it; building needs its headers | Apache-2.0, MIT, MIT OR Apache-2.0 | ok |
 | toml (with toml_parser, toml_writer, toml_datetime, serde_spanned, winnow) | Reads and writes `providers.toml` in `llm-client` | MIT OR Apache-2.0; winnow MIT | ok |
 | tempfile (with fastrand) | Temporary directories in `llm-client` tests | MIT OR Apache-2.0 | ok |
+| rtrb | Lock-free single-producer single-consumer ring buffer in `audio-io` (0.4.0). Its `unsafe` is inside the crate, audited by its authors; `audio-io` itself forbids unsafe. | MIT OR Apache-2.0 | ok |
+| rubato 5.0.1 and its dependencies (audioadapter, audioadapter-buffers, audioadapter-sample, realfft, rustfft, windowfunctions, num-complex, num-integer, num-traits, primal-check, strength_reduce, transpose, visibility) | Sample-rate conversion to 16 kHz and to the playback device rate in `audio-io`. Licenses read from each crate's `Cargo.toml` in the registry source. | MIT OR Apache-2.0 for rubato; realfft and windowfunctions MIT; visibility Zlib OR MIT OR Apache-2.0; the rest MIT OR Apache-2.0 | ok |
+| audio-codec-algorithms 0.8.1 | Sample-format conversion pulled in by audioadapter-sample | 0BSD OR Apache-2.0 (used under Apache-2.0) | ok |
+| cpal 0.18.2 and its platform dependencies (windows, windows-core and siblings, alsa, alsa-sys, coreaudio-rs, objc2 family, jni, ndk, wasm-bindgen family, dasp_sample, and others) | Audio capture and playback in `audio-io`, behind the off-by-default `cpal-backend` feature. Licenses read from `cargo metadata --all-features` on 2026-10-05, every platform's dependencies included. UNVERIFIED on hardware. | cpal Apache-2.0; dependencies MIT, Apache-2.0, Zlib or BSD choices (all offer MIT or Apache-2.0) | ok |
 
 ## 4. JavaScript packages
 
@@ -106,8 +110,6 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 |---|---|---|---|
 | sherpa-onnx (Rust crate and native library) | VAD, STT, TTS runtime | Apache-2.0 | verify |
 | ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
-| CPAL | Audio capture and playback | Apache-2.0 | verify |
-| Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
 | harper-core | Rule-based grammar findings | Apache-2.0 | verify |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |
 | Supertonic 3 | TTS candidate | Model: OpenRAIL-M. Code: MIT. | review: read the use restrictions in full and show them before download |
