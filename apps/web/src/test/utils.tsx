@@ -30,7 +30,27 @@ export function resetBrowserState(): void {
   root.lang = "";
 }
 
-export const SNAPSHOT: StateSnapshot = { server_version: "9.9.9", dev_mode: false, uptime_ms: 5000 };
+export const SNAPSHOT: StateSnapshot = {
+  server_version: "9.9.9",
+  dev_mode: false,
+  uptime_ms: 5000,
+  settings: {
+    display_name: "Learner",
+    ui_language: "en",
+    l1: "id",
+    l1_help_mode: "auto",
+    adaptive_timing: "auto",
+    keep_recordings: false,
+  },
+  hardware: {
+    ram_total_bytes: 16_000_000_000,
+    logical_cores: 8,
+    minimum_ram_bytes: 8_000_000_000,
+    minimum_logical_cores: 4,
+    meets_minimum: true,
+  },
+  unavailable: [],
+};
 
 export interface FakeApi extends ApiClient {
   emit: (event: ServerEvent) => void;

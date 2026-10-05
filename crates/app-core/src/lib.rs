@@ -9,6 +9,9 @@
 //! - [`api`]: every request, response and event type. They are exported to
 //!   TypeScript from here and nowhere else.
 //! - [`hardware`]: memory and logical processors, as measured.
+//! - [`events`]: the event bus.
+//! - [`session`]: the boundary to session orchestration, which is not built in.
+//! - [`AppCore`]: lifecycle and the typed command and query API.
 //!
 //! # Channels
 //!
@@ -21,9 +24,15 @@
 pub mod api;
 pub mod clock;
 pub mod config;
+mod core;
 pub mod error;
+pub mod events;
 pub mod hardware;
+pub mod session;
+mod settings;
 
 pub use clock::{Clock, SystemClock};
 pub use config::{CoreConfig, default_curriculum_dir, default_data_dir};
+pub use core::AppCore;
 pub use error::{CoreError, CoreResult};
+pub use session::SessionService;

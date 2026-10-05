@@ -2,6 +2,7 @@
 import type { StateSnapshot } from "./StateSnapshot";
 
 /**
- * One message on the event stream. Every event carries a sequence number.
+ * One message on the event stream. Every event carries a sequence number that
+ * grows by one per published event.
  */
 export type ServerEvent = { "type": "Snapshot", seq: number, state: StateSnapshot, } | { "type": "Heartbeat", seq: number, uptime_ms: number, };

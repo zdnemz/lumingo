@@ -5,6 +5,12 @@
 //! fails when the checked-in files differ.
 
 mod common;
+mod events;
 pub(crate) mod mirror;
+mod settings;
+mod state;
 
 pub use common::{ApiErrorBody, ErrorCode, Feature, HardwareProfile, L1HelpMode, UiLanguage};
+pub use events::ServerEvent;
+pub use settings::{AdaptiveTiming, Settings};
+pub use state::StateSnapshot;
