@@ -2860,6 +2860,7 @@ dependencies = [
  "async-trait",
  "curriculum",
  "futures-util",
+ "jsonschema",
  "llm-client",
  "serde",
  "serde_json",
