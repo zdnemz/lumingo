@@ -22,6 +22,8 @@ mod estimates;
 mod game;
 mod models;
 mod profiles;
+mod progress;
+mod pron;
 mod providers;
 mod row;
 mod sessions;
@@ -53,6 +55,11 @@ pub use game::{
 };
 pub use models::{InstalledModel, Models};
 pub use profiles::{NewProfile, Profile, Profiles};
+pub use progress::{
+    ErrorStat, ErrorStats, MasteryRepo, NewReviewItem, ObjectiveMastery, ReviewItem,
+    ReviewSchedule, UnitProgress, UnitProgressRepo,
+};
+pub use pron::{NewPronResult, PronResult, PronResults};
 pub use providers::{NewProviderProfile, ProviderProfile, Providers};
 pub use sessions::{NewSession, Session, Sessions};
 pub use settings::{Setting, Settings};

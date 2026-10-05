@@ -143,6 +143,27 @@ string_enum! {
 }
 
 string_enum! {
+    /// Where a unit stands for a learner.
+    UnitStatus {
+        Locked => "locked",
+        Available => "available",
+        InProgress => "in_progress",
+        Passed => "passed",
+        Skipped => "skipped",
+    }
+}
+
+string_enum! {
+    /// What a spaced-review item is about.
+    ReviewKind { Vocab => "vocab", Grammar => "grammar", Pron => "pron" }
+}
+
+string_enum! {
+    /// Whether a pronunciation result came from a drill or from free speech.
+    PronMode { Drill => "drill", FreeSpeech => "free_speech" }
+}
+
+string_enum! {
     /// What produced a score.
     Scorer { Deterministic => "deterministic", RubricLlm => "rubric_llm", PronEngine => "pron_engine" }
 }
