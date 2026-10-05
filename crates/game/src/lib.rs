@@ -7,5 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod ranks;
+mod sparks;
 
 pub use ranks::{RANK_THRESHOLDS, RankInfo, rank_for};
+pub use sparks::{SparkSource, award};
