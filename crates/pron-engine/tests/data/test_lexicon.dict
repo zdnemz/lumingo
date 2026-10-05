@@ -1,0 +1,89 @@
+;;; HAND-WRITTEN TEST DATA. This is NOT CMUdict and must never be shipped or
+;;; described as CMUdict. About 60 entries typed by hand in the cmudict.dict
+;;; format so the tests can run without the real dictionary. Pronunciations are
+;;; plausible General American readings written for tests; they are not
+;;; authoritative. Variants use the (2), (3) marker like the real format.
+a AH0
+a(2) EY1
+asked AE1 S K T
+about AH0 B AW1 T
+bad B AE1 D
+bag B AE1 G
+bed B EH1 D
+can K AE1 N
+can(2) K AH0 N
+cat K AE1 T
+coffee K AO1 F IY0
+coffee(2) K AA1 F IY0
+data D EY1 T AH0
+data(2) D AE1 T AH0
+data(3) D AA1 T AH0
+do D UW1
+dog D AO1 G
+don't D OW1 N T
+easy IY1 Z IY0
+either IY1 DH ER0
+either(2) AY1 DH ER0
+fish F IH1 SH
+fool F UW1 L
+from F R AH1 M
+from(2) F R AH0 M
+full F UH1 L
+good G UH1 D
+hello HH AH0 L OW1
+hello(2) HH EH0 L OW1
+help HH EH1 L P
+hot HH AA1 T
+i'm AY1 M
+is IH1 Z
+it IH1 T
+job JH AA1 B
+light L AY1 T
+like L AY1 K
+live L IH1 V
+live(2) L AY1 V
+morning M AO1 R N IH0 NG
+mother M AH1 DH ER0
+my M AY1
+name N EY1 M
+night N AY1 T
+no N OW1
+please P L IY1 Z
+read R EH1 D
+read(2) R IY1 D
+record R EH1 K ER0 D
+record(2) R IH0 K AO1 R D
+rice R AY1 S
+right R AY1 T
+school S K UW1 L
+seven S EH1 V AH0 N
+she SH IY1
+sheep SH IY1 P
+ship SH IH1 P
+texts T EH1 K S T S
+thank TH AE1 NG K
+thanks TH AE1 NG K S
+the DH AH0
+the(2) DH IY0
+this DH IH1 S
+three TH R IY1
+time T AY1 M
+to T UW1
+to(2) T AH0
+today T AH0 D EY1
+tomato T AH0 M EY1 T OW2
+tomato(2) T AH0 M AA1 T OW2
+very V EH1 R IY0
+vision V IH1 ZH AH0 N
+water W AO1 T ER0
+water(2) W AA1 T ER0
+what W AH1 T
+what(2) W AH0 T
+where W EH1 R
+work W ER1 K
+world W ER1 L D
+yes Y EH1 S
+you Y UW1
+you(2) Y UH1
+you(3) Y AH0
+zoo Z UW1

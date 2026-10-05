@@ -65,6 +65,15 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | tempfile (with fastrand) | Temporary directories in `llm-client` tests | MIT OR Apache-2.0 | ok |
 | sysinfo | Installed memory in the hardware profile of `crates/app-core` (only the `system` feature; the same crate version as `tools/bench`). Checked 2026-10-05, version 0.36.1. | MIT | ok |
 | iana-time-zone, iana-time-zone-haiku, android_system_properties | Pulled in by the `clock` feature of chrono, which `crates/app-core` uses to read the learner's local calendar day for streaks (unix targets only; Windows uses `windows-link`). Checked 2026-10-05. | MIT OR Apache-2.0 | ok |
+| rtrb | Lock-free single-producer single-consumer ring buffer in `audio-io` (0.4.0). Its `unsafe` is inside the crate, audited by its authors; `audio-io` itself forbids unsafe. | MIT OR Apache-2.0 | ok |
+| rubato 5.0.1 and its dependencies (audioadapter, audioadapter-buffers, audioadapter-sample, realfft, rustfft, windowfunctions, num-complex, num-integer, num-traits, primal-check, strength_reduce, transpose, visibility) | Sample-rate conversion to 16 kHz and to the playback device rate in `audio-io`. Licenses read from each crate's `Cargo.toml` in the registry source. | MIT OR Apache-2.0 for rubato; realfft and windowfunctions MIT; visibility Zlib OR MIT OR Apache-2.0; the rest MIT OR Apache-2.0 | ok |
+| audio-codec-algorithms 0.8.1 | Sample-format conversion pulled in by audioadapter-sample | 0BSD OR Apache-2.0 (used under Apache-2.0) | ok |
+| cpal 0.18.2 and its platform dependencies (windows, windows-core and siblings, alsa, alsa-sys, coreaudio-rs, objc2 family, jni, ndk, wasm-bindgen family, dasp_sample, and others) | Audio capture and playback in `audio-io`, behind the off-by-default `cpal-backend` feature. Licenses read from `cargo metadata --all-features` on 2026-10-05, every platform's dependencies included. UNVERIFIED on hardware. | cpal Apache-2.0; dependencies MIT, Apache-2.0, Zlib or BSD choices (all offer MIT or Apache-2.0) | ok |
+| toml | Reads the phone map and the calibration file in `pron-engine` | MIT OR Apache-2.0 | ok |
+| hound | Reads WAV files in the `pron` program (`ort-backend` feature, off by default) | Apache-2.0 | ok |
+| ort, ort-sys 2.0.0-rc.13 | ONNX Runtime bindings for the phoneme model (`ort-backend` feature, off by default). Built with `load-dynamic`, so no runtime is downloaded or linked at build time. | MIT OR Apache-2.0 | ok. Read from the crate metadata and the `LICENSE-MIT` and `LICENSE-APACHE` files in the published package. The ONNX Runtime library the program loads is a separate item (section 6). |
+| libloading | Loads the ONNX Runtime library (dependency of `ort`) | ISC | ok |
+| ndarray, matrixmultiply, rawpointer, num-complex, num-integer, num-traits | Dependencies of `ort` | MIT OR Apache-2.0 | ok |
 
 ## 4. JavaScript packages
 
@@ -107,15 +116,13 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | Item | Planned use | Expected license | Status |
 |---|---|---|---|
 | sherpa-onnx (Rust crate and native library) | VAD, STT, TTS runtime | Apache-2.0 | verify |
-| ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
-| CPAL | Audio capture and playback | Apache-2.0 | verify |
-| Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
+| ONNX Runtime (the native library; the `ort` crate is in section 3) | Phoneme model inference. `pron-engine` loads it at run time from `ORT_DYLIB_PATH`; nothing in the repository bundles it. | MIT | verify |
 | harper-core | Rule-based grammar findings | Apache-2.0 | verify |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |
 | Supertonic 3 | TTS candidate | Model: OpenRAIL-M. Code: MIT. | review: read the use restrictions in full and show them before download |
 | Kokoro, Kitten TTS | TTS candidates | Apache-2.0 | verify |
 | wav2vec2 phoneme model, ZIPA | Phoneme model candidates | Apache-2.0, unknown | verify |
-| CMUdict | Canonical pronunciations | BSD-style | verify |
+| CMUdict | Canonical pronunciations. `pron-engine` ships no dictionary: it reads a `cmudict.dict` file the user supplies. Crates.io was checked on 2026-10-05: `cmudict-fast` 0.8.0 and `mora-cmudict` 0.0.1 carry a copy of the data with its terms in `LICENSE-CMUDICT` (copyright 1993-2015 Carnegie Mellon University, redistribution allowed if the notice is kept), but the data is not covered by the crates' own `MIT OR Apache-2.0` metadata and the original source could not be reached to compare, so neither is a dependency. Shipping the data would need a `NOTICE` line. | BSD-style | verify |
 | CEFR-J vocabulary profile | Checking word levels | Free with citation, not an open license | review |
 | Octanove vocabulary profile C1/C2 | Word levels above B2 | CC BY-SA 4.0 | verify |
 | speechocean762 | Evaluation only | CC BY 4.0 | verify |
