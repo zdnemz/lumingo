@@ -1,0 +1,33 @@
+[package]
+name = "app-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Lifecycle, settings, typed commands and events, providers, curriculum index, progress and game state for Lumingo"
+
+[dependencies]
+async-trait = "0.1.92"
+# "clock" reads the local calendar day for streaks. storage itself takes every date from its caller.
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+curriculum = { version = "0.0.0", path = "../curriculum", features = ["ts"] }
+game = { version = "0.0.0", path = "../game" }
+llm-client = { version = "0.0.0", path = "../llm-client" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+storage = { version = "0.0.0", path = "../storage" }
+# Only the memory reading of sysinfo is used; the other components are off.
+sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
+thiserror = "2.0.21"
+tokio = { version = "1.53.2", features = ["rt", "sync", "time", "fs"] }
+tokio-util = "0.7.19"
+tracing = "0.1.44"
+ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread", "time"] }

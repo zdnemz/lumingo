@@ -63,6 +63,8 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | openssl, openssl-sys, openssl-probe | Linux binding used by native-tls. They link the system OpenSSL library and do not bundle it; building needs its headers | Apache-2.0, MIT, MIT OR Apache-2.0 | ok |
 | toml (with toml_parser, toml_writer, toml_datetime, serde_spanned, winnow) | Reads and writes `providers.toml` in `llm-client` | MIT OR Apache-2.0; winnow MIT | ok |
 | tempfile (with fastrand) | Temporary directories in `llm-client` tests | MIT OR Apache-2.0 | ok |
+| sysinfo | Installed memory in the hardware profile of `crates/app-core` (only the `system` feature; the same crate version as `tools/bench`). Checked 2026-10-05, version 0.36.1. | MIT | ok |
+| iana-time-zone, iana-time-zone-haiku, android_system_properties | Pulled in by the `clock` feature of chrono, which `crates/app-core` uses to read the learner's local calendar day for streaks (unix targets only; Windows uses `windows-link`). Checked 2026-10-05. | MIT OR Apache-2.0 | ok |
 
 ## 4. JavaScript packages
 
