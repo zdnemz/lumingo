@@ -43,6 +43,7 @@
 //! | inbox, every producer to the orchestrator | 64 | threads drop the message and count it (`inbox_dropped`); async senders wait |
 //! | STT input (speech) | 4 utterances | `submit` returns `Full`; the turn ends as a recoverable `EngineError` |
 //! | utterance backlog (orchestrator) | 4 | the new utterance is dropped and counted (`utterances_dropped`) |
+//! | audio session events (audio-io) | 32 | the new event is dropped and counted; the orchestrator reads them every 250 ms |
 //! | TTS input (speech) | 8 sentences | `speak` returns the sentence; the turn keeps it and offers it again every poll; nothing is dropped |
 //! | playback queue (audio-io) | 30 s | the chunk is handed back; the TTS worker retries every 5 ms and waits |
 //! | notes of one turn (speaker to turn) | 32 | the note is dropped and counted (`notes_dropped`); the 5 s TTS limit then ends the turn |
@@ -60,7 +61,9 @@
 //!
 //! The half-duplex gate of `audio-io` drops microphone frames while tutor audio
 //! plays and for 150 ms after, so the learner cannot interrupt by voice while the
-//! tutor is speaking. Stopping works three ways: [`VoiceHandle::stop_speaking`],
+//! tutor is speaking. An utterance that still ends while the tutor speaks, in a gap
+//! between two sentences, is dropped and counted, because it is most likely the
+//! tutor's own voice. Stopping works three ways: [`VoiceHandle::stop_speaking`],
 //! push-to-talk (frames that bypass the gate), and speaking while the tutor is
 //! still thinking. Each one cancels the turn's LLM stream and TTS turn, stops the
 //! playback queue and returns the session to `Listening`.

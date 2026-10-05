@@ -29,6 +29,8 @@ pub enum VoiceError {
     Settings(&'static str),
     #[error("storage: {0}")]
     Storage(#[from] storage::StorageError),
+    #[error("a background task did not finish")]
+    TaskFailed,
     #[error("the voice loop has stopped")]
     Stopped,
 }

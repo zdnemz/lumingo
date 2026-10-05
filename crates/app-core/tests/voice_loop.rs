@@ -275,6 +275,47 @@ async fn speaking_while_the_tutor_thinks_cancels_the_turn() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn an_utterance_that_ends_while_the_tutor_speaks_is_not_taken_as_the_learners_turn() {
+    // The fed audio bypasses the gate, as the tutor's own voice would if it
+    // slipped through a gap between two sentences.
+    let steps = vec![reply(&["This reply keeps the speaker busy for a while."])];
+    let mut rig = Rig::start(
+        steps,
+        Options {
+            transcripts: vec!["that was the tutor itself"],
+            ..Options::default()
+        },
+    )
+    .await;
+    rig.handle.open().await.unwrap();
+    rig.log
+        .wait("speaking", |e| {
+            e.iter().any(|e| matches!(e, VoiceEvent::Latency(_)))
+        })
+        .await;
+    rig.say().await;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while rig.handle.stats().utterances_dropped == 0 {
+        assert!(
+            Instant::now() < deadline,
+            "the utterance was neither taken nor dropped"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    rig.log.turn_ended(1).await;
+    // Nothing answered it: one model call, no second turn, back to listening.
+    assert_eq!(rig.llm.calls(), 1);
+    assert!(
+        !rig.log
+            .all()
+            .iter()
+            .any(|e| matches!(e, VoiceEvent::Heard { .. }))
+    );
+    assert_eq!(rig.handle.phase(), active(TurnState::Listening));
+    rig.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_gate_keeps_the_microphone_closed_while_the_tutor_speaks() {
     let steps = vec![reply(&[
         "This reply is long enough to play for about two seconds.",

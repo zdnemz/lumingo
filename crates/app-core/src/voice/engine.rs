@@ -374,36 +374,46 @@ impl VoiceLoop {
             frames_tx = Some(tx);
         }
 
-        // Audio devices.
+        // Audio devices. Opening a device can take a while, so it is not done
+        // on a runtime worker.
         match &audio {
             AudioMode::None => {}
             AudioMode::Full(registry) => {
                 let Some(tx) = frames_tx.clone() else {
                     return Err(VoiceError::Missing("a listener"));
                 };
-                let session = AudioSession::start(
-                    Arc::clone(registry),
-                    SessionConfig {
-                        frame_len: config.frame_len,
-                        ..SessionConfig::default()
-                    },
-                    frame_sink(tx, Arc::clone(&counters)),
-                )?;
+                let registry = Arc::clone(registry);
+                let session_config = SessionConfig {
+                    frame_len: config.frame_len,
+                    ..SessionConfig::default()
+                };
+                let sink = frame_sink(tx, Arc::clone(&counters));
+                let session = tokio::task::spawn_blocking(move || {
+                    AudioSession::start(registry, session_config, sink)
+                })
+                .await
+                .map_err(|_| VoiceError::TaskFailed)??;
                 playback = Some(Arc::new(session.playback()));
                 push_to_talk = Some(session.push_to_talk());
                 resources.session = Some(session);
             }
             AudioMode::PlaybackOnly(registry) => {
-                let device = registry.resolve(Direction::Output)?;
-                let (queue, mut source) = playback_queue(
-                    device.info.format,
-                    SessionConfig::default().playback_capacity,
-                )?;
-                let stream = registry.backend().open_output(
-                    &device.info,
-                    Box::new(move |out| source.fill(out)),
-                    Arc::new(|error| tracing::warn!(%error, "the output stream failed")),
-                )?;
+                let registry = Arc::clone(registry);
+                let (queue, stream) = tokio::task::spawn_blocking(move || {
+                    let device = registry.resolve(Direction::Output)?;
+                    let (queue, mut source) = playback_queue(
+                        device.info.format,
+                        SessionConfig::default().playback_capacity,
+                    )?;
+                    let stream = registry.backend().open_output(
+                        &device.info,
+                        Box::new(move |out| source.fill(out)),
+                        Arc::new(|error| tracing::warn!(%error, "the output stream failed")),
+                    )?;
+                    Ok::<_, VoiceError>((queue, stream))
+                })
+                .await
+                .map_err(|_| VoiceError::TaskFailed)??;
                 resources.output_stream = Some(stream);
                 playback = Some(Arc::new(queue));
             }
@@ -823,6 +833,12 @@ impl Orchestrator {
             Phase::Active {
                 turn: TurnState::Listening,
             } => self.begin_voice_turn(utterance),
+            // Heard while the tutor is speaking, in a gap between its sentences:
+            // far more likely the tutor's own voice than the learner. Taking it
+            // as the learner's next turn would answer the tutor with itself.
+            Phase::Active {
+                turn: TurnState::Speaking,
+            } => Counters::bump(&self.shared.counters.utterances_dropped),
             Phase::Active { .. } => self.enqueue(Queued::Utterance(utterance)),
             Phase::Paused
             | Phase::ProviderUnavailable
