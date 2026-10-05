@@ -119,6 +119,11 @@ async fn a_scripted_conversation_runs_turn_by_turn_and_speaks_sentence_by_senten
         "Hello there. What is your name?"
     );
 
+    // The engines that loaded identify themselves, for the result files.
+    let engines = rig.handle.engines();
+    assert_eq!(engines.stt.map(|i| i.id).as_deref(), Some("fake-stt"));
+    assert_eq!(engines.tts.map(|i| i.id).as_deref(), Some("fake-tts"));
+
     let summary = rig.finish().await;
     assert_eq!(summary.turns_completed, 3);
     assert_eq!(summary.latencies.len(), 3);

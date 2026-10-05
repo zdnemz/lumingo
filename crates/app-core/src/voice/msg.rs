@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use speech::{SttEvent, TtsError};
+use speech::{EngineInfo, SttEvent, TtsError};
 use tokio::sync::{mpsc, oneshot};
 
 use super::turn::TurnReport;
@@ -48,7 +48,7 @@ pub(crate) enum Command {
 
 #[derive(Debug)]
 pub(crate) enum TtsLifecycle {
-    Ready,
+    Ready(EngineInfo),
     LoadFailed(TtsError),
     Stopped,
 }

@@ -91,8 +91,8 @@ mod turn;
 pub use clock::{LoopClock, SystemLoopClock};
 pub use config::{Scenario, VoiceConfig};
 pub use engine::{
-    AudioMode, ListenParts, SttLoad, TtsLoad, VoiceHandle, VoiceLoop, VoiceParts, VoiceStats,
-    VoiceSummary,
+    AudioMode, EngineInfos, ListenParts, SttLoad, TtsLoad, VoiceHandle, VoiceLoop, VoiceParts,
+    VoiceStats, VoiceSummary,
 };
 pub use error::{VoiceError, VoiceResult};
 pub use event::{StopCause, TurnOutcome, VoiceEvent};

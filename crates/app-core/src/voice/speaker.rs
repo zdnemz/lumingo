@@ -111,8 +111,8 @@ impl Speaker {
 
     fn on_event(&self, event: TtsEvent) -> TtsSinkResult {
         match event {
-            TtsEvent::Ready { .. } => {
-                self.inbox.post(Inbound::Tts(TtsLifecycle::Ready));
+            TtsEvent::Ready { info, .. } => {
+                self.inbox.post(Inbound::Tts(TtsLifecycle::Ready(info)));
                 TtsSinkResult::Accepted
             }
             TtsEvent::LoadFailed { error } => {

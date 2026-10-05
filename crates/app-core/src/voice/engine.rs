@@ -15,8 +15,8 @@ use audio_io::{
 };
 use llm_client::{ChatMessage, LlmClient, Role, TextRequest};
 use speech::{
-    CancelFlag, SttEngine, SttError, SttEvent, SttJob, SttSubmitError, SttWorker, SttWorkerStats,
-    TtsEngine, TtsError, TtsWorker, TtsWorkerStats, UtteranceSegmenter, Vad,
+    CancelFlag, EngineInfo, SttEngine, SttError, SttEvent, SttJob, SttSubmitError, SttWorker,
+    SttWorkerStats, TtsEngine, TtsError, TtsWorker, TtsWorkerStats, UtteranceSegmenter, Vad,
 };
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle as TaskHandle;
@@ -104,6 +104,14 @@ pub struct VoiceStats {
     pub tts: Option<TtsWorkerStats>,
 }
 
+/// The engines that loaded, as they identify themselves. Written next to every
+/// result so a latency can be traced to the exact engine and model.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EngineInfos {
+    pub stt: Option<EngineInfo>,
+    pub tts: Option<EngineInfo>,
+}
+
 /// What a finished session leaves behind.
 #[derive(Debug, Clone)]
 pub struct VoiceSummary {
@@ -134,6 +142,7 @@ struct Shared {
     push_to_talk: Option<PushToTalk>,
     frames: Option<SyncSender<FrameMsg>>,
     playback: Option<Arc<dyn PlaybackPort>>,
+    engines: Mutex<EngineInfos>,
     resources: Mutex<Option<Resources>>,
 }
 
@@ -177,6 +186,11 @@ impl VoiceHandle {
 
     pub fn turns_completed(&self) -> u32 {
         self.shared.cell.turns_completed()
+    }
+
+    /// The engines that have loaded so far.
+    pub fn engines(&self) -> EngineInfos {
+        lock(&self.shared.engines).clone()
     }
 
     async fn command(&self, command: Command) -> VoiceResult<()> {
@@ -448,6 +462,7 @@ impl VoiceLoop {
             push_to_talk,
             frames: frames_tx,
             playback: playback.clone(),
+            engines: Mutex::new(EngineInfos::default()),
             resources: Mutex::new(Some(resources)),
         });
         let orchestrator = Orchestrator {
@@ -755,7 +770,8 @@ impl Orchestrator {
             Inbound::Listen(event) => self.on_listen(event).await,
             Inbound::Stt(event) => self.on_stt(event).await,
             Inbound::Tts(life) => match life {
-                TtsLifecycle::Ready => {
+                TtsLifecycle::Ready(info) => {
+                    lock(&self.shared.engines).tts = Some(info);
                     if let Some(ready) = self.ready.as_mut() {
                         ready.tts = true;
                     }
@@ -880,7 +896,8 @@ impl Orchestrator {
 
     async fn on_stt(&mut self, event: SttEvent) {
         match event {
-            SttEvent::Ready { .. } => {
+            SttEvent::Ready { info, .. } => {
+                lock(&self.shared.engines).stt = Some(info);
                 if let Some(ready) = self.ready.as_mut() {
                     ready.stt = true;
                 }
