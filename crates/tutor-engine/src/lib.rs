@@ -2,6 +2,7 @@
 //! contain tutoring, scoring or prompt logic themselves.
 #![forbid(unsafe_code)]
 
+mod analysis;
 mod chunker;
 mod drafts;
 mod error;
@@ -10,6 +11,7 @@ mod review;
 mod session;
 mod support;
 
+pub use analysis::*;
 pub use chunker::SentenceChunker;
 pub use drafts::{DraftComparison, DraftError, EarlierError, Resolution, compare_drafts};
 pub use error::{EngineError, Result};
