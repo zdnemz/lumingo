@@ -5,6 +5,9 @@
 //! real `cpal` backend is behind the off-by-default `cpal-backend` feature.
 #![forbid(unsafe_code)]
 
+mod resample;
 mod ring;
+
+pub use resample::{CaptureConverter, MonoResampler, ResampleError};
 
 pub use ring::{CaptureConsumer, CaptureCounters, CaptureProducer, CaptureSnapshot, capture_ring};

@@ -45,6 +45,8 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
 | rtrb | Lock-free single-producer single-consumer ring buffer in `audio-io` (0.4.0). Its `unsafe` is inside the crate, audited by its authors; `audio-io` itself forbids unsafe. | MIT OR Apache-2.0 | ok |
+| rubato 5.0.1 and its dependencies (audioadapter, audioadapter-buffers, audioadapter-sample, realfft, rustfft, windowfunctions, num-complex, num-integer, num-traits, primal-check, strength_reduce, transpose, visibility) | Sample-rate conversion to 16 kHz and to the playback device rate in `audio-io`. Licenses read from each crate's `Cargo.toml` in the registry source. | MIT OR Apache-2.0 for rubato; realfft and windowfunctions MIT; visibility Zlib OR MIT OR Apache-2.0; the rest MIT OR Apache-2.0 | ok |
+| audio-codec-algorithms 0.8.1 | Sample-format conversion pulled in by audioadapter-sample | 0BSD OR Apache-2.0 (used under Apache-2.0) | ok |
 
 ## 4. JavaScript packages
 
@@ -89,7 +91,6 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | sherpa-onnx (Rust crate and native library) | VAD, STT, TTS runtime | Apache-2.0 | verify |
 | ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
-| Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
 | SQLx, SQLite | Storage | MIT OR Apache-2.0, public domain | verify |
 | reqwest | LLM HTTP client | MIT OR Apache-2.0 | verify |
 | jsonschema | Local validation of structured output and units | MIT | verify |

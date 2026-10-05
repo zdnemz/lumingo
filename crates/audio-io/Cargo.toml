@@ -8,7 +8,10 @@ rust-version.workspace = true
 description = "Capture, resampling, playback queue, microphone gate, devices and lifecycle for Lumingo"
 
 [dependencies]
+speech = { path = "../speech" }
+thiserror = "2.0.21"
 rtrb = "0.4.0"
+rubato = "5.0.1"
 
 [lints]
 workspace = true
