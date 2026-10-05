@@ -4,6 +4,10 @@
 
 mod chunker;
 mod review;
+mod session;
 
 pub use chunker::SentenceChunker;
 pub use review::{Grade, ReviewState, due_order, update_mastery};
+pub use session::{
+    Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,
+};

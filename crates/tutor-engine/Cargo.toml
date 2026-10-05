@@ -9,6 +9,7 @@ description = "Tutoring logic for Lumingo: sessions, turns, prompts and the free
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.21"
 
 [lints]
 workspace = true
