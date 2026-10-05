@@ -1,5 +1,5 @@
 import { render } from "@testing-library/react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { vi } from "vitest";
 import type { ApiClient, EventStreamHandlers } from "@/api/client";
 import { Providers } from "@/components/Providers";
@@ -57,6 +57,9 @@ export function fakeApi(getState: () => Promise<StateSnapshot> = () => Promise.r
   };
 }
 
+/** Renders inside the app providers. The wrapper stays in place on `rerender`. */
 export function renderApp(ui: ReactElement, client?: ApiClient) {
-  return render(<Providers client={client}>{ui}</Providers>);
+  return render(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => <Providers client={client}>{children}</Providers>,
+  });
 }
