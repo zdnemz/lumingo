@@ -12,3 +12,19 @@ Third-party components keep their own licenses. The list of what is used, and
 under which terms, is kept in docs/LICENSE_REGISTER.md. This file is extended
 with the required attribution lines each time a third-party item that needs
 attribution is added.
+
+Bundled fonts (SIL Open Font License 1.1; the license texts are served with the
+fonts from /fonts/licenses/):
+
+- Press Start 2P. Copyright 2012 The Press Start 2P Project Authors
+  (cody@zone38.net), with Reserved Font Name "Press Start 2P".
+- Pixelify Sans. Copyright 2021 The Pixelify Sans Project Authors
+  (https://github.com/eifetx/Pixelify-Sans).
+- Noto Sans Mono. Copyright 2022 The Noto Project Authors
+  (https://github.com/notofonts/latin-greek-cyrillic).
+
+Build-time data:
+
+- caniuse-lite, browser support data used by the Next.js build, is licensed
+  under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). It is not part
+  of the shipped application.
