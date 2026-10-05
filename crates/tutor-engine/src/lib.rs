@@ -13,6 +13,7 @@ mod review;
 mod session;
 mod support;
 mod topics;
+mod workshop;
 
 pub use analysis::*;
 pub use chat::{
@@ -35,3 +36,4 @@ pub use support::{Clock, system_clock};
 pub use topics::{
     ConversationTopic, LevelBank, LocalizedText, ReadingTopic, TopicBank, WritingPrompt,
 };
+pub use workshop::*;
