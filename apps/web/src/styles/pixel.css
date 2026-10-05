@@ -311,7 +311,7 @@ textarea.px-field {
 .px-switch__track {
   position: relative;
   flex: none;
-  width: calc(var(--px) * 18);
+  width: calc(var(--px) * 22);
   height: calc(var(--px) * 9);
   margin: var(--px);
   background: var(--color-bg-deep);
@@ -362,6 +362,10 @@ textarea.px-field {
   padding: 0;
   border: 0;
 }
+.px-segmented__option {
+  position: relative;
+  display: inline-flex;
+}
 .px-segmented__item {
   display: inline-flex;
   align-items: center;
@@ -376,8 +380,19 @@ textarea.px-field {
   cursor: pointer;
   box-shadow: var(--shadow-edge);
 }
-.px-segmented__item:hover {
+.px-segmented__option:hover .px-segmented__item {
   background: var(--color-surface);
+}
+/* The real radio sits invisibly over its label, so a click lands on the input
+ * and keyboard and screen reader behaviour stay those of a radio group. */
+.px-segmented__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 .px-segmented__input:checked + .px-segmented__item {
   background: var(--color-primary);
@@ -387,11 +402,6 @@ textarea.px-field {
 .px-segmented__input:focus-visible + .px-segmented__item {
   outline: var(--px) solid var(--color-focus);
   outline-offset: var(--px);
-}
-.px-segmented__input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
 }
 
 /* ---- Tutor dialog box --------------------------------------------------- */
