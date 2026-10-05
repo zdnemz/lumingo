@@ -6,69 +6,16 @@ mod common;
 
 use std::time::Duration;
 
-use common::{Chunk, Reply, TEST_KEY, fixture_text, openai_rig};
+use common::{
+    Chunk, Reply, TEST_KEY, collect, complete, fixture_text, openai_rig, test_schema, text_request,
+};
 use futures_util::StreamExt;
 use llm_client::{
-    Capabilities, ChatMessage, Completion, CompletionRequest, FinishReason, Format, LlmError,
-    ProtocolAdapter, SchemaRef, StreamEvent, TextRequest, TokenLimitParam,
+    Capabilities, FinishReason, Format, LlmError, ProtocolAdapter, SchemaRef, StreamEvent,
+    TokenLimitParam,
 };
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
-
-fn text_request() -> TextRequest {
-    TextRequest::new(
-        "You are a tutor.",
-        vec![
-            ChatMessage::user("Hi"),
-            ChatMessage::assistant("Hello"),
-            ChatMessage::user("How are you?"),
-        ],
-        80,
-    )
-    .with_temperature(0.7)
-}
-
-async fn collect(
-    adapter: &impl ProtocolAdapter,
-    request: &TextRequest,
-) -> Result<llm_client::CollectedText, LlmError> {
-    adapter
-        .stream_text(request, &CancellationToken::new())
-        .await?
-        .collect_text()
-        .await
-}
-
-fn test_schema() -> Value {
-    json!({
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["title", "word_count", "is_ok"],
-        "properties": {
-            "title": { "type": "string" },
-            "word_count": { "type": "integer" },
-            "is_ok": { "type": "boolean" }
-        }
-    })
-}
-
-async fn complete(
-    adapter: &impl ProtocolAdapter,
-    format: impl FnOnce(&Value) -> Format<'_>,
-    temperature: Option<f32>,
-) -> Result<Completion, LlmError> {
-    let schema = test_schema();
-    let messages = [ChatMessage::user("Make an example.")];
-    let request = CompletionRequest {
-        system: "Return JSON.",
-        messages: &messages,
-        max_tokens: 200,
-        temperature,
-        format: format(&schema),
-    };
-    // `schema` must outlive the call: the format borrows it.
-    adapter.complete(&request, &CancellationToken::new()).await
-}
 
 #[tokio::test]
 async fn streams_text_and_sends_the_documented_request() {

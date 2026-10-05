@@ -15,12 +15,14 @@ use axum::extract::{Request, State};
 use axum::response::Response;
 use futures_util::stream;
 use llm_client::{
-    AdapterConfig, ApiKey, Capabilities, CapsHandle, ClientOptions, HttpClientFactory, Limits,
-    OpenAiChat,
+    AdapterConfig, AnthropicMessages, ApiKey, Capabilities, CapsHandle, ChatMessage, ClientOptions,
+    Completion, CompletionRequest, Format, HttpClientFactory, Limits, LlmError, OpenAiChat,
+    ProtocolAdapter, TextRequest,
 };
 use reqwest::Url;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 pub const TEST_KEY: &str = "sk-test-0123456789abcdefghij-KEYMATERIAL";
 
@@ -278,5 +280,66 @@ pub async fn rig(base_path: &str, key: Option<&str>, options: ClientOptions) -> 
 pub async fn openai_rig() -> (Rig, OpenAiChat) {
     let rig = rig("/v1", Some(TEST_KEY), quick_options()).await;
     let adapter = OpenAiChat::new(rig.config.clone()).expect("adapter");
+    (rig, adapter)
+}
+
+pub fn text_request() -> TextRequest {
+    TextRequest::new(
+        "You are a tutor.",
+        vec![
+            ChatMessage::user("Hi"),
+            ChatMessage::assistant("Hello"),
+            ChatMessage::user("How are you?"),
+        ],
+        80,
+    )
+    .with_temperature(0.7)
+}
+
+pub async fn collect(
+    adapter: &impl ProtocolAdapter,
+    request: &TextRequest,
+) -> Result<llm_client::CollectedText, LlmError> {
+    adapter
+        .stream_text(request, &CancellationToken::new())
+        .await?
+        .collect_text()
+        .await
+}
+
+pub fn test_schema() -> Value {
+    json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "word_count", "is_ok"],
+        "properties": {
+            "title": { "type": "string" },
+            "word_count": { "type": "integer" },
+            "is_ok": { "type": "boolean" }
+        }
+    })
+}
+
+pub async fn complete(
+    adapter: &impl ProtocolAdapter,
+    format: impl FnOnce(&Value) -> Format<'_>,
+    temperature: Option<f32>,
+) -> Result<Completion, LlmError> {
+    let schema = test_schema();
+    let messages = [ChatMessage::user("Make an example.")];
+    let request = CompletionRequest {
+        system: "Return JSON.",
+        messages: &messages,
+        max_tokens: 200,
+        temperature,
+        format: format(&schema),
+    };
+    // `schema` must outlive the call: the format borrows it.
+    adapter.complete(&request, &CancellationToken::new()).await
+}
+
+pub async fn anthropic_rig() -> (Rig, AnthropicMessages) {
+    let rig = rig("", Some(TEST_KEY), quick_options()).await;
+    let adapter = AnthropicMessages::new(rig.config.clone()).expect("adapter");
     (rig, adapter)
 }

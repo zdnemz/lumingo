@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 pub mod adapter;
+pub mod anthropic;
 pub mod caps;
 pub mod client;
 pub mod error;
@@ -26,6 +27,7 @@ pub use adapter::{
     AdapterConfig, ClientOptions, Completion, CompletionRequest, Format, Limits, ProtocolAdapter,
     SchemaRef,
 };
+pub use anthropic::AnthropicMessages;
 pub use caps::CapsHandle;
 pub use client::LlmClient;
 pub use error::{InvalidOutput, InvalidReason, LlmError, TimeoutKind, TransportKind};
