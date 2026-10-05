@@ -41,7 +41,7 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | referencing, jsonschema-regex, jsonschema-value, fluent-uri, fancy-regex, email_address, uuid-simd, vsimd, outref, data-encoding, micromap, fraction, num-cmp, bytecount, ahash, strum, unicode-general-category | Dependencies of jsonschema. Checked 2026-10-05. | MIT, or MIT OR Apache-2.0, or Apache-2.0 (unicode-general-category) | ok |
 | borrow-or-share | Dependency of fluent-uri, which jsonschema uses for references. Its LICENSE file is MIT No Attribution, which asks for less than MIT. It is allowed through a per-crate exception in `deny.toml`. Checked 2026-10-05, version 0.2.4. | MIT-0 | ok |
 | serde, serde_json | Serialisation | MIT OR Apache-2.0 | ok |
-| clap | Command-line options of `apps/server` and `tools/content-cli` | MIT OR Apache-2.0 | ok |
+| clap | Command-line options of `apps/server`, `tools/content-cli` and `tools/tutor-cli` | MIT OR Apache-2.0 | ok |
 | anyhow, thiserror | Errors | MIT OR Apache-2.0 | ok |
 | tracing, tracing-subscriber | Logging | MIT | ok |
 | sha2, base64 | Content-Security-Policy script hashes. sha2 also gives the SHA-256 checksum of each unit file in `crates/curriculum`. | MIT OR Apache-2.0 | ok |
@@ -61,7 +61,7 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | native-tls | TLS backend choice: Schannel on Windows (no library to install), Security framework on macOS, OpenSSL on Linux | MIT OR Apache-2.0 | ok |
 | schannel | Windows binding used by native-tls | MIT | ok |
 | openssl, openssl-sys, openssl-probe | Linux binding used by native-tls. They link the system OpenSSL library and do not bundle it; building needs its headers | Apache-2.0, MIT, MIT OR Apache-2.0 | ok |
-| toml (with toml_parser, toml_writer, toml_datetime, serde_spanned, winnow) | Reads and writes `providers.toml` in `llm-client` | MIT OR Apache-2.0; winnow MIT | ok |
+| toml (with toml_parser, toml_writer, toml_datetime, serde_spanned, winnow) | Reads and writes `providers.toml` in `llm-client`; reads the sherpa engines file of `tools/tutor-cli` (`sherpa` feature, off by default) | MIT OR Apache-2.0; winnow MIT | ok |
 | tempfile (with fastrand) | Temporary directories in `llm-client` tests | MIT OR Apache-2.0 | ok |
 | sysinfo | Installed memory in the hardware profile of `crates/app-core` (only the `system` feature; the same crate version as `tools/bench`). Checked 2026-10-05, version 0.36.1. | MIT | ok |
 | iana-time-zone, iana-time-zone-haiku, android_system_properties | Pulled in by the `clock` feature of chrono, which `crates/app-core` uses to read the learner's local calendar day for streaks (unix targets only; Windows uses `windows-link`). Checked 2026-10-05. | MIT OR Apache-2.0 | ok |
