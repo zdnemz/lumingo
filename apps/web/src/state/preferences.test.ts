@@ -69,7 +69,10 @@ describe("resolving settings", () => {
 });
 
 /** Runs the boot script against a fake document and returns what it set. */
-function runBootScript(stored: string | null, hints: { reduced: boolean; dark: boolean; lang: string }) {
+function runBootScript(
+  stored: string | null,
+  hints: { reduced: boolean; dark: boolean; lang: string },
+): Record<string, string> {
   const dataset: Record<string, string> = {};
   const root = { dataset, lang: "" };
   const fakeDocument = { documentElement: root };
