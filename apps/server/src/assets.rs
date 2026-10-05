@@ -18,6 +18,10 @@ use sha2::{Digest, Sha256};
 #[allow_missing = true]
 struct Ui;
 
+/// Whether `apps/web/out` existed when the server was compiled. `build.rs` sets
+/// it, which also makes Cargo recompile this file when the UI is built later.
+pub const UI_BUILT_AT_COMPILE_TIME: bool = matches!(env!("LUMINGO_UI_BUILT").as_bytes(), b"1");
+
 const NOT_BUILT_PAGE: &str = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Lumingo</title></head><body><p>The web UI has not been built. Run <code>pnpm --dir apps/web build</code> and rebuild the server.</p></body></html>";
 
 /// Fallback handler: every request that is not an API route.
