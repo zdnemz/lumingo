@@ -228,3 +228,64 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* ---- Wardrobe -------------------------------------------------------------- */
+
+.wardrobe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.wardrobe__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wardrobe__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  height: calc(100% - var(--px) * 2);
+  text-align: center;
+}
+.wardrobe__preview {
+  display: grid;
+  place-items: center;
+  min-height: calc(var(--px) * 24);
+}
+.wardrobe__name {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.wardrobe__state {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.wardrobe__swatch {
+  position: relative;
+  display: block;
+  width: calc(var(--px) * 20);
+  height: calc(var(--px) * 16);
+  background: var(--color-bg);
+  box-shadow: 0 0 0 var(--px) var(--color-border);
+  margin: var(--px);
+}
+.wardrobe__swatch-surface {
+  position: absolute;
+  inset: calc(var(--px) * 3) calc(var(--px) * 3) calc(var(--px) * 6);
+  background: var(--color-surface-raised);
+  box-shadow: 0 0 0 var(--px) var(--color-border);
+}
+.wardrobe__swatch-primary {
+  position: absolute;
+  left: calc(var(--px) * 3);
+  bottom: calc(var(--px) * 2);
+  width: calc(var(--px) * 8);
+  height: calc(var(--px) * 3);
+  background: var(--color-primary);
+}
