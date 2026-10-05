@@ -1,0 +1,41 @@
+[package]
+name = "pron-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Pronunciation engine for Lumingo: lexicon, forced alignment, GOP, scores and adaptive timing"
+
+[features]
+# Off by default. `cli` builds the `pron` program, which can score a posterior
+# matrix read from a JSON file and show the timing mode of a stored speed
+# profile. Both are checked by tests that need no model.
+cli = ["dep:clap", "dep:anyhow"]
+# Off by default. Adds the ONNX Runtime adapter and lets `pron score` read a
+# WAV file. UNVERIFIED: it compiles, but it has never run against a model
+# because the build container has neither a model nor an ONNX Runtime library.
+ort-backend = ["cli", "dep:ort", "dep:hound"]
+
+[[bin]]
+name = "pron"
+path = "src/bin/pron.rs"
+required-features = ["cli"]
+
+[dependencies]
+speech = { path = "../speech" }
+thiserror = "2.0.21"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+toml = "1.1.6"
+anyhow = { version = "1.0.104", optional = true }
+clap = { version = "4.6.7", features = ["derive"], optional = true }
+hound = { version = "3.5.1", optional = true }
+# Pinned exactly: this is a release candidate and its API still moves between
+# candidates. `load-dynamic` keeps the build from downloading ONNX Runtime (the
+# download host is not reachable from CI containers and the owner chooses which
+# runtime to ship): the program loads the library named by ORT_DYLIB_PATH.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "load-dynamic"], optional = true }
+
+[lints]
+workspace = true
