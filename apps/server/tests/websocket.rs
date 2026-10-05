@@ -2,6 +2,8 @@
 
 //! The event stream against a real listener on the loopback address.
 
+mod common;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,8 +14,6 @@ use tokio_tungstenite::tungstenite::Error as WsError;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
-use tokio_util::sync::CancellationToken;
-use tutor_server::events::EventHub;
 use tutor_server::security::Guard;
 use tutor_server::{AppState, build_router};
 
@@ -33,23 +33,24 @@ async fn next_text(ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> Strin
 struct Running {
     port: u16,
     state: Arc<AppState>,
+    _dir: tempfile::TempDir,
 }
 
 async fn start() -> Running {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
     let guard = Arc::new(Guard::new(port, None).expect("guard"));
-    let state = Arc::new(AppState {
-        hub: EventHub::new(false),
-        guard,
-        shutdown: CancellationToken::new(),
-        dev_mode: false,
-    });
+    let (core, dir) = common::open_core(&common::Options::default()).await;
+    let state = Arc::new(AppState::new(core, guard));
     let app = build_router(Arc::clone(&state));
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
     });
-    Running { port, state }
+    Running {
+        port,
+        state,
+        _dir: dir,
+    }
 }
 
 /// Fetches the UI page the way a browser does and returns the `name=value` cookie pair.
@@ -109,8 +110,8 @@ async fn first_message_is_a_snapshot_then_events_follow_in_order() {
     assert_eq!(first["seq"], 0);
     assert_eq!(first["state"]["dev_mode"], false);
 
-    running.state.hub.publish_heartbeat();
-    running.state.hub.publish_heartbeat();
+    running.state.core.publish_heartbeat();
+    running.state.core.publish_heartbeat();
     let second: serde_json::Value = serde_json::from_str(&next_text(&mut ws).await).expect("json");
     let third: serde_json::Value = serde_json::from_str(&next_text(&mut ws).await).expect("json");
     assert_eq!(second["type"], "Heartbeat");
@@ -123,7 +124,7 @@ async fn first_message_is_a_snapshot_then_events_follow_in_order() {
 async fn a_late_connection_starts_from_the_current_sequence() {
     let running = start().await;
     for _ in 0..5 {
-        running.state.hub.publish_heartbeat();
+        running.state.core.publish_heartbeat();
     }
     let cookie = session_cookie(running.port).await;
     let origin = format!("http://127.0.0.1:{}", running.port);
@@ -151,4 +152,76 @@ async fn handshake_is_refused_for_foreign_origin_and_missing_cookie() {
             other => panic!("expected an HTTP refusal, got {other:?}"),
         }
     }
+}
+
+async fn next_json(ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> serde_json::Value {
+    serde_json::from_str(&next_text(ws).await).expect("json")
+}
+
+#[tokio::test]
+async fn a_provider_change_and_new_settings_reach_every_client_in_order() {
+    let running = start().await;
+    let cookie = session_cookie(running.port).await;
+    let origin = format!("http://127.0.0.1:{}", running.port);
+    let (mut ws, _) = connect_async(ws_request(running.port, &origin, Some(&cookie)))
+        .await
+        .expect("handshake");
+    let first = next_json(&mut ws).await;
+    assert_eq!(first["type"], "Snapshot");
+    assert_eq!(first["state"]["provider"], serde_json::Value::Null);
+    assert_eq!(first["state"]["settings"]["display_name"], "Learner");
+
+    let request = serde_json::from_value(serde_json::json!({
+        "name": "mine", "protocol": "openai_chat",
+        "base_url": "https://api.example.test/v1", "model": "m", "api_key": "sk-abcdefgh-12345678"
+    }))
+    .expect("request");
+    running
+        .state
+        .core
+        .save_provider(request)
+        .await
+        .expect("save");
+    let status = next_json(&mut ws).await;
+    assert_eq!(status["type"], "ProviderStatus");
+    assert_eq!(status["seq"], 1);
+    assert_eq!(status["provider"]["name"], "mine");
+    assert_eq!(status["provider"]["has_key"], true);
+    assert!(
+        !status.to_string().contains("abcdefgh"),
+        "no key on the stream"
+    );
+
+    let mut settings = running.state.core.settings();
+    settings.display_name = "Sari".to_owned();
+    running
+        .state
+        .core
+        .update_settings(settings)
+        .await
+        .expect("settings");
+    let snapshot = next_json(&mut ws).await;
+    assert_eq!(snapshot["type"], "Snapshot");
+    assert_eq!(snapshot["seq"], 2);
+    assert_eq!(snapshot["state"]["settings"]["display_name"], "Sari");
+    assert_eq!(snapshot["state"]["provider"]["name"], "mine");
+}
+
+#[tokio::test]
+async fn shutdown_closes_the_stream() {
+    let running = start().await;
+    let cookie = session_cookie(running.port).await;
+    let origin = format!("http://127.0.0.1:{}", running.port);
+    let (mut ws, _) = connect_async(ws_request(running.port, &origin, Some(&cookie)))
+        .await
+        .expect("handshake");
+    let _ = next_text(&mut ws).await;
+    running.state.core.request_shutdown();
+    let frame = tokio::time::timeout(Duration::from_secs(2), ws.next())
+        .await
+        .expect("the stream ends");
+    assert!(matches!(
+        frame,
+        Some(Ok(Message::Close(_))) | None | Some(Err(_))
+    ));
 }

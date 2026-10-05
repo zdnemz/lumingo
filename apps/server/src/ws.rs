@@ -7,8 +7,9 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use tokio::sync::broadcast::error::RecvError;
 
+use app_core::api::ServerEvent;
+
 use crate::AppState;
-use crate::types::ServerEvent;
 
 /// Messages from the browser are never read as commands, so the limit is small.
 const MAX_INCOMING_BYTES: usize = 1024;
@@ -20,16 +21,17 @@ pub async fn events(State(state): State<Arc<AppState>>, upgrade: WebSocketUpgrad
 }
 
 async fn run(mut socket: WebSocket, state: Arc<AppState>) {
+    let shutdown = state.core.shutdown_token();
     // Subscribe before taking the snapshot so no event falls between the two.
-    let mut rx = state.hub.subscribe();
-    let first = state.hub.snapshot_event();
+    let mut rx = state.core.events().subscribe();
+    let first = state.core.snapshot_event();
     let mut last_seq = first.seq();
     if send(&mut socket, &first).await.is_err() {
         return;
     }
     loop {
         tokio::select! {
-            () = state.shutdown.cancelled() => {
+            () = shutdown.cancelled() => {
                 let _ = socket.send(Message::Close(None)).await;
                 return;
             }
@@ -46,7 +48,7 @@ async fn run(mut socket: WebSocket, state: Arc<AppState>) {
                 }
                 Ok(_) => {}
                 Err(RecvError::Lagged(_)) => {
-                    let snapshot = state.hub.snapshot_event();
+                    let snapshot = state.core.snapshot_event();
                     last_seq = snapshot.seq();
                     if send(&mut socket, &snapshot).await.is_err() {
                         return;
