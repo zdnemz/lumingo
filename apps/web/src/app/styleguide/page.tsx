@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Hud } from "@/game/Hud";
+import { Wardrobe, type CosmeticItem } from "@/game/Wardrobe";
 import { QuestMap, type QuestRegion } from "@/learn/QuestMap";
 import { SkillBars, type SkillEstimate } from "@/progress/SkillBars";
 import { PhonemeChips, type WordResult } from "@/pron/PhonemeChips";
@@ -51,6 +52,15 @@ const WORDS: WordResult[] = [
   },
 ];
 
+const COSMETICS: CosmeticItem[] = [
+  { id: "accessory-cap", kind: "accessory", rank: 1, unlocked: true, equipped: true },
+  { id: "accessory-headphones", kind: "accessory", rank: 2, unlocked: true, equipped: false },
+  { id: "theme-forest", kind: "theme", rank: 2, unlocked: true, equipped: false },
+  { id: "theme-ember", kind: "theme", rank: 3, unlocked: false, equipped: false },
+  { id: "accessory-wizard", kind: "accessory", rank: 3, unlocked: false, equipped: false },
+  { id: "accessory-crown", kind: "accessory", rank: 6, unlocked: false, equipped: false },
+];
+
 const MOODS: LumiMood[] = ["idle", "blink", "happy", "think", "talk", "sad"];
 const SWATCHES = [
   "bg", "bg-deep", "surface", "surface-raised", "border", "text", "text-muted", "primary", "success", "danger",
@@ -60,7 +70,7 @@ const SWATCHES = [
 export default function StyleguidePage() {
   const [on, setOn] = useState(true);
   const [choice, setChoice] = useState<"a" | "b" | "c">("a");
-  const icons = Object.keys(SPRITES).filter((name) => !name.startsWith("lumi-")) as SpriteName[];
+  const icons = Object.keys(SPRITES).filter((name) => !name.startsWith("lumi-") && !name.startsWith("accessory-")) as SpriteName[];
 
   return (
     <AppShell>
@@ -156,6 +166,10 @@ export default function StyleguidePage() {
               <Typewriter text="Hello! Today we talk about food. What do you like to eat?" />
             </DialogBox>
           </div>
+        </Panel>
+
+        <Panel title="Wardrobe" raised>
+          <Wardrobe items={COSMETICS} onEquip={() => undefined} onUnequip={() => undefined} />
         </Panel>
 
         <Panel title="Icons" raised>
