@@ -17,7 +17,7 @@ use futures_util::stream;
 use llm_client::{
     AdapterConfig, AnthropicMessages, ApiKey, Capabilities, CapsHandle, ChatMessage, ClientOptions,
     Completion, CompletionRequest, Format, HttpClientFactory, Limits, LlmError, OpenAiChat,
-    ProtocolAdapter, ProviderClient, TextRequest,
+    ProtocolAdapter, ProviderClient, RetryPolicy, TextRequest,
 };
 use reqwest::Url;
 use serde_json::{Value, json};
@@ -245,6 +245,12 @@ pub fn quick_options() -> ClientOptions {
             connect: Duration::from_millis(500),
             first_token: None,
             total: Duration::from_secs(5),
+        },
+        retry: RetryPolicy {
+            transport_retries: 1,
+            jitter_base: Duration::from_millis(20),
+            rate_limit_retries: 2,
+            rate_limit_backoff: Duration::from_millis(60),
         },
     }
 }

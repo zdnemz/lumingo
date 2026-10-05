@@ -56,7 +56,13 @@ impl AnthropicMessages {
             value.set_sensitive(true);
             headers.insert(HeaderName::from_static("x-api-key"), value);
         }
-        let transport = Transport::new(config.http.clone(), url, headers, config.key.clone());
+        let transport = Transport::new(
+            config.http.clone(),
+            url,
+            headers,
+            config.key.clone(),
+            config.options.retry,
+        );
         Ok(Self { config, transport })
     }
 

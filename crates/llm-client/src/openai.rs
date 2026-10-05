@@ -56,7 +56,13 @@ impl OpenAiChat {
             value.set_sensitive(true);
             headers.insert(AUTHORIZATION, value);
         }
-        let transport = Transport::new(config.http.clone(), url, headers, config.key.clone());
+        let transport = Transport::new(
+            config.http.clone(),
+            url,
+            headers,
+            config.key.clone(),
+            config.options.retry,
+        );
         Ok(Self { config, transport })
     }
 

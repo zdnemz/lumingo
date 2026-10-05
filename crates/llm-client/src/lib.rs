@@ -11,6 +11,7 @@ pub mod adapter;
 pub mod anthropic;
 pub mod caps;
 pub mod client;
+mod connect;
 pub mod error;
 #[cfg(test)]
 mod fake;
@@ -30,7 +31,7 @@ mod validate;
 
 pub use adapter::{
     AdapterConfig, ClientOptions, Completion, CompletionRequest, Format, Limits, ProtocolAdapter,
-    SchemaRef,
+    RetryPolicy, SchemaRef,
 };
 pub use anthropic::AnthropicMessages;
 pub use caps::CapsHandle;
@@ -40,7 +41,10 @@ pub use http::{GuardedClient, HttpClientFactory, SetupHosts, is_loopback_url};
 pub use key::{ApiKey, KeyError};
 pub use ladder::{ProviderClient, REPROBE_BELOW, VALIDITY_WINDOW};
 pub use openai::OpenAiChat;
-pub use profile::Protocol;
+pub use profile::{
+    ENV_API_KEY, ENV_BASE_URL, ENV_MODEL, ENV_PROFILE_NAME, ENV_PROTOCOL, EnvProfileLoader,
+    ProfileError, ProfileInfo, ProfileSet, ProfileSource, Protocol, ProviderProfile, parse_dotenv,
+};
 pub use schema::Contract;
 pub use types::{
     Capabilities, ChatMessage, CollectedText, FinishReason, LadderLevel, RateLimit, Role,

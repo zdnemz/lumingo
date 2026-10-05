@@ -45,10 +45,34 @@ impl Limits {
     };
 }
 
+/// Retry rules of `context_pack.md` section 13: one retry for transport errors and
+/// 5xx with jitter, no retry on 4xx except 429, which follows `Retry-After`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetryPolicy {
+    /// Retries after a transport error or a 5xx reply.
+    pub transport_retries: u32,
+    /// The pause before such a retry is between half of this and one and a half times it.
+    pub jitter_base: Duration,
+    /// Retries after HTTP 429 (`docs/PROMPT_CONTRACTS.md` section 9: at most two).
+    pub rate_limit_retries: u32,
+    /// Pause before the first 429 retry when the reply has no `Retry-After`; it doubles each time.
+    pub rate_limit_backoff: Duration,
+}
+
+impl RetryPolicy {
+    pub const DEFAULT: RetryPolicy = RetryPolicy {
+        transport_retries: 1,
+        jitter_base: Duration::from_millis(300),
+        rate_limit_retries: 2,
+        rate_limit_backoff: Duration::from_secs(2),
+    };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClientOptions {
     pub tutor: Limits,
     pub background: Limits,
+    pub retry: RetryPolicy,
 }
 
 impl Default for ClientOptions {
@@ -56,6 +80,7 @@ impl Default for ClientOptions {
         Self {
             tutor: Limits::TUTOR_TURN,
             background: Limits::BACKGROUND,
+            retry: RetryPolicy::DEFAULT,
         }
     }
 }

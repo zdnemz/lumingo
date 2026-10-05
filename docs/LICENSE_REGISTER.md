@@ -55,6 +55,8 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | openssl, openssl-sys, openssl-probe | Linux binding used by native-tls. They link the system OpenSSL library and do not bundle it; building needs its headers | Apache-2.0, MIT, MIT OR Apache-2.0 | ok |
 | jsonschema, referencing, fluent-uri and the crates they use | Local validation of structured output in `llm-client`. Built without default features, so it cannot fetch a schema over HTTP or from a file | MIT (jsonschema); others MIT or MIT OR Apache-2.0 | ok |
 | borrow-or-share | Used by fluent-uri, under jsonschema | MIT-0 (OSI approved, MIT without the attribution clause). Allowed for this crate only by an exception in `deny.toml` | ok |
+| toml (with toml_parser, toml_writer, toml_datetime, serde_spanned, winnow) | Reads and writes `providers.toml` in `llm-client` | MIT OR Apache-2.0; winnow MIT | ok |
+| tempfile (with fastrand) | Temporary directories in `llm-client` tests | MIT OR Apache-2.0 | ok |
 
 ## 4. JavaScript packages
 

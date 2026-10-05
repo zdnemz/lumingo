@@ -8,7 +8,7 @@ use serde_json::Value;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-use crate::adapter::Limits;
+use crate::adapter::{Limits, RetryPolicy};
 use crate::error::{LlmError, TimeoutKind};
 use crate::http::{GuardedClient, map_reqwest_error};
 use crate::key::ApiKey;
@@ -56,6 +56,7 @@ pub(crate) struct Transport {
     url: Url,
     headers: HeaderMap,
     key: Option<ApiKey>,
+    retry: RetryPolicy,
 }
 
 impl Transport {
@@ -64,12 +65,14 @@ impl Transport {
         url: Url,
         headers: HeaderMap,
         key: Option<ApiKey>,
+        retry: RetryPolicy,
     ) -> Self {
         Self {
             http,
             url,
             headers,
             key,
+            retry,
         }
     }
 
@@ -77,8 +80,77 @@ impl Transport {
         self.key.as_ref().map(ApiKey::expose)
     }
 
-    /// Sends the body once and returns the response when its status is 2xx.
+    /// Sends the body and returns the response when its status is 2xx. Retries follow
+    /// `context_pack.md` section 13:
+    ///
+    /// - A transport error (including a connect timeout) or a 5xx reply is retried
+    ///   once after a jittered pause.
+    /// - HTTP 429 is retried up to twice, after `Retry-After` when the reply has it
+    ///   and after an exponential backoff from 2 s otherwise. A wait that would
+    ///   outlast the call's total limit is not taken: the error is returned at once
+    ///   with the `Retry-After` value, so the caller can switch to batched mode.
+    /// - Every other 4xx, a first-token or total timeout, and a cancellation are
+    ///   final. A stream is retried only here, before its first byte of content, never
+    ///   after, because a repeated reply would repeat spoken words.
     pub(crate) async fn post(
+        &self,
+        body: &Value,
+        stream: bool,
+        budget: &CallBudget,
+        cancel: &CancellationToken,
+    ) -> Result<Response, LlmError> {
+        let mut transport_retries = 0;
+        let mut rate_limit_retries = 0;
+        loop {
+            let error = match self.post_once(body, stream, budget, cancel).await {
+                Ok(response) => return Ok(response),
+                Err(error) => error,
+            };
+            let pause = match &error {
+                LlmError::Transport(_) | LlmError::Timeout(TimeoutKind::Connect)
+                    if transport_retries < self.retry.transport_retries =>
+                {
+                    transport_retries += 1;
+                    Some(jittered(self.retry.jitter_base))
+                }
+                LlmError::Server { .. } if transport_retries < self.retry.transport_retries => {
+                    transport_retries += 1;
+                    Some(jittered(self.retry.jitter_base))
+                }
+                LlmError::RateLimited { retry_after }
+                    if rate_limit_retries < self.retry.rate_limit_retries =>
+                {
+                    let backoff = self.retry.rate_limit_backoff * 2u32.pow(rate_limit_retries);
+                    rate_limit_retries += 1;
+                    Some(retry_after.unwrap_or(backoff))
+                }
+                _ => None,
+            };
+            let Some(pause) = pause else {
+                return Err(error);
+            };
+            if budget
+                .total_deadline
+                .saturating_duration_since(Instant::now())
+                <= pause
+            {
+                return Err(error);
+            }
+            tracing::debug!(
+                target: "llm_client::transport",
+                pause_ms = u64::try_from(pause.as_millis()).unwrap_or(u64::MAX),
+                "retrying after a failed request"
+            );
+            tokio::select! {
+                biased;
+                () = cancel.cancelled() => return Err(LlmError::Cancelled),
+                () = tokio::time::sleep(pause) => {}
+            }
+        }
+    }
+
+    /// Sends the body once and returns the response when its status is 2xx.
+    async fn post_once(
         &self,
         body: &Value,
         stream: bool,
@@ -169,6 +241,17 @@ async fn read_limited(mut response: Response, limit: usize) -> Result<Vec<u8>, L
             Err(error) => return Err(map_reqwest_error(&error)),
         }
     }
+}
+
+/// A pause between half of `base` and one and a half times it. The randomness
+/// only has to spread simultaneous retries apart, so the per-instance random keys
+/// of the standard library's `RandomState` are enough.
+fn jittered(base: Duration) -> Duration {
+    use std::hash::{BuildHasher, Hasher};
+    let random = std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish();
+    base / 2 + base.mul_f64((random % 1000) as f64 / 1000.0)
 }
 
 /// `retry-after-ms` (sent by some providers) wins over `retry-after` in seconds.
