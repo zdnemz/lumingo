@@ -3624,8 +3624,19 @@ name = "tutor-engine"
 version = "0.0.0"
 dependencies = [
  "assessment-engine",
+ "async-trait",
+ "curriculum",
+ "futures-util",
+ "jsonschema",
+ "llm-client",
  "serde",
+ "serde_json",
+ "storage",
+ "tempfile",
  "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
