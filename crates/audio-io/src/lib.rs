@@ -5,8 +5,16 @@
 //! real `cpal` backend is behind the off-by-default `cpal-backend` feature.
 #![forbid(unsafe_code)]
 
+mod format;
+mod playback;
 mod resample;
 mod ring;
+mod sync;
+
+pub use format::StreamFormat;
+pub use playback::{
+    EnqueueOutcome, PlaybackError, PlaybackQueue, PlaybackSource, PlaybackStats, playback_queue,
+};
 
 pub use resample::{CaptureConverter, MonoResampler, ResampleError};
 
