@@ -73,3 +73,29 @@ pub async fn make_turn(db: &Database, session_id: i64, role: TurnRole, text: &st
         .await
         .expect("append turn")
 }
+
+/// A scored, authored, estimate-eligible attempt row. Tests change the fields
+/// they care about with struct update syntax.
+pub fn new_attempt(profile_id: i64, response_id: &str, dimension: &str) -> storage::NewAttempt {
+    storage::NewAttempt {
+        profile_id,
+        session_id: None,
+        unit_id: Some("a1-u01".to_owned()),
+        activity_id: "act-1".to_owned(),
+        activity_type: "guided_writing".to_owned(),
+        response_id: response_id.to_owned(),
+        origin: storage::AttemptOrigin::Authored,
+        level: storage::Level::A1,
+        skill: "writing".to_owned(),
+        dimension: dimension.to_owned(),
+        scorer: storage::Scorer::RubricLlm,
+        scorer_version: "rubric-w1/1".to_owned(),
+        raw_score: Some(3.0),
+        max_score: Some(4.0),
+        normalized: Some(0.75),
+        confidence: Some(0.8),
+        status: storage::AttemptStatus::Scored,
+        counts_toward_estimate: true,
+        created_at: ts(100),
+    }
+}
