@@ -1,0 +1,65 @@
+# ARPAbet to phoneme-model label map (ASSESSMENT_SPEC 7.2 step 2).
+#
+# STATUS: CANDIDATE, UNVERIFIED. The phoneme model is chosen in S1-07 and the
+# build container cannot reach Hugging Face, so no `vocab.json` was read. The
+# labels below are the IPA symbols an espeak-style CTC recogniser (the candidate
+# in the licence register, facebook/wav2vec2-lv-60-espeak-cv-ft) is expected to
+# use, written from the espeak English phoneme inventory, not from the model's
+# vocabulary. Each ARPAbet symbol lists every label that counts as that sound;
+# alignment and GOP take the best of them. Labels the real vocabulary lacks are
+# ignored when the map is bound to it; a symbol left with no label at all is an
+# error at that moment, so a wrong guess fails loudly rather than scoring wrong.
+# When the model is chosen, check this file against its vocabulary and change
+# `status`.
+#
+# Choices that change what gets flagged, so they are stated here:
+# - IPA flap [ɾ] is accepted for T and D because General American produces it
+#   between vowels ("water"). The trill [r], typical of Indonesian speakers, is
+#   NOT accepted for R, so it can be heard as a substitution.
+# - Length marks and diphthong spellings vary between vocabularies, so both
+#   spellings are listed where the choice is not known.
+
+[meta]
+model = "facebook/wav2vec2-lv-60-espeak-cv-ft (candidate, not yet chosen)"
+status = "candidate-unverified-against-vocab"
+
+[map]
+AA = ["ɑː", "ɑ", "ɒ"]
+AE = ["æ", "a"]
+AH = ["ʌ", "ə", "ɐ"]
+AO = ["ɔː", "ɔ", "ɒ"]
+AW = ["aʊ"]
+AY = ["aɪ"]
+B = ["b"]
+CH = ["tʃ", "t͡ʃ"]
+D = ["d", "ɾ"]
+DH = ["ð"]
+EH = ["ɛ", "e"]
+ER = ["ɜː", "ɚ", "ɝ", "ɜ"]
+EY = ["eɪ", "e"]
+F = ["f"]
+G = ["ɡ", "g"]
+HH = ["h"]
+IH = ["ɪ", "ɨ"]
+IY = ["iː", "i"]
+JH = ["dʒ", "d͡ʒ"]
+K = ["k"]
+L = ["l", "ɫ"]
+M = ["m"]
+N = ["n"]
+NG = ["ŋ"]
+OW = ["oʊ", "əʊ", "o"]
+OY = ["ɔɪ"]
+P = ["p"]
+R = ["ɹ", "ɻ"]
+S = ["s"]
+SH = ["ʃ"]
+T = ["t", "ɾ"]
+TH = ["θ"]
+UH = ["ʊ"]
+UW = ["uː", "u"]
+V = ["v"]
+W = ["w"]
+Y = ["j"]
+Z = ["z"]
+ZH = ["ʒ"]

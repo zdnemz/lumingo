@@ -9,8 +9,12 @@
 
 pub mod arpabet;
 pub mod lexicon;
+pub mod phone_map;
 pub mod reference;
+pub mod vocab;
 
 pub use arpabet::{Arpabet, Phone, PhoneClass, UnknownArpabet};
 pub use lexicon::{Lexicon, LexiconError};
+pub use phone_map::{BoundPhoneMap, PhoneMap, PhoneMapError};
 pub use reference::{NotChecked, Reference, ReferenceWord, WordStatus};
+pub use vocab::{ModelVocab, VocabError};
