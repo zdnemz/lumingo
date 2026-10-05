@@ -6,6 +6,8 @@
 #![forbid(unsafe_code)]
 
 mod capture;
+#[cfg(feature = "cpal-backend")]
+mod cpal_backend;
 mod device;
 #[cfg(any(test, feature = "test-support"))]
 pub mod fake;
@@ -38,3 +40,6 @@ pub use session::{
     AudioEvent, AudioSession, FrameSink, PlaybackHandle, SessionConfig, SessionError, SessionStats,
     StopReport,
 };
+
+#[cfg(feature = "cpal-backend")]
+pub use cpal_backend::CpalBackend;
