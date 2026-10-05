@@ -1,0 +1,19 @@
+[package]
+name = "pron-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Pronunciation engine for Lumingo: lexicon, forced alignment, GOP, scores and adaptive timing"
+
+[dependencies]
+speech = { path = "../speech" }
+thiserror = "2.0.21"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+toml = "1.1.6"
+tracing = "0.1.44"
+
+[lints]
+workspace = true
