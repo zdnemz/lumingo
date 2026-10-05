@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod cancel;
+mod endpoint;
 mod error;
 mod info;
 mod stt;
@@ -15,6 +16,10 @@ mod unavailable;
 mod vad;
 
 pub use cancel::CancelFlag;
+pub use endpoint::{
+    EndReason, EndpointConfig, EndpointConfigError, EndpointEvent, Endpointer, MAX_END_SILENCE_MS,
+    MIN_END_SILENCE_MS, SegmentEvent, Utterance, UtteranceSegmenter,
+};
 pub use error::{SttError, TtsError, VadError};
 pub use info::EngineInfo;
 pub use stt::{SttEngine, Transcript, TranscriptWord};
