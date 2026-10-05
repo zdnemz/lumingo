@@ -11,9 +11,16 @@
 #![forbid(unsafe_code)]
 
 mod db;
+mod enums;
 mod error;
+mod profiles;
+mod row;
+mod settings;
 mod time;
 
 pub use db::{Database, OpenConfig, SCHEMA_VERSION};
+pub use enums::*;
 pub use error::{Result, StorageError};
+pub use profiles::{NewProfile, Profile, Profiles};
+pub use settings::{Setting, Settings};
 pub use time::{LocalDate, TimeError, Timestamp};

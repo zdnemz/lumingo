@@ -11,6 +11,7 @@ description = "SQLite storage, migrations and repositories for Lumingo"
 # No clock or time-zone features: every date and timestamp comes from the caller.
 chrono = { version = "0.4.45", default-features = false, features = ["std", "now"] }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 # "sqlite-bundled" builds SQLite from source so the Windows build needs no system
 # library. The umbrella "sqlite" feature would also enable extension loading and
 # in-memory deserialisation, which nothing here uses.
@@ -20,7 +21,6 @@ tokio = { version = "1.53.2", features = ["fs"] }
 tracing = "0.1.44"
 
 [dev-dependencies]
-serde_json = "1.0.151"
 tempfile = "3.27.0"
 tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread", "time"] }
 
