@@ -3684,6 +3684,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "tutor-cli"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "app-core",
+ "audio-io",
+ "clap",
+ "curriculum",
+ "llm-client",
+ "serde",
+ "serde_json",
+ "speech",
+ "storage",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "tutor-cli",
+ "tutor-engine",
+]
+
+[[package]]
 name = "tutor-engine"
 version = "0.0.0"
 dependencies = [

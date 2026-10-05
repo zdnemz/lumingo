@@ -1,0 +1,53 @@
+[package]
+name = "tutor-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Command-line voice loop for Lumingo, used before the UI exists"
+
+[[bin]]
+name = "tutor-cli"
+path = "src/main.rs"
+
+[lib]
+name = "tutor_cli"
+path = "src/lib.rs"
+
+[features]
+default = []
+# Real microphone and speakers through cpal. Compile-checked only, UNVERIFIED on
+# hardware. See the README.
+cpal-backend = ["audio-io/cpal-backend"]
+# Real VAD, speech recognition and speech synthesis through sherpa-onnx. UNVERIFIED:
+# the build container cannot download the native library. See the README.
+sherpa = ["speech/sherpa", "dep:toml"]
+# Fakes for tests: `--backend fake` with fake engines. A default or release build
+# does not contain them, and the program says so if asked for them.
+test-support = ["app-core/test-support", "audio-io/test-support"]
+
+[dependencies]
+anyhow = "1.0.104"
+app-core = { version = "0.0.0", path = "../../crates/app-core" }
+audio-io = { version = "0.0.0", path = "../../crates/audio-io" }
+clap = { version = "4.6.7", features = ["derive"] }
+curriculum = { version = "0.0.0", path = "../../crates/curriculum" }
+llm-client = { version = "0.0.0", path = "../../crates/llm-client" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+speech = { version = "0.0.0", path = "../../crates/speech" }
+storage = { version = "0.0.0", path = "../../crates/storage" }
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "io-std", "io-util", "signal", "time", "sync", "fs"] }
+toml = { version = "1.1.6", optional = true }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tutor-engine = { version = "0.0.0", path = "../../crates/tutor-engine" }
+
+[dev-dependencies]
+# The integration tests run the program with the fakes of the voice loop.
+tutor-cli = { path = ".", features = ["test-support"] }
+tempfile = "3.27.0"
+
+[lints]
+workspace = true
