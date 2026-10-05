@@ -10,6 +10,7 @@ description = "Speech engine traits and shared primitives for Lumingo"
 [dependencies]
 thiserror = "2.0.21"
 serde = { version = "1.0.229", features = ["derive"] }
+tracing = "0.1.44"
 
 [lints]
 workspace = true

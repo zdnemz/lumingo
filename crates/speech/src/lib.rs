@@ -11,6 +11,7 @@ mod endpoint;
 mod error;
 mod info;
 mod stt;
+mod stt_worker;
 mod tts;
 mod unavailable;
 mod vad;
@@ -20,9 +21,12 @@ pub use endpoint::{
     EndReason, EndpointConfig, EndpointConfigError, EndpointEvent, Endpointer, MAX_END_SILENCE_MS,
     MIN_END_SILENCE_MS, SegmentEvent, Utterance, UtteranceSegmenter,
 };
-pub use error::{SttError, TtsError, VadError};
+pub use error::{SttError, TtsError, VadError, WorkerError};
 pub use info::EngineInfo;
 pub use stt::{SttEngine, Transcript, TranscriptWord};
+pub use stt_worker::{
+    SttEvent, SttJob, SttWorker, SttWorkerConfig, SttWorkerStats, SubmitError as SttSubmitError,
+};
 pub use tts::{PcmChunk, TtsEngine};
 pub use unavailable::UnavailableEngine;
 pub use vad::Vad;
