@@ -44,6 +44,10 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | sha2, base64 | Content-Security-Policy script hashes | MIT OR Apache-2.0 | ok |
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
+| reqwest, native-tls, url | Model downloads in `crates/model-manager` (system TLS, no bundled roots) | MIT OR Apache-2.0 | ok |
+| toml | Reads `models/manifest.toml` | MIT OR Apache-2.0 | ok |
+| tempfile, jsonschema | Tests of `crates/model-manager` only | MIT OR Apache-2.0, MIT | ok |
+| webpki-roots | CA root data, pulled in only by the build script of `sherpa-onnx-sys` when the optional `sherpa` feature of `speech` is on. Not in the default build. | CDLA-Permissive-2.0 | review: per-crate exception in `deny.toml` for this reason only |
 
 ## 4. JavaScript packages
 
@@ -85,7 +89,7 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 
 | Item | Planned use | Expected license | Status |
 |---|---|---|---|
-| sherpa-onnx (Rust crate and native library) | VAD, STT, TTS runtime | Apache-2.0 | verify |
+| sherpa-onnx 1.13.8 (Rust crate and native library) | VAD, STT, TTS runtime, optional `sherpa` feature of `speech` | Apache-2.0 (crate metadata) | review: the build script of `sherpa-onnx-sys` 1.13.8 links the static libraries `espeak-ng` and `piper_phonemize` into every static build. espeak-ng is GPL-3.0 (section 7). Read the licence of the prebuilt archive and decide before the feature is enabled in a release. The shared-library mode was not inspected. |
 | ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
