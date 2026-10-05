@@ -29,6 +29,17 @@ pub(crate) fn storage_level(level: Level) -> storage::Level {
     }
 }
 
+pub(crate) fn curriculum_level(level: Level) -> curriculum::Level {
+    match level {
+        Level::A1 => curriculum::Level::A1,
+        Level::A2 => curriculum::Level::A2,
+        Level::B1 => curriculum::Level::B1,
+        Level::B2 => curriculum::Level::B2,
+        Level::C1 => curriculum::Level::C1,
+        Level::C2 => curriculum::Level::C2,
+    }
+}
+
 /// Lower-cases and collapses whitespace, the form in which a quote is compared
 /// with the text it claims to come from.
 pub(crate) fn fold(text: &str) -> String {

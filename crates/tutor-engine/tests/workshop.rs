@@ -195,7 +195,7 @@ async fn a_reachable_provider_gives_errors_bands_and_stored_free_mode_attempts()
     assert!(rubric.on_task);
 
     // T3 saw the rubric, the text input mode and the response.
-    let seen = f.llm.structured_seen.lock().unwrap();
+    let seen = f.llm.structured_requests();
     assert_eq!(seen[0].contract, llm_client::Contract::TurnAnalysis);
     assert!(seen[0].system.contains("At most 20 errors per turn"));
     assert_eq!(seen[1].contract, llm_client::Contract::RubricScore);

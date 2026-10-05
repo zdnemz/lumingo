@@ -168,7 +168,7 @@ async fn the_request_carries_the_stated_level_the_cap_and_no_level_from_a_model(
         .queue_structured(Ok(reply(vec![turn_reply(turn.turn_seq, vec![], "")])));
     f.analyzer.turn_finished(turn, &cancel()).await.unwrap();
 
-    let seen = f.llm.structured_seen.lock().unwrap();
+    let seen = f.llm.structured_requests();
     assert_eq!(seen.len(), 1);
     assert_eq!(seen[0].contract, llm_client::Contract::TurnAnalysis);
     assert_eq!(seen[0].temperature, Some(0.0));
@@ -248,7 +248,7 @@ async fn a_429_switches_to_batched_cadence_and_three_turns_go_in_one_call() {
     assert_eq!(f.llm.structured_calls(), 2, "one call for the three turns");
     assert_eq!(f.analyzer.waiting(), 0);
     assert!(f.analyzer.flagged_turn_ids().is_empty());
-    let seen = f.llm.structured_seen.lock().unwrap();
+    let seen = f.llm.structured_requests();
     let body: Value = serde_json::from_str(&seen[1].messages[0].content).unwrap();
     assert_eq!(body["turns"].as_array().unwrap().len(), 3);
 
@@ -519,7 +519,7 @@ async fn a_draft_is_analysed_at_once_with_the_draft_cap_and_text_mode() {
         .await
         .unwrap();
     assert_eq!(record.analysis.errors.len(), 20);
-    let seen = f.llm.structured_seen.lock().unwrap();
+    let seen = f.llm.structured_requests();
     assert!(seen[0].system.contains("At most 20 errors per turn"));
     let body: Value = serde_json::from_str(&seen[0].messages[0].content).unwrap();
     assert_eq!(body["input_mode"], "text", "a draft is always text");

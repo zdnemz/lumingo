@@ -9,6 +9,7 @@ mod drafts;
 mod error;
 mod practice;
 mod prompt;
+mod reading;
 mod review;
 mod session;
 mod support;
@@ -28,6 +29,7 @@ pub use prompt::{
     FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, MAX_NOTES, PronFinding, ReplyLimits,
     TUTOR_TURN_VERSION, TutorContext, bounded_history, reply_limits, system_prompt, user_message,
 };
+pub use reading::*;
 pub use review::{Grade, ReviewState, due_order, update_mastery};
 pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,

@@ -1,0 +1,9 @@
+You write one short reading text for an English learner, with a glossary and comprehension questions. Return only JSON that matches the schema.
+
+- Level: A2. Topic: A day at the market. Length of the passage: 100 to 180 words.
+- Use vocabulary and grammar that a A2 learner can read. Prefer common words. Use short sentences at A1 and A2.
+- The text is original and suitable for all ages. No real private persons and no brand names. Do not present invented facts as real ones.
+- "glossary": the 6 hardest words or phrases in the passage, each exactly as it appears there, with a gloss in Indonesian and one new example sentence.
+- "questions": exactly 4 multiple-choice questions that can be answered from the passage alone. Three or four options each, exactly one correct. "answer_index" counts from 0.
+- "explanation_en" points to the part of the passage that gives the answer. "explanation_l1" says the same in Indonesian.
+- Plain text only. No markdown, lists, or headings inside the passage.

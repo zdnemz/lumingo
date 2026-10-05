@@ -128,7 +128,7 @@ async fn valid_items_are_converted_marked_generated_and_stored_with_the_session(
     assert_eq!(stored[0].model, "test-model");
     assert_eq!(stored[0].content["items"].as_array().unwrap().len(), 3);
 
-    let seen = f.llm.structured_seen.lock().unwrap();
+    let seen = f.llm.structured_requests();
     assert!(seen[0].system.contains("Write exactly 3 items"));
     let body: Value = serde_json::from_str(&seen[0].messages[0].content).unwrap();
     assert_eq!(body["max_level"], "A1");
@@ -283,7 +283,7 @@ async fn the_policy_limit_per_session_is_enforced_across_calls() {
     f.llm.queue_structured(Ok(items(vec![reorder()])));
     let second = f.generator.generate(&unit, 5, &[], &never()).await.unwrap();
     assert_eq!(second.items.len(), 1);
-    let seen = f.llm.structured_seen.lock().unwrap();
+    let seen = f.llm.structured_requests();
     assert!(seen[1].system.contains("Write exactly 1 items"));
     let body: Value = serde_json::from_str(&seen[1].messages[0].content).unwrap();
     let existing = body["existing_items"].as_array().unwrap();

@@ -78,6 +78,15 @@ impl FakeLlm {
         self.texts.lock().unwrap().push_back(reply);
     }
 
+    /// A copy of the structured requests seen so far, so no lock is held in a test.
+    pub fn structured_requests(&self) -> Vec<StructuredRequest> {
+        self.structured_seen.lock().unwrap().clone()
+    }
+
+    pub fn text_requests(&self) -> Vec<TextRequest> {
+        self.text_seen.lock().unwrap().clone()
+    }
+
     pub fn structured_calls(&self) -> usize {
         self.structured_seen.lock().unwrap().len()
     }

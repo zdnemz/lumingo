@@ -11,7 +11,7 @@ use curriculum::validate::WordLevels;
 use llm_client::LadderLevel;
 use serde::{Deserialize, Serialize};
 
-use crate::support::{names_a_level, states_a_percentage, truncate_words};
+use crate::support::{curriculum_level, names_a_level, states_a_percentage, truncate_words};
 
 pub const RUBRIC_SCORE_VERSION: &str = "rubric_score/1";
 
@@ -437,17 +437,6 @@ pub fn cross_check(raw: &RawRubric, input: &CrossCheck<'_>) -> RubricResult {
         confidence,
         alarms,
         rejected,
-    }
-}
-
-fn curriculum_level(level: Level) -> curriculum::Level {
-    match level {
-        Level::A1 => curriculum::Level::A1,
-        Level::A2 => curriculum::Level::A2,
-        Level::B1 => curriculum::Level::B1,
-        Level::B2 => curriculum::Level::B2,
-        Level::C1 => curriculum::Level::C1,
-        Level::C2 => curriculum::Level::C2,
     }
 }
 
