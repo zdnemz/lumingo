@@ -1,0 +1,17 @@
+[package]
+name = "game"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Rules of Lumingo's cosmetic game layer: ranks, sparks and unlockables"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = "1.0.151"
