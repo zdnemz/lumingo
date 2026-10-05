@@ -1,0 +1,103 @@
+/* Motion lives here and only here.
+ *
+ * Nothing in the other stylesheets animates. Every animation below is attached
+ * under html[data-motion="on"], so when the learner turns motion off in the
+ * settings, or the system asks for reduced motion and the setting is "system",
+ * the page is completely still. The last rule is a safety net that stops
+ * anything a later stylesheet might add by mistake.
+ */
+
+html[data-motion="on"] {
+  scroll-behavior: smooth;
+}
+
+/* Pixel motion is stepped: a few visible frames, never a smooth tween. */
+
+@keyframes px-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(calc(var(--px) * -1)); }
+}
+@keyframes px-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes px-twinkle {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes px-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes px-slide-up {
+  from { transform: translateY(calc(var(--px) * 3)); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes px-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(calc(var(--px) * -1)); }
+  75% { transform: translateX(var(--px)); }
+}
+@keyframes px-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50% { filter: drop-shadow(0 0 var(--px) var(--color-primary)); }
+}
+@keyframes px-meter-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+/* Ambient: small, slow, and few per screen. The sky tile itself stays still;
+ * .px-sky--twinkle adds one layer of stars that blink. */
+html[data-motion="on"] .px-sky--twinkle::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--color-star) 1.5px, transparent 2px);
+  background-size: 120px 120px;
+  background-position: 40px 20px;
+  animation: px-twinkle 3s steps(3, end) infinite;
+}
+html[data-motion="on"] [data-anim="bob"] {
+  animation: px-bob 1.2s steps(2, end) infinite;
+}
+html[data-motion="on"] [data-anim="glow"] {
+  animation: px-glow 2.4s steps(4, end) infinite;
+}
+html[data-motion="on"] [data-anim="blink"] {
+  animation: px-blink 1s steps(1, end) infinite;
+}
+
+/* Feedback: one-shot, short. */
+html[data-motion="on"] [data-anim="pop"] {
+  animation: px-pop var(--dur-base) steps(4, end) both;
+}
+html[data-motion="on"] [data-anim="slide-up"] {
+  animation: px-slide-up var(--dur-base) steps(4, end) both;
+}
+html[data-motion="on"] [data-anim="shake"] {
+  animation: px-shake var(--dur-base) steps(4, end) 1;
+}
+html[data-motion="on"] .px-meter__fill {
+  transition: width var(--dur-slow) steps(8, end);
+}
+html[data-motion="on"] .px-meter[data-live="true"] .px-meter__fill {
+  animation: px-meter-pulse 1.2s steps(2, end) infinite;
+}
+
+/* Stagger children that opt in with --i. */
+html[data-motion="on"] [data-stagger] > * {
+  animation: px-slide-up var(--dur-base) steps(4, end) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+/* Safety net: motion off means nothing moves, whatever else was written. */
+html:not([data-motion="on"]) *,
+html:not([data-motion="on"]) *::before,
+html:not([data-motion="on"]) *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
