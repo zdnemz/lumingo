@@ -1,0 +1,13 @@
+[package]
+name = "tutor-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Tutoring logic for Lumingo: sessions, turns, prompts and the free modes"
+
+[dependencies]
+
+[lints]
+workspace = true
