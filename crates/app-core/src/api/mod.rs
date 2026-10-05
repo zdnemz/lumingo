@@ -10,6 +10,7 @@ pub(crate) mod mirror;
 mod providers;
 mod settings;
 mod state;
+mod units;
 
 pub use common::{ApiErrorBody, ErrorCode, Feature, HardwareProfile, L1HelpMode, UiLanguage};
 pub use events::ServerEvent;
@@ -19,3 +20,4 @@ pub use providers::{
 };
 pub use settings::{AdaptiveTiming, Settings};
 pub use state::StateSnapshot;
+pub use units::{UnitDetail, UnitIssue, UnitList, UnitSummary};

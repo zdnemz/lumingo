@@ -17,6 +17,7 @@ use crate::error::{CoreError, CoreResult};
 use crate::events::EventBus;
 use crate::providers::ProviderHub;
 use crate::session::SessionService;
+use crate::units::UnitHub;
 use crate::{hardware, settings};
 
 /// The default name of the one learner profile, until the learner sets one.
@@ -36,6 +37,7 @@ pub struct AppCore {
     /// database writes.
     pub(crate) settings_write: Mutex<()>,
     pub(crate) providers: ProviderHub,
+    pub(crate) units: UnitHub,
     pub(crate) hardware: HardwareProfile,
     pub(crate) shutdown: CancellationToken,
     pub(crate) sessions: OnceLock<Arc<dyn SessionService>>,
@@ -66,6 +68,7 @@ impl AppCore {
                 .map_err(|_| CoreError::Internal("the hardware probe did not finish".to_owned()))?,
         };
         let providers = ProviderHub::load(&config, &db, &config.clock.now()).await?;
+        let units = UnitHub::load(&config.curriculum_dir, &db, &config.clock.now()).await?;
         Ok(Arc::new(Self {
             config,
             db,
@@ -75,6 +78,7 @@ impl AppCore {
             settings: RwLock::new(loaded),
             settings_write: Mutex::new(()),
             providers,
+            units,
             hardware,
             shutdown: CancellationToken::new(),
             sessions: OnceLock::new(),

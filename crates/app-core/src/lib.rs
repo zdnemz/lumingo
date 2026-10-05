@@ -31,6 +31,7 @@ pub mod hardware;
 mod providers;
 pub mod session;
 mod settings;
+mod units;
 
 pub use clock::{Clock, SystemClock};
 pub use config::{CoreConfig, default_curriculum_dir, default_data_dir};
