@@ -3,128 +3,98 @@
 //! Every route group and the WebSocket must refuse a foreign Host, a foreign
 //! Origin, and a request without the session cookie (context pack section 10).
 
-use std::sync::Arc;
+mod common;
 
-use axum::Router;
-use axum::body::Body;
-use axum::http::{Method, Request, Response, StatusCode, header};
-use http_body_util::BodyExt;
-use tokio_util::sync::CancellationToken;
+use axum::http::{Method, StatusCode, header};
+use common::{DEV_ORIGIN, EVIL_ORIGIN, Harness, OWN_ORIGIN, Req, body_text, harness, send};
+use serde_json::json;
 use tower::ServiceExt;
-use tutor_server::events::EventHub;
-use tutor_server::security::Guard;
-use tutor_server::{AppState, build_router};
 
-const PORT: u16 = 4321;
-const HOST: &str = "127.0.0.1:4321";
-const OWN_ORIGIN: &str = "http://127.0.0.1:4321";
-const DEV_ORIGIN: &str = "http://localhost:3000";
-const EVIL_ORIGIN: &str = "https://evil.example";
-
-struct Harness {
-    router: Router,
-    cookie: String,
-}
-
-fn harness(dev: bool) -> Harness {
-    let dev_origin = dev.then(|| DEV_ORIGIN.to_owned());
-    let guard = Arc::new(Guard::new(PORT, dev_origin).expect("guard"));
-    let cookie = guard
-        .set_cookie_value()
-        .split(';')
-        .next()
-        .expect("cookie pair")
-        .to_owned();
-    let state = Arc::new(AppState {
-        hub: EventHub::new(dev),
-        guard,
-        shutdown: CancellationToken::new(),
-        dev_mode: dev,
-    });
-    Harness {
-        router: build_router(state),
-        cookie,
-    }
-}
-
-struct Req {
-    method: Method,
-    uri: &'static str,
-    host: Option<&'static str>,
-    origin: Option<&'static str>,
-    cookie: Option<String>,
-    content_type: Option<&'static str>,
-    websocket: bool,
-}
-
-impl Req {
-    fn get(uri: &'static str) -> Self {
-        Self {
-            method: Method::GET,
-            uri,
-            host: Some(HOST),
-            origin: None,
-            cookie: None,
-            content_type: None,
-            websocket: false,
-        }
-    }
-
-    fn build(self) -> Request<Body> {
-        let mut builder = Request::builder().method(self.method).uri(self.uri);
-        if let Some(host) = self.host {
-            builder = builder.header(header::HOST, host);
-        }
-        if let Some(origin) = self.origin {
-            builder = builder.header(header::ORIGIN, origin);
-        }
-        if let Some(cookie) = self.cookie {
-            builder = builder.header(header::COOKIE, cookie);
-        }
-        if let Some(content_type) = self.content_type {
-            builder = builder.header(header::CONTENT_TYPE, content_type);
-        }
-        if self.websocket {
-            builder = builder
-                .header(header::UPGRADE, "websocket")
-                .header(header::CONNECTION, "Upgrade")
-                .header("sec-websocket-version", "13")
-                .header("sec-websocket-key", "dGhlIHNhbXBsZSBub25jZQ==");
-        }
-        builder.body(Body::empty()).expect("request")
-    }
-}
-
-async fn send(router: &Router, req: Req) -> Response<Body> {
-    router.clone().oneshot(req.build()).await.expect("response")
-}
-
-async fn body_text(response: Response<Body>) -> String {
-    let bytes = response
-        .into_body()
-        .collect()
-        .await
-        .expect("body")
-        .to_bytes();
-    String::from_utf8_lossy(&bytes).into_owned()
-}
-
-/// One request per route group: the UI, the JSON API, and the WebSocket.
+/// One request per route group: the UI, every JSON route (reads and changes), and
+/// the WebSocket. The cookie is attached; each test then takes away what it
+/// wants to refuse. Ids and bodies are valid, so a request that got through would
+/// really act.
 fn route_groups(cookie: &str) -> Vec<Req> {
-    let mut ui = Req::get("/");
-    ui.cookie = Some(cookie.to_owned());
-    let mut api = Req::get("/api/state");
-    api.cookie = Some(cookie.to_owned());
+    let mut requests = vec![
+        Req::get("/"),
+        // State
+        Req::get("/api/state"),
+        // Curriculum
+        Req::get("/api/units"),
+        Req::get("/api/units/a1-u01"),
+        // Providers
+        Req::get("/api/providers"),
+        Req::post(
+            "/api/providers",
+            json!({"name": "x", "protocol": "openai_chat",
+                   "base_url": "https://api.example.test/v1", "model": "m"}),
+        ),
+        Req::post("/api/providers/1/test", json!({})),
+        Req::post("/api/providers/1/activate", json!({})),
+        Req::delete("/api/providers/1"),
+        // Progress
+        Req::get("/api/progress"),
+        Req::get("/api/attempts/1/evidence"),
+        // Game
+        Req::get("/api/game"),
+        Req::post("/api/game/equip", json!({"slot": "accessory", "id": null})),
+        // Settings
+        Req::get("/api/settings"),
+        Req::put(
+            "/api/settings",
+            json!({"display_name": "X", "ui_language": "en", "l1": "id", "l1_help_mode": "auto",
+                   "adaptive_timing": "auto", "keep_recordings": false}),
+        ),
+        // Data
+        Req::delete("/api/sessions/1"),
+        Req::delete("/api/data"),
+        Req::get("/api/export"),
+        // Diagnostics
+        Req::get("/api/diagnostics"),
+    ];
+    for request in &mut requests {
+        request.cookie = Some(cookie.to_owned());
+    }
     let mut ws = Req::get("/ws");
     ws.cookie = Some(cookie.to_owned());
     ws.origin = Some(OWN_ORIGIN);
     ws.websocket = true;
-    vec![ui, api, ws]
+    requests.push(ws);
+    requests
+}
+
+/// Every refusal must also leave the data as it was: a refused `DELETE /api/data`
+/// that still deleted would pass a status-only check.
+async fn assert_nothing_changed(h: &Harness) {
+    assert_eq!(h.core.settings().display_name, "Learner");
+    assert_eq!(h.core.list_providers().providers.len(), 1);
+    assert!(h.core.game_state().await.unwrap().xp_total > 0);
+}
+
+/// A harness with something to lose: a provider, XP and a session.
+async fn harness_with_data(dev: bool) -> Harness {
+    let h = common::harness_with(common::Options {
+        dev,
+        with_unit: true,
+        ..common::Options::default()
+    })
+    .await;
+    let request = serde_json::from_value(json!({
+        "name": "mine", "protocol": "openai_chat",
+        "base_url": "https://api.example.test/v1", "model": "m", "api_key": "sk-abcdefgh-12345678"
+    }))
+    .unwrap();
+    h.core.save_provider(request).await.unwrap();
+    h.core
+        .record_practice(app_core::api::XpSourceKind::Lesson, "session:1")
+        .await
+        .unwrap();
+    h
 }
 
 #[tokio::test]
 async fn foreign_host_is_refused_everywhere() {
-    let h = harness(false);
+    let h = harness_with_data(false).await;
     for host in [
         "evil.example",
         "127.0.0.1:9999",
@@ -133,7 +103,7 @@ async fn foreign_host_is_refused_everywhere() {
     ] {
         for mut req in route_groups(&h.cookie) {
             req.host = Some(host);
-            let uri = req.uri;
+            let uri = req.uri.clone();
             let response = send(&h.router, req).await;
             assert_eq!(
                 response.status(),
@@ -142,11 +112,12 @@ async fn foreign_host_is_refused_everywhere() {
             );
         }
     }
+    assert_nothing_changed(&h).await;
 }
 
 #[tokio::test]
 async fn missing_host_is_refused() {
-    let h = harness(false);
+    let h = harness(false).await;
     let mut req = Req::get("/api/state");
     req.host = None;
     req.cookie = Some(h.cookie.clone());
@@ -155,7 +126,7 @@ async fn missing_host_is_refused() {
 
 #[tokio::test]
 async fn foreign_origin_is_refused_everywhere() {
-    let h = harness(false);
+    let h = harness_with_data(false).await;
     for origin in [
         EVIL_ORIGIN,
         "null",
@@ -164,7 +135,7 @@ async fn foreign_origin_is_refused_everywhere() {
     ] {
         for mut req in route_groups(&h.cookie) {
             req.origin = Some(origin);
-            let uri = req.uri;
+            let uri = req.uri.clone();
             let response = send(&h.router, req).await;
             assert_eq!(
                 response.status(),
@@ -173,11 +144,12 @@ async fn foreign_origin_is_refused_everywhere() {
             );
         }
     }
+    assert_nothing_changed(&h).await;
 }
 
 #[tokio::test]
 async fn missing_or_wrong_cookie_is_refused_on_api_and_websocket() {
-    let h = harness(false);
+    let h = harness(false).await;
     for uri in ["/api/state", "/api/anything", "/ws"] {
         for cookie in [
             None,
@@ -197,8 +169,46 @@ async fn missing_or_wrong_cookie_is_refused_on_api_and_websocket() {
 }
 
 #[tokio::test]
+async fn every_api_route_refuses_a_missing_or_wrong_cookie_and_changes_nothing() {
+    let h = harness_with_data(false).await;
+    let mut checked = 0;
+    for cookie in [
+        None,
+        Some("tutor_session=wrong".to_owned()),
+        Some("other=1".to_owned()),
+    ] {
+        // The first entry is the UI page, which is served without a cookie.
+        for mut req in route_groups(&h.cookie).into_iter().skip(1) {
+            req.cookie.clone_from(&cookie);
+            let uri = req.uri.clone();
+            let response = send(&h.router, req).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::UNAUTHORIZED,
+                "{uri} with {cookie:?}"
+            );
+            let body = body_text(response).await;
+            assert!(body.contains("session_required"), "{uri}: {body}");
+            checked += 1;
+        }
+    }
+    assert!(checked >= 3 * 19, "{checked}");
+    assert_nothing_changed(&h).await;
+}
+
+#[tokio::test]
+async fn an_unknown_api_path_is_a_json_not_found_and_still_needs_the_cookie() {
+    let h = harness(false).await;
+    let response = send(&h.router, Req::get("/api/nothing-here")).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let (status, body) = h.get_json("/api/nothing-here").await;
+    assert_eq!(status, 404);
+    assert_eq!(body["error"], "not_found");
+}
+
+#[tokio::test]
 async fn websocket_upgrade_without_origin_is_refused() {
-    let h = harness(false);
+    let h = harness(false).await;
     let mut req = Req::get("/ws");
     req.cookie = Some(h.cookie.clone());
     req.websocket = true;
@@ -207,7 +217,7 @@ async fn websocket_upgrade_without_origin_is_refused() {
 
 #[tokio::test]
 async fn state_route_answers_with_the_right_headers() {
-    let h = harness(false);
+    let h = harness(false).await;
     let mut req = Req::get("/api/state");
     req.cookie = Some(h.cookie.clone());
     let response = send(&h.router, req).await;
@@ -234,7 +244,7 @@ async fn state_route_answers_with_the_right_headers() {
 
 #[tokio::test]
 async fn html_sets_a_strict_http_only_session_cookie() {
-    let h = harness(false);
+    let h = harness(false).await;
     let response = send(&h.router, Req::get("/")).await;
     let cookie = response.headers()[header::SET_COOKIE]
         .to_str()
@@ -255,7 +265,7 @@ async fn html_sets_a_strict_http_only_session_cookie() {
 
 #[tokio::test]
 async fn state_changing_requests_need_origin_and_json() {
-    let h = harness(false);
+    let h = harness(false).await;
 
     let mut no_origin = Req::get("/api/state");
     no_origin.method = Method::POST;
@@ -298,7 +308,7 @@ async fn state_changing_requests_need_origin_and_json() {
 
 #[tokio::test]
 async fn normal_mode_has_no_cors_and_no_dev_route() {
-    let h = harness(false);
+    let h = harness(false).await;
     let mut preflight = Req::get("/api/state");
     preflight.method = Method::OPTIONS;
     preflight.origin = Some(DEV_ORIGIN);
@@ -324,7 +334,7 @@ async fn normal_mode_has_no_cors_and_no_dev_route() {
 
 #[tokio::test]
 async fn dev_mode_allows_exactly_one_extra_origin() {
-    let h = harness(true);
+    let h = harness(true).await;
 
     let mut preflight = Req::get("/api/state");
     preflight.method = Method::OPTIONS;

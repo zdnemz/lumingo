@@ -3384,16 +3384,20 @@ name = "tutor-server"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "app-core",
  "axum",
  "base64 0.22.1",
  "clap",
  "futures-util",
  "getrandom 0.3.4",
  "http-body-util",
+ "llm-client",
  "rust-embed",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "storage",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite",
@@ -3401,7 +3405,6 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber",
- "ts-rs",
  "webbrowser",
 ]
 
