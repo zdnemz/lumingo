@@ -7,18 +7,41 @@
 #![forbid(unsafe_code)]
 
 mod cancel;
+mod endpoint;
 mod error;
 mod info;
+#[cfg(feature = "sherpa")]
+mod sherpa;
+mod sherpa_config;
 mod stt;
+mod stt_worker;
 mod tts;
+mod tts_worker;
 mod unavailable;
 mod vad;
 
 pub use cancel::CancelFlag;
-pub use error::{SttError, TtsError, VadError};
+pub use endpoint::{
+    EndReason, EndpointConfig, EndpointConfigError, EndpointEvent, Endpointer, MAX_END_SILENCE_MS,
+    MIN_END_SILENCE_MS, SegmentEvent, Utterance, UtteranceSegmenter,
+};
+pub use error::{SttError, TtsError, VadError, WorkerError};
 pub use info::EngineInfo;
+#[cfg(feature = "sherpa")]
+pub use sherpa::{SHERPA_ONNX_CRATE_VERSION, SherpaStt, SherpaTts, SherpaVad};
+pub use sherpa_config::{
+    SHERPA_VAD_FRAME_SAMPLES, SherpaConfigError, SherpaSttConfig, SherpaSttModel, SherpaTtsConfig,
+    SherpaTtsModel, SherpaVadConfig,
+};
 pub use stt::{SttEngine, Transcript, TranscriptWord};
+pub use stt_worker::{
+    SttEvent, SttJob, SttWorker, SttWorkerConfig, SttWorkerStats, SubmitError as SttSubmitError,
+};
 pub use tts::{PcmChunk, TtsEngine};
+pub use tts_worker::{
+    SinkResult as TtsSinkResult, SubmitError as TtsSubmitError, TtsEvent, TtsJob, TtsTurn,
+    TtsWorker, TtsWorkerConfig, TtsWorkerStats,
+};
 pub use unavailable::UnavailableEngine;
 pub use vad::Vad;
 

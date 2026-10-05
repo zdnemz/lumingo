@@ -1,0 +1,148 @@
+# Lumingo model manifest. This is the only source of model download locations.
+# The schema is models/manifest.schema.json and is described in models/README.md.
+#
+# Every entry below is a CANDIDATE. None of them can be downloaded yet:
+#
+#   * `files` is empty, and a file entry needs a `sha256`. An empty checksum, or no
+#     file at all, makes `model-manager verify` and `ModelManager::install` refuse
+#     the entry before any network request.
+#   * `source` is the upstream project or model page, not yet a directory the
+#     files can be fetched from. Replace it, or give each file its own `url`,
+#     once the real file locations are known.
+#   * `version` and `size_bytes` stay unset until a real download is measured.
+#
+# The owner fills `files` (path, sha256, size_bytes) after downloading each file
+# from the upstream host and checking the checksum and the licence by hand. Do
+# not copy a checksum from anywhere but a file you downloaded yourself. Shape of
+# a finished file entry:
+#
+#   files = [
+#     { path = "encoder.onnx", sha256 = "<64 hex characters>", size_bytes = 123 },
+#   ]
+#
+# License fields come from docs/LICENSE_REGISTER.md section 6, status `verify`
+# unless the notes say otherwise. They are what the register expected, not what
+# anyone has read at the source yet.
+
+schema_version = 1
+
+[[model]]
+id = "vad-silero"
+role = "vad"
+engine = "sherpa-onnx"
+version = "candidate"
+license = "MIT"
+license_url = "https://github.com/snakers4/silero-vad/blob/master/LICENSE"
+source = "https://github.com/snakers4/silero-vad"
+size_bytes = 0
+files = []
+notes = "Silero VAD. Confirm which ONNX file sherpa-onnx loads and where it is published."
+
+[[model]]
+id = "stt-whisper-base-en"
+role = "stt"
+engine = "sherpa-onnx"
+version = "candidate"
+license = "MIT"
+license_url = "https://github.com/openai/whisper/blob/main/LICENSE"
+source = "https://huggingface.co/openai/whisper-base.en"
+size_bytes = 0
+files = []
+notes = "Whisper base.en. The source is the upstream model card. sherpa-onnx loads an ONNX export of it, so the export host and file names are still to be confirmed."
+
+[[model]]
+id = "stt-whisper-small-en"
+role = "stt"
+engine = "sherpa-onnx"
+version = "candidate"
+license = "MIT"
+license_url = "https://github.com/openai/whisper/blob/main/LICENSE"
+source = "https://huggingface.co/openai/whisper-small.en"
+size_bytes = 0
+files = []
+notes = "Whisper small.en. Same open point as base.en about the ONNX export."
+
+[[model]]
+id = "stt-moonshine-english"
+role = "stt"
+engine = "sherpa-onnx"
+version = "candidate"
+license = "MIT"
+license_url = "https://github.com/moonshine-ai/moonshine"
+source = "https://github.com/moonshine-ai/moonshine"
+size_bytes = 0
+files = []
+notes = "Moonshine, English models only (the other languages are non-commercial and excluded in the register). Which size and whether sherpa-onnx can run it are decided in stage 1. license_url is the repository page: replace it with the licence file of the exact model."
+
+[[model]]
+id = "stt-parakeet-tdt"
+role = "stt"
+engine = "sherpa-onnx"
+version = "candidate"
+license = "CC-BY-4.0"
+license_url = "https://creativecommons.org/licenses/by/4.0/"
+source = "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2"
+size_bytes = 0
+files = []
+notes = "Parakeet TDT 0.6B, int8. About 640 MB, may not fit the FLOOR profile. Attribution is required, add the NOTICE line when it is chosen. Confirm the exact model card and licence."
+
+[[model]]
+id = "tts-supertonic-3"
+role = "tts"
+engine = "sherpa-onnx"
+version = "candidate"
+license = "OpenRAIL-M"
+license_url = ""
+license_review = true
+source = ""
+size_bytes = 0
+files = []
+notes = "Model licence is OpenRAIL-M, code is MIT. The use restrictions must be read in full and put in license_text before this entry is downloadable. license_url and source are not filled in because nothing has been checked at the source."
+
+[[model]]
+id = "tts-kokoro"
+role = "tts"
+engine = "sherpa-onnx"
+version = "candidate"
+license = "Apache-2.0"
+license_url = "https://www.apache.org/licenses/LICENSE-2.0"
+source = "https://huggingface.co/hexgrad/Kokoro-82M"
+size_bytes = 0
+files = []
+notes = "Kokoro. The usual text front end needs espeak-ng, which is GPL and excluded. Do not fill this entry until it is confirmed how sherpa-onnx packages the front end."
+
+[[model]]
+id = "tts-kitten"
+role = "tts"
+engine = "sherpa-onnx"
+version = "candidate"
+license = "Apache-2.0"
+license_url = "https://www.apache.org/licenses/LICENSE-2.0"
+source = "https://github.com/KittenML/KittenTTS"
+size_bytes = 0
+files = []
+notes = "Kitten TTS. Quality is to be judged by the owner. Confirm the upstream location of the ONNX files and that the model licence is Apache-2.0."
+
+[[model]]
+id = "pron-wav2vec2-lv-60-espeak"
+role = "pron"
+engine = "ort"
+version = "candidate"
+license = "Apache-2.0"
+license_url = "https://www.apache.org/licenses/LICENSE-2.0"
+source = "https://huggingface.co/facebook/wav2vec2-lv-60-espeak-cv-ft"
+size_bytes = 0
+files = []
+notes = "Phoneme model for the pronunciation engine, about 315M parameters, needs an int8 export. Confirm the licence on the model card and the ONNX export."
+
+[[model]]
+id = "pron-zipa-small"
+role = "pron"
+engine = "ort"
+version = "candidate"
+license = "unknown"
+license_url = ""
+source = ""
+size_bytes = 0
+files = []
+notes = "ZIPA small. The licence and the ONNX export are both unverified, so the licence stays unknown and the entry stays refused."

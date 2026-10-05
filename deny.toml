@@ -27,6 +27,11 @@ allow = [
 # borrow-or-share comes in through jsonschema (referencing, fluent-uri).
 exceptions = [
   { crate = "borrow-or-share", allow = ["MIT-0"] },
+  # webpki-roots holds the CA root certificate data. It is pulled in only by the
+  # build script of sherpa-onnx-sys (through ureq), which downloads the native
+  # library, and only when the optional `sherpa` feature of `speech` is on. It is
+  # not part of the default build. Register row: docs/LICENSE_REGISTER.md section 3.
+  { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
 ]
 
 [bans]

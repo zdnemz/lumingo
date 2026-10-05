@@ -72,6 +72,7 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | ort, ort-sys 2.0.0-rc.13 | ONNX Runtime bindings for the phoneme model (`ort-backend` feature, off by default). Built with `load-dynamic`, so no runtime is downloaded or linked at build time. | MIT OR Apache-2.0 | ok. Read from the crate metadata and the `LICENSE-MIT` and `LICENSE-APACHE` files in the published package. The ONNX Runtime library the program loads is a separate item (section 6). |
 | libloading | Loads the ONNX Runtime library (dependency of `ort`) | ISC | ok |
 | ndarray, matrixmultiply, rawpointer, num-complex, num-integer, num-traits | Dependencies of `ort` | MIT OR Apache-2.0 | ok |
+| webpki-roots | CA root data, pulled in only by the build script of `sherpa-onnx-sys` when the optional `sherpa` feature of `speech` is on. Not in the default build. | CDLA-Permissive-2.0 | review: per-crate exception in `deny.toml` for this reason only |
 
 ## 4. JavaScript packages
 
@@ -113,7 +114,7 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 
 | Item | Planned use | Expected license | Status |
 |---|---|---|---|
-| sherpa-onnx (Rust crate and native library) | VAD, STT, TTS runtime | Apache-2.0 | verify |
+| sherpa-onnx 1.13.8 (Rust crate and native library) | VAD, STT, TTS runtime, optional `sherpa` feature of `speech` | Apache-2.0 (crate metadata) | review: the build script of `sherpa-onnx-sys` 1.13.8 links the static libraries `espeak-ng` and `piper_phonemize` into every static build. espeak-ng is GPL-3.0 (section 7). Read the licence of the prebuilt archive and decide before the feature is enabled in a release. The shared-library mode was not inspected. |
 | ONNX Runtime (the native library; the `ort` crate is in section 3) | Phoneme model inference. `pron-engine` loads it at run time from `ORT_DYLIB_PATH`; nothing in the repository bundles it. | MIT | verify |
 | harper-core | Rule-based grammar findings | Apache-2.0 | verify |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |

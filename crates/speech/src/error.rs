@@ -1,5 +1,17 @@
 use thiserror::Error;
 
+/// Why a worker thread could not be started.
+#[derive(Debug, Error)]
+pub enum WorkerError {
+    #[error("the {name} worker thread could not be started: {source}")]
+    Spawn {
+        name: &'static str,
+        source: std::io::Error,
+    },
+    #[error("a queue capacity of zero is not usable")]
+    ZeroCapacity,
+}
+
 #[derive(Debug, Error)]
 pub enum SttError {
     #[error("the speech recognition engine is not available: {reason}")]
