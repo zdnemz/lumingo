@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 pub mod fake_provider;
+pub mod seed;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -52,6 +53,12 @@ pub struct TestCore {
     pub core: Arc<AppCore>,
     pub dir: TempDir,
     pub clock: Arc<ManualClock>,
+}
+
+impl TestCore {
+    pub fn clock_now(&self) -> Timestamp {
+        self.clock.now()
+    }
 }
 
 /// The hardware every test core reports, so no test depends on the machine.

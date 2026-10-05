@@ -69,7 +69,7 @@ impl AppCore {
         };
         let providers = ProviderHub::load(&config, &db, &config.clock.now()).await?;
         let units = UnitHub::load(&config.curriculum_dir, &db, &config.clock.now()).await?;
-        Ok(Arc::new(Self {
+        let core = Arc::new(Self {
             config,
             db,
             bus: EventBus::new(),
@@ -82,7 +82,9 @@ impl AppCore {
             hardware,
             shutdown: CancellationToken::new(),
             sessions: OnceLock::new(),
-        }))
+        });
+        core.sync_unlocks().await?;
+        Ok(core)
     }
 
     /// Tells every task that stops with the program to stop: open event

@@ -6,7 +6,9 @@
 
 mod common;
 mod events;
+mod game;
 pub(crate) mod mirror;
+mod progress;
 mod providers;
 mod settings;
 mod state;
@@ -14,6 +16,15 @@ mod units;
 
 pub use common::{ApiErrorBody, ErrorCode, Feature, HardwareProfile, L1HelpMode, UiLanguage};
 pub use events::ServerEvent;
+pub use game::{
+    CosmeticKind, CosmeticSlot, CosmeticView, EquipRequest, EquippedView, GameState,
+    PracticeOutcome, RankView, StreakDayView, StreakView, XpBySourceView, XpSourceKind,
+};
+pub use progress::{
+    AttemptEvidence, ErrorStatView, EstimateLevel, EstimateStatus, EvidenceKind, EvidenceView,
+    ObjectiveMasteryView, ProgressOverview, ReviewDueView, ReviewItemKind, SessionKind,
+    SessionStatus, SessionSummary, SkillEstimateView, UnitProgressView, UnitStatus,
+};
 pub use providers::{
     ProbeFailure, ProbeFailureKind, ProbeReport, ProviderCapabilities, ProviderInfo, ProviderList,
     ProviderProtocol, ProviderSource, SaveProviderRequest, SecretText,
