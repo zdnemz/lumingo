@@ -9,6 +9,7 @@ mod checkpoint;
 mod deterministic;
 mod estimate;
 mod normalise;
+mod placement;
 mod types;
 
 pub use checkpoint::{CheckpointItem, CheckpointOutcome, DEFAULT_PASS_MARK, evaluate_checkpoint};
@@ -21,4 +22,5 @@ pub use estimate::{
     confidence_band, estimate_profile, estimate_skill, wilson_lower_bound,
 };
 pub use normalise::{NORM_VERSION, edit_distance, normalize};
+pub use placement::{BLOCK_SIZE, MAX_BLOCKS, Placement, START_LEVEL, Step};
 pub use types::{Attempt, AttemptStatus, Level, Origin, Scorer, Skill};
