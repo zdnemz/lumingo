@@ -13,11 +13,15 @@
 mod analysis;
 mod attempts;
 mod content;
+mod curriculum;
 mod db;
+mod diagnostics;
 mod enums;
 mod error;
 mod estimates;
+mod models;
 mod profiles;
+mod providers;
 mod row;
 mod sessions;
 mod settings;
@@ -32,11 +36,18 @@ pub use attempts::{
 pub use content::{
     AudioClip, AudioClips, GeneratedContent, GeneratedContentRepo, NewGeneratedContent,
 };
+pub use curriculum::{
+    Curriculum, CurriculumVersion, IndexStatus, IndexedObjective, IndexedUnit,
+    NewCurriculumVersion, NewObjective, NewUnit,
+};
 pub use db::{Database, OpenConfig, SCHEMA_VERSION};
+pub use diagnostics::{Diagnostics, LlmCall, NewLlmCall, NewPerfSample, PerfSample};
 pub use enums::*;
 pub use error::{Result, StorageError};
 pub use estimates::{Estimates, NewSkillEstimate, SkillEstimate};
+pub use models::{InstalledModel, Models};
 pub use profiles::{NewProfile, Profile, Profiles};
+pub use providers::{NewProviderProfile, ProviderProfile, Providers};
 pub use sessions::{NewSession, Session, Sessions};
 pub use settings::{Setting, Settings};
 pub use time::{LocalDate, TimeError, Timestamp};
