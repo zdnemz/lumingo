@@ -8,6 +8,28 @@
 //! functions with plain serde types. Every timestamp and every calendar day is
 //! supplied by the caller, so the crate has no hidden dependence on the clock or
 //! the time zone.
+//!
+//! # Opening
+//!
+//! [`Database::open`] creates or opens the file in WAL mode with foreign keys on
+//! and a busy timeout, copies the old file to `<db>.bak-<old version>` before a
+//! migration that changes an existing schema (the newest two backups are kept),
+//! and runs the migrations. One write connection serialises writes; a small pool
+//! reads. A file written by a newer build, or whose applied migration was edited,
+//! is refused and left untouched.
+//!
+//! # Repositories
+//!
+//! Each is a method on [`Database`] that returns a short-lived handle:
+//! `profiles`, `settings`, `providers`, `models`, `curriculum`, `sessions`,
+//! `turns`, `analysis`, `generated_content`, `audio_clips`, `attempts`,
+//! `evidence`, `pending_scoring`, `estimates`, `pron_results`, `unit_progress`,
+//! `mastery`, `error_stats`, `review_schedule`, `diagnostics` and `game`.
+//!
+//! They are plain inserts and reads. Scoring, eligibility and levels belong to
+//! the assessment crate: `estimates` stores the level it is given and nothing
+//! here derives one. The game layer (XP, streaks, cosmetics) shares no table or
+//! key with attempts, evidence or estimates; see `migrations/0002_game.sql`.
 #![forbid(unsafe_code)]
 
 mod analysis;
