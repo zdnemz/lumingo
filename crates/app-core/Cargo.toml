@@ -9,6 +9,7 @@ description = "Lifecycle, settings, typed commands and events, providers, curric
 
 [dependencies]
 async-trait = "0.1.92"
+assessment-engine = { version = "0.0.0", path = "../assessment-engine" }
 audio-io = { version = "0.0.0", path = "../audio-io" }
 # "clock" reads the local calendar day for streaks. storage itself takes every date from its caller.
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
