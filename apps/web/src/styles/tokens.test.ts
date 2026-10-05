@@ -45,10 +45,10 @@ function contrast(a: string, b: string): number {
 }
 
 const THEMES: Record<string, RegExp> = {
-  night: /^:root,\s*\n:root\[data-theme="night"\]\s*\{/m,
-  day: /^:root\[data-theme="day"\]\s*\{/m,
-  forest: /^:root\[data-theme="forest"\]\s*\{/m,
-  ember: /^:root\[data-theme="ember"\]\s*\{/m,
+  night: /^:root,\s*\n:root\[data-theme="night"\],\s*\n\[data-theme-scope="night"\]\s*\{/m,
+  day: /^:root\[data-theme="day"\],\s*\n\[data-theme-scope="day"\]\s*\{/m,
+  forest: /^:root\[data-theme="forest"\],\s*\n\[data-theme-scope="forest"\]\s*\{/m,
+  ember: /^:root\[data-theme="ember"\],\s*\n\[data-theme-scope="ember"\]\s*\{/m,
 };
 
 const REQUIRED = [

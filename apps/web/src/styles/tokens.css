@@ -85,7 +85,8 @@
 
 /* ---- Theme: Night (default) -------------------------------------------- */
 :root,
-:root[data-theme="night"] {
+:root[data-theme="night"],
+[data-theme-scope="night"] {
   color-scheme: dark;
 
   --color-bg: var(--pal-night-900);
@@ -124,7 +125,8 @@
 }
 
 /* ---- Theme: Day -------------------------------------------------------- */
-:root[data-theme="day"] {
+:root[data-theme="day"],
+[data-theme-scope="day"] {
   color-scheme: light;
 
   --color-bg: var(--pal-parchment-200);
@@ -163,7 +165,8 @@
 }
 
 /* ---- Theme: Forest (unlockable) ---------------------------------------- */
-:root[data-theme="forest"] {
+:root[data-theme="forest"],
+[data-theme-scope="forest"] {
   color-scheme: dark;
 
   --color-bg: #0f1f17;
@@ -202,7 +205,8 @@
 }
 
 /* ---- Theme: Ember (unlockable) ------------------------------------------- */
-:root[data-theme="ember"] {
+:root[data-theme="ember"],
+[data-theme-scope="ember"] {
   color-scheme: dark;
 
   --color-bg: #1f0f10;
