@@ -12,6 +12,7 @@ pub mod arpabet;
 pub mod calibration;
 pub mod gop;
 pub mod lexicon;
+pub mod perf;
 pub mod phone_map;
 pub mod posteriors;
 pub mod reference;
@@ -26,6 +27,11 @@ pub use arpabet::{Arpabet, Phone, PhoneClass, UnknownArpabet};
 pub use calibration::{Calibration, CalibrationError, LogisticCurve, Thresholds};
 pub use gop::{GopError, HeardColumn, PhoneGop, gop};
 pub use lexicon::{Lexicon, LexiconError};
+pub use perf::{
+    DecisionSource, Measurement, ModeDecision, ModeSetting, PerfError, PerformanceTier,
+    PolicyConfig, Prediction, PronMode, SpeedProfile, Workload, Workloads, decide, headroom_ms,
+    measure,
+};
 pub use phone_map::{BoundPhoneMap, PhoneMap, PhoneMapError};
 pub use posteriors::{LogPosteriors, PosteriorsError};
 pub use reference::{NotChecked, Reference, ReferenceWord, WordStatus};
