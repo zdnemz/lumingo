@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:schema:syllabus:1.0",
+  "title": "Level syllabus",
+  "description": "The plan for the units of one level, written and reviewed before the units (docs/CURRICULUM_SPEC.md section 7, step 2). The spec names the fields of an entry but ships no schema, so this shape is inferred from that sentence and from validator rules X03 and X05. content-cli compares each unit with its entry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "level", "units"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "level": { "$ref": "#/$defs/level" },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "unit_id": {
+      "type": "string",
+      "pattern": "^(a1|a2|b1|b2|c1|c2)-u(0[1-9]|[12][0-9]|30)$"
+    },
+    "local_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "maxLength": 64
+    },
+    "level": { "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+    "skill": {
+      "enum": [
+        "listening",
+        "reading",
+        "speaking_production",
+        "speaking_interaction",
+        "writing",
+        "mediation",
+        "grammar",
+        "vocabulary",
+        "pronunciation"
+      ]
+    },
+    "localized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sequence",
+        "title",
+        "theme",
+        "objectives",
+        "grammar_ids",
+        "vocabulary_field",
+        "functions",
+        "pronunciation_focus"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/unit_id" },
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "title": { "$ref": "#/$defs/localized" },
+        "theme": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "objectives": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["skill", "can_do"],
+            "properties": {
+              "skill": { "$ref": "#/$defs/skill" },
+              "can_do": { "$ref": "#/$defs/localized" }
+            }
+          }
+        },
+        "grammar_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/local_id" },
+          "uniqueItems": true
+        },
+        "vocabulary_field": { "type": "string", "minLength": 1 },
+        "functions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "uniqueItems": true
+        },
+        "pronunciation_focus": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

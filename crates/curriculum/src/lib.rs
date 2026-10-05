@@ -14,6 +14,8 @@ pub mod index;
 pub mod load;
 pub mod model;
 pub mod schema;
+pub mod syllabus;
+pub mod validate;
 
 pub use index::{SkillCounts, UnitIndexEntry};
 pub use load::{
