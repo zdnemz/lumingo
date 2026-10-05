@@ -9,8 +9,21 @@ description = "Tutoring logic for Lumingo: sessions, turns, prompts and the free
 
 [dependencies]
 assessment-engine = { version = "0.0.0", path = "../assessment-engine" }
+async-trait = "0.1.92"
+curriculum = { version = "0.0.0", path = "../curriculum" }
+futures-util = "0.3.34"
+llm-client = { version = "0.0.0", path = "../llm-client" }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+storage = { version = "0.0.0", path = "../storage" }
 thiserror = "2.0.21"
+tokio = { version = "1.53.2", features = ["rt", "sync", "time"] }
+tokio-util = "0.7.19"
+tracing = "0.1.44"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread", "time"] }
 
 [lints]
 workspace = true

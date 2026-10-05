@@ -2857,8 +2857,18 @@ name = "tutor-engine"
 version = "0.0.0"
 dependencies = [
  "assessment-engine",
+ "async-trait",
+ "curriculum",
+ "futures-util",
+ "llm-client",
  "serde",
+ "serde_json",
+ "storage",
+ "tempfile",
  "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
