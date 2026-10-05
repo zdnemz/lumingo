@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SPRITES } from "./data";
 import { runsOf } from "./Sprite";
 
-const KNOWN = new Set([".", "k", "g", "G", "w", "e", "b", "m", "x", "a"]);
+const KNOWN = new Set([".", "k", "g", "G", "w", "e", "b", "m", "x", "a", "r", "p", "s", "y", "u", "n"]);
 
 describe("sprite data", () => {
   it("draws every sprite as a rectangle of known pixels", () => {
@@ -27,9 +27,18 @@ describe("sprite data", () => {
     }
   });
 
+  it("draws every accessory on the same 16 by 16 canvas as Lumi", () => {
+    const accessories = Object.entries(SPRITES).filter(([name]) => name.startsWith("accessory-"));
+    expect(accessories.length).toBe(6);
+    for (const [name, def] of accessories) {
+      expect(def.rows.length, name).toBe(16);
+      expect(def.rows[0]?.length, name).toBe(16);
+    }
+  });
+
   it("gives every icon a name that starts with its group", () => {
     for (const name of Object.keys(SPRITES)) {
-      expect(/^(lumi|skill|icon)-[a-z]+$/.test(name), name).toBe(true);
+      expect(/^(lumi|skill|icon|accessory)-[a-z]+$/.test(name), name).toBe(true);
     }
   });
 });
