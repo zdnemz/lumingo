@@ -17,6 +17,7 @@ The core of Lumingo without HTTP. `apps/server` parses a request, checks it, cal
 | Data | `delete_session`, `delete_all_data`, `export` | Recordings are deleted before rows; the file is compacted afterwards. |
 | Diagnostics | `diagnostics` | Hardware, latency percentiles from stored samples, provider test result. |
 | Sessions | `session::SessionService`, `attach_sessions`, `session_service` | A boundary only. Without a service, `NotAvailable(Sessions)`. |
+| Voice loop | `voice::VoiceLoop`, `VoiceHandle`, `VoiceEvent` | Listen, transcribe, think, speak over trait objects. Used by `tools/tutor-cli` now and by the server through `SessionService` later. Not attached to the server yet. See below. |
 
 ## Route to method
 
@@ -63,8 +64,37 @@ Other bounded things:
 
 ## Not here
 
-Session orchestration, turns, activities, free modes, speech and model downloads. The snapshot lists them in `unavailable`. The payload inspector (`GET /api/inspector`) needs a hook in `llm-client` and is not built.
+Lessons, activities, free modes and model downloads, and the server's use of the voice loop (it is not attached to `SessionService`). The snapshot lists them in `unavailable`. The payload inspector (`GET /api/inspector`) needs a hook in `llm-client` and is not built.
 
 ## Tests
 
 `cargo test -p app-core` runs unit tests and integration tests against a real SQLite file in a temporary directory, with a fixed clock and a small OpenAI-compatible server on 127.0.0.1 for the provider tests. No test contacts a real provider. Nothing in this crate needs a microphone, a speaker or a model.
+
+## The voice loop (`voice`, ROADMAP S3-06)
+
+`voice::VoiceLoop` runs the conversation by voice: microphone, gate, VAD and
+endpointer, STT worker, the T1 prompt, the LLM stream, the sentence chunker, TTS worker
+and playback. It is wired over trait objects only (`DeviceRegistry` over an
+`AudioBackend`, `Vad`, `SttEngine`, `TtsEngine`, `Arc<dyn LlmClient>`) and reuses the
+tutor engine's `Session` as its state machine. The module documentation in
+`src/voice/mod.rs` lists the threads, the capacity of every queue and what happens when
+it is full, and how a stop or a barge-in cancels the model stream, the TTS turn and
+playback.
+
+* Every turn records the five latency parts of `context_pack.md` section 4 from an
+  injected `LoopClock`, and `LatencySummary` gives p50 and p95.
+* A failed provider call is retried once; the second failure moves the session to
+  `ProviderUnavailable` with a message and waits for `resume`. `VoiceConfig::provider_timeout`
+  is the whole budget for both attempts.
+* The background analysis (T2) is spawned through the tutor engine's `TurnAnalyzer` by a
+  recorder task that is not on the speech path. Storing is optional (`Recording`).
+* `Scenario::from_unit` builds the prompt context from a unit's roleplay.
+* The fakes (`voice::testing`: manual clock, scripted language model, fake engines, fake
+  audio backend with a held output) exist only for this crate's tests and behind the
+  `test-support` feature. A release build does not contain them.
+
+`cargo test -p app-core` runs the loop over the fakes in `tests/voice_loop.rs`,
+`tests/voice_record.rs` and `tests/voice_offline.rs` (a closed port, a listener that
+never answers, an address that routes nowhere, a capture server that proves no request
+goes to any host but the provider). No test needs a microphone, a speaker, a model or the
+network. A real conversation is UNVERIFIED: see `tools/tutor-cli/README.md`.
