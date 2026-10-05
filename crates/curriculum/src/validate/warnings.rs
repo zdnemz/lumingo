@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::report::{Finding, RuleCode, UnitReport};
+use super::report::{FileReport, Finding, RuleCode};
 use super::text::{lowercase_words, word_count, word_set_similarity};
 use super::texts::{TextScope, localized_texts, unit_texts};
 use super::unit_rules::{listening_range, writing_range};
@@ -110,7 +110,7 @@ pub fn check_warnings(
     unit: &Unit,
     document: &serde_json::Value,
     options: &UnitOptions<'_>,
-    report: &mut UnitReport,
+    report: &mut FileReport,
 ) {
     match options.word_levels {
         Some(levels) => {
@@ -157,7 +157,7 @@ fn profile_words(text: &str) -> Vec<String> {
     words
 }
 
-fn check_vocabulary_profile(unit: &Unit, levels: &WordLevels, report: &mut UnitReport) {
+fn check_vocabulary_profile(unit: &Unit, levels: &WordLevels, report: &mut FileReport) {
     let targets: HashSet<String> = unit
         .targets
         .vocabulary
@@ -198,7 +198,7 @@ fn check_vocabulary_profile(unit: &Unit, levels: &WordLevels, report: &mut UnitR
     }
 }
 
-fn check_level_tags(unit: &Unit, levels: &WordLevels, report: &mut UnitReport) {
+fn check_level_tags(unit: &Unit, levels: &WordLevels, report: &mut FileReport) {
     for (i, item) in unit.targets.vocabulary.iter().enumerate() {
         let listed = levels.level_of(&item.lemma);
         // A phrase is rarely in a word list, so a missing phrase is not a disagreement.
@@ -219,7 +219,7 @@ fn check_level_tags(unit: &Unit, levels: &WordLevels, report: &mut UnitReport) {
     }
 }
 
-fn check_at_answers(unit: &Unit, checker: &dyn GrammarCheck, report: &mut UnitReport) {
+fn check_at_answers(unit: &Unit, checker: &dyn GrammarCheck, report: &mut FileReport) {
     for (i, activity) in unit.activities.iter().enumerate() {
         let answers = match activity {
             Activity::GuidedSpeaking(a) | Activity::GuidedWriting(a) => &a.model_answers,
@@ -266,7 +266,7 @@ fn comparison_text(activity: &Activity) -> Option<(&'static str, &str)> {
     }
 }
 
-fn check_near_duplicates(unit: &Unit, report: &mut UnitReport) {
+fn check_near_duplicates(unit: &Unit, report: &mut FileReport) {
     let texts: Vec<(usize, &'static str, &str)> = unit
         .activities
         .iter()
@@ -291,7 +291,7 @@ fn check_near_duplicates(unit: &Unit, report: &mut UnitReport) {
     }
 }
 
-fn check_language_balance(document: &serde_json::Value, report: &mut UnitReport) {
+fn check_language_balance(document: &serde_json::Value, report: &mut FileReport) {
     for text in localized_texts(document) {
         let Some(indonesian) = text.id else { continue };
         let english_len = text.en.chars().count();
@@ -319,7 +319,7 @@ fn check_language_balance(document: &serde_json::Value, report: &mut UnitReport)
     }
 }
 
-fn check_writing_and_listening_length(unit: &Unit, report: &mut UnitReport) {
+fn check_writing_and_listening_length(unit: &Unit, report: &mut FileReport) {
     let (write_min, write_max) = writing_range(unit.level);
     let (listen_min, listen_max) = listening_range(unit.level);
     for (i, activity) in unit.activities.iter().enumerate() {

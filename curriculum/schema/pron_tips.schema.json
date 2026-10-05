@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:schema:pron_tips:1.0",
+  "title": "Pronunciation tips",
+  "description": "curriculum/catalogs/pron_tips.json: a tip for each sound pair (expected sound, heard sound) and one generic tip per English phoneme. A tip says what the tongue, lips and voice do, in plain words, in both languages, with two example words (docs/CURRICULUM_SPEC.md section 9, docs/ASSESSMENT_SPEC.md sections 7.1 and 7.3). Phonemes are ARPAbet symbols without stress digits. Inferred from those texts; the spec ships no schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "version", "pairs", "generic"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "version": { "type": "integer", "minimum": 1 },
+    "pairs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pair_tip" }
+    },
+    "generic": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/generic_tip" }
+    }
+  },
+  "$defs": {
+    "bilingual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "id"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "phoneme": { "type": "string", "pattern": "^[A-Z]{1,2}$" },
+    "examples": {
+      "description": "At least two example words.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "pair_tip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "heard", "tip", "examples"],
+      "properties": {
+        "expected": { "$ref": "#/$defs/phoneme" },
+        "heard": {
+          "description": "The sound the learner produced instead, or none when the sound was left out, as in a dropped final consonant.",
+          "type": "string",
+          "pattern": "^([A-Z]{1,2}|none)$"
+        },
+        "tip": { "$ref": "#/$defs/bilingual" },
+        "examples": { "$ref": "#/$defs/examples" }
+      }
+    },
+    "generic_tip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phoneme", "tip", "examples"],
+      "properties": {
+        "phoneme": { "$ref": "#/$defs/phoneme" },
+        "tip": { "$ref": "#/$defs/bilingual" },
+        "examples": { "$ref": "#/$defs/examples" }
+      }
+    }
+  }
+}

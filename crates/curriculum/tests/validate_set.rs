@@ -8,7 +8,7 @@ use common::example_value;
 use curriculum::Level;
 use curriculum::syllabus::{Syllabus, syllabus_from_value};
 use curriculum::validate::{
-    RuleCode, SetConfig, SetReport, UnitInput, UnitOptions, UnitReport, validate_set,
+    FileReport, RuleCode, SetConfig, SetReport, UnitInput, UnitOptions, validate_set,
 };
 use serde_json::{Value, json};
 
@@ -59,7 +59,7 @@ fn folder(inputs: &[UnitInput]) -> SetReport {
     )
 }
 
-fn codes(report: &UnitReport) -> Vec<RuleCode> {
+fn codes(report: &FileReport) -> Vec<RuleCode> {
     report.errors().map(|f| f.code).collect()
 }
 

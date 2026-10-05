@@ -113,18 +113,66 @@ pub struct Skipped {
     pub reason: String,
 }
 
-/// Everything found for one unit file.
+/// What kind of file a report is about. Units are the default; the rest are catalogs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileKind {
+    #[default]
+    Unit,
+    Syllabus,
+    Rubric,
+    Anchors,
+    Placement,
+    Errors,
+    PronTips,
+    Topics,
+}
+
+impl FileKind {
+    /// Every kind, units first.
+    pub const ALL: [FileKind; 8] = [
+        FileKind::Unit,
+        FileKind::Syllabus,
+        FileKind::Rubric,
+        FileKind::Anchors,
+        FileKind::Placement,
+        FileKind::Errors,
+        FileKind::PronTips,
+        FileKind::Topics,
+    ];
+
+    /// The name used on the command line and in reports.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FileKind::Unit => "unit",
+            FileKind::Syllabus => "syllabus",
+            FileKind::Rubric => "rubric",
+            FileKind::Anchors => "anchors",
+            FileKind::Placement => "placement",
+            FileKind::Errors => "errors",
+            FileKind::PronTips => "pron_tips",
+            FileKind::Topics => "topics",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<FileKind> {
+        FileKind::ALL.into_iter().find(|kind| kind.as_str() == name)
+    }
+}
+
+/// Everything found for one file: a unit or a catalog.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
-pub struct UnitReport {
-    /// The file the unit came from, as given to the validator.
+pub struct FileReport {
+    /// The file the document came from, as given to the validator.
     pub file: String,
-    /// The unit id, when the document had one.
-    pub unit_id: Option<String>,
+    pub kind: FileKind,
+    /// The unit id or rubric id, when the document had one.
+    pub id: Option<String>,
     pub findings: Vec<Finding>,
     pub skipped: Vec<Skipped>,
 }
 
-impl UnitReport {
+impl FileReport {
     pub fn errors(&self) -> impl Iterator<Item = &Finding> {
         self.findings
             .iter()

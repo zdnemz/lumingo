@@ -8,6 +8,7 @@
 //! Nothing here reads the file system. The caller hands over parsed documents, word lists,
 //! syllabi and rubric ids, and a rule whose input is missing is listed as skipped in the report.
 
+pub mod catalogs;
 pub mod cross;
 mod report;
 pub mod text;
@@ -19,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::Value;
 
-pub use report::{Finding, RuleCode, Severity, Skipped, UnitReport};
+pub use report::{FileKind, FileReport, Finding, RuleCode, Severity, Skipped};
 pub use texts::{LocalizedAt, TextScope, localized_texts, unit_texts};
 pub use unit_rules::{
     ERROR_CATEGORIES, check_activity_alone, check_unit, listening_range, reading_range,
@@ -36,7 +37,7 @@ use cross::{Located, UnitRef};
 /// could be read into the model at all.
 #[derive(Debug)]
 pub struct UnitCheck {
-    pub report: UnitReport,
+    pub report: FileReport,
     pub unit: Option<Unit>,
 }
 
@@ -46,13 +47,13 @@ pub fn validate_unit_document(
     document: &Value,
     options: &UnitOptions<'_>,
 ) -> UnitCheck {
-    let mut report = UnitReport {
+    let mut report = FileReport {
         file: file.to_owned(),
-        unit_id: document
+        id: document
             .get("id")
             .and_then(Value::as_str)
             .map(str::to_owned),
-        ..UnitReport::default()
+        ..FileReport::default()
     };
 
     let issues = match unit_checker() {
@@ -148,27 +149,29 @@ pub struct SetConfig<'a> {
 /// The report of a whole run.
 #[derive(Debug, Default)]
 pub struct SetReport {
-    /// One report per input file, in input order.
-    pub units: Vec<UnitReport>,
-    /// Findings and skipped rules that belong to no single unit.
-    pub set: UnitReport,
+    /// One report per unit input, in input order.
+    pub units: Vec<FileReport>,
+    /// Reports of catalog files (rubrics, anchors and the rest). The caller fills these with
+    /// [`catalogs::validate_catalog`]; this function only handles units.
+    pub catalogs: Vec<FileReport>,
+    /// Findings and skipped rules that belong to no single file.
+    pub set: FileReport,
 }
 
 impl SetReport {
-    pub fn error_count(&self) -> usize {
+    fn all(&self) -> impl Iterator<Item = &FileReport> {
         self.units
             .iter()
-            .map(UnitReport::error_count)
-            .sum::<usize>()
-            + self.set.error_count()
+            .chain(self.catalogs.iter())
+            .chain(std::iter::once(&self.set))
+    }
+
+    pub fn error_count(&self) -> usize {
+        self.all().map(FileReport::error_count).sum()
     }
 
     pub fn warning_count(&self) -> usize {
-        self.units
-            .iter()
-            .map(UnitReport::warning_count)
-            .sum::<usize>()
-            + self.set.warning_count()
+        self.all().map(FileReport::warning_count).sum()
     }
 
     /// True only when there is no error anywhere. This decides the exit code.
@@ -189,11 +192,10 @@ pub fn validate_set(inputs: &[UnitInput], config: &SetConfig<'_>) -> SetReport {
                 typed.push(check.unit);
             }
             Err(reason) => {
-                report.units.push(UnitReport {
+                report.units.push(FileReport {
                     file: input.file.clone(),
-                    unit_id: None,
                     findings: vec![Finding::new(RuleCode::E01, "", reason.clone())],
-                    skipped: Vec::new(),
+                    ..FileReport::default()
                 });
                 typed.push(None);
             }

@@ -6,20 +6,20 @@ use std::collections::BTreeSet;
 
 use common::example_value;
 use curriculum::validate::{
-    Finding, GrammarCheck, RuleCode, Severity, UnitOptions, UnitReport, WordLevels,
+    FileReport, Finding, GrammarCheck, RuleCode, Severity, UnitOptions, WordLevels,
     validate_unit_document,
 };
 use serde_json::{Value, json};
 
-fn check(document: &Value) -> UnitReport {
+fn check(document: &Value) -> FileReport {
     validate_unit_document("test.json", document, &UnitOptions::default()).report
 }
 
-fn error_codes(report: &UnitReport) -> BTreeSet<RuleCode> {
+fn error_codes(report: &FileReport) -> BTreeSet<RuleCode> {
     report.errors().map(|f| f.code).collect()
 }
 
-fn describe(report: &UnitReport) -> String {
+fn describe(report: &FileReport) -> String {
     report
         .findings
         .iter()
@@ -539,7 +539,7 @@ fn e16_b2_needs_the_drill_in_odd_units_and_mediation_every_third() {
         remove_activity(&mut unit, 6);
         check(&unit)
     };
-    let messages = |report: &UnitReport| -> Vec<String> {
+    let messages = |report: &FileReport| -> Vec<String> {
         report
             .findings
             .iter()
