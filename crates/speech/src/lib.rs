@@ -13,6 +13,7 @@ mod info;
 mod stt;
 mod stt_worker;
 mod tts;
+mod tts_worker;
 mod unavailable;
 mod vad;
 
@@ -28,6 +29,10 @@ pub use stt_worker::{
     SttEvent, SttJob, SttWorker, SttWorkerConfig, SttWorkerStats, SubmitError as SttSubmitError,
 };
 pub use tts::{PcmChunk, TtsEngine};
+pub use tts_worker::{
+    SinkResult as TtsSinkResult, SubmitError as TtsSubmitError, TtsEvent, TtsJob, TtsTurn,
+    TtsWorker, TtsWorkerConfig, TtsWorkerStats,
+};
 pub use unavailable::UnavailableEngine;
 pub use vad::Vad;
 
