@@ -44,6 +44,11 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | sha2, base64 | Content-Security-Policy script hashes | MIT OR Apache-2.0 | ok |
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
+| toml | Reads the phone map and the calibration file in `pron-engine` | MIT OR Apache-2.0 | ok |
+| hound | Reads WAV files in the `pron` program (`ort-backend` feature, off by default) | Apache-2.0 | ok |
+| ort, ort-sys 2.0.0-rc.13 | ONNX Runtime bindings for the phoneme model (`ort-backend` feature, off by default). Built with `load-dynamic`, so no runtime is downloaded or linked at build time. | MIT OR Apache-2.0 | ok. Read from the crate metadata and the `LICENSE-MIT` and `LICENSE-APACHE` files in the published package. The ONNX Runtime library the program loads is a separate item (section 6). |
+| libloading | Loads the ONNX Runtime library (dependency of `ort`) | ISC | ok |
+| ndarray, matrixmultiply, rawpointer, num-complex, num-integer, num-traits | Dependencies of `ort` | MIT OR Apache-2.0 | ok |
 
 ## 4. JavaScript packages
 
@@ -86,7 +91,7 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | Item | Planned use | Expected license | Status |
 |---|---|---|---|
 | sherpa-onnx (Rust crate and native library) | VAD, STT, TTS runtime | Apache-2.0 | verify |
-| ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
+| ONNX Runtime (the native library; the `ort` crate is in section 3) | Phoneme model inference. `pron-engine` loads it at run time from `ORT_DYLIB_PATH`; nothing in the repository bundles it. | MIT | verify |
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
 | SQLx, SQLite | Storage | MIT OR Apache-2.0, public domain | verify |
@@ -97,7 +102,7 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | Supertonic 3 | TTS candidate | Model: OpenRAIL-M. Code: MIT. | review: read the use restrictions in full and show them before download |
 | Kokoro, Kitten TTS | TTS candidates | Apache-2.0 | verify |
 | wav2vec2 phoneme model, ZIPA | Phoneme model candidates | Apache-2.0, unknown | verify |
-| CMUdict | Canonical pronunciations | BSD-style | verify |
+| CMUdict | Canonical pronunciations. `pron-engine` ships no dictionary: it reads a `cmudict.dict` file the user supplies. Crates.io was checked on 2026-10-05: `cmudict-fast` 0.8.0 and `mora-cmudict` 0.0.1 carry a copy of the data with its terms in `LICENSE-CMUDICT` (copyright 1993-2015 Carnegie Mellon University, redistribution allowed if the notice is kept), but the data is not covered by the crates' own `MIT OR Apache-2.0` metadata and the original source could not be reached to compare, so neither is a dependency. Shipping the data would need a `NOTICE` line. | BSD-style | verify |
 | CEFR-J vocabulary profile | Checking word levels | Free with citation, not an open license | review |
 | Octanove vocabulary profile C1/C2 | Word levels above B2 | CC BY-SA 4.0 | verify |
 | speechocean762 | Evaluation only | CC BY 4.0 | verify |
