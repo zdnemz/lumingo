@@ -1,0 +1,5 @@
+[env]
+# ts-rs writes the generated TypeScript types here when the tests run.
+TS_RS_EXPORT_DIR = { value = "apps/web/src/generated", relative = true }
+# Every integer that crosses the API fits in a JavaScript number.
+TS_RS_LARGE_INT = "number"
