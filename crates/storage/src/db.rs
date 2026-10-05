@@ -465,4 +465,200 @@ mod tests {
         assert!(backup_path(&path, 10).exists());
         assert!(unrelated.exists());
     }
+
+    fn backups_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .expect("read dir")
+            .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".bak-"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    async fn table_exists(conn: &mut SqliteConnection, name: &str) -> bool {
+        let found: Option<String> =
+            sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1")
+                .bind(name)
+                .fetch_optional(&mut *conn)
+                .await
+                .expect("sqlite_master");
+        found.is_some()
+    }
+
+    async fn make_profile(db: &Database) {
+        db.profiles()
+            .create(&crate::NewProfile {
+                display_name: "Before the upgrade".to_owned(),
+                ui_language: crate::UiLanguage::Id,
+                l1: "id".to_owned(),
+                l1_help_mode: crate::L1HelpMode::Auto,
+                created_at: crate::Timestamp::from_unix_seconds(1_790_000_000).expect("timestamp"),
+            })
+            .await
+            .expect("profile");
+    }
+
+    /// A database file as an older build left it, holding one profile.
+    async fn at_version(version: i64) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        let old = Database::open_up_to(&path, &OpenConfig::default(), version)
+            .await
+            .expect("open an old database");
+        make_profile(&old).await;
+        old.close().await.expect("close");
+        (dir, path)
+    }
+
+    #[tokio::test]
+    async fn an_upgrade_copies_the_old_file_first_and_keeps_its_data() {
+        let (dir, path) = at_version(1).await;
+        assert!(
+            backups_in(dir.path()).is_empty(),
+            "a fresh file needs no backup"
+        );
+
+        let upgraded = Database::open(&path).await.expect("upgrade");
+        assert_eq!(upgraded.schema_version().await.expect("version"), 2);
+        assert_eq!(backups_in(dir.path()), ["lumingo.sqlite.bak-1"]);
+
+        // The copy is the old schema with the old data ...
+        let mut copy = SqliteConnectOptions::new()
+            .filename(backup_path(&path, 1))
+            .read_only(true)
+            .connect()
+            .await
+            .expect("open the backup");
+        let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM profiles")
+            .fetch_one(&mut copy)
+            .await
+            .expect("count");
+        assert_eq!(rows, 1);
+        assert!(!table_exists(&mut copy, "xp_ledger").await);
+        // ... and the live file has both.
+        assert!(
+            table_exists(
+                &mut upgraded.reader().acquire().await.expect("conn"),
+                "xp_ledger"
+            )
+            .await
+        );
+        assert!(upgraded.profiles().first().await.expect("first").is_some());
+    }
+
+    #[tokio::test]
+    async fn reopening_a_current_database_makes_no_backup() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        for _ in 0..3 {
+            let db = Database::open(&path).await.expect("open");
+            db.close().await.expect("close");
+        }
+        assert!(backups_in(dir.path()).is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_failed_upgrade_leaves_the_old_schema_and_data_and_keeps_the_backup() {
+        let (dir, path) = at_version(1).await;
+        // Something else already uses the name migration 0002 wants for its first table.
+        let mut conn = open_plain(&path).await;
+        sqlx::query("CREATE TABLE xp_ledger (not_ours TEXT)")
+            .execute(&mut conn)
+            .await
+            .expect("squat the name");
+        conn.close().await.expect("close");
+
+        let result = Database::open(&path).await;
+        assert!(
+            matches!(result, Err(StorageError::Migration(_))),
+            "{result:?}"
+        );
+        assert_eq!(backups_in(dir.path()), ["lumingo.sqlite.bak-1"]);
+
+        let mut check = open_plain(&path).await;
+        let version: i64 =
+            sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
+                .fetch_one(&mut check)
+                .await
+                .expect("version");
+        assert_eq!(version, 1);
+        // The migration ran in one transaction: none of its other tables exist.
+        for table in [
+            "rest_tokens",
+            "streak_days",
+            "unlockables",
+            "equipped_cosmetics",
+        ] {
+            assert!(!table_exists(&mut check, table).await, "{table}");
+        }
+        let profiles: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM profiles")
+            .fetch_one(&mut check)
+            .await
+            .expect("count");
+        assert_eq!(profiles, 1);
+    }
+
+    #[tokio::test]
+    async fn a_database_from_a_newer_build_is_refused_without_a_backup_or_changes() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        let current = Database::open(&path).await.expect("open");
+        make_profile(&current).await;
+        current.close().await.expect("close");
+
+        let result = Database::open_up_to(&path, &OpenConfig::default(), 1).await;
+        assert!(matches!(
+            result,
+            Err(StorageError::SchemaTooNew {
+                found: 2,
+                supported: 1
+            })
+        ));
+        assert!(backups_in(dir.path()).is_empty());
+
+        let again = Database::open(&path)
+            .await
+            .expect("still opens with the right build");
+        assert_eq!(again.schema_version().await.expect("version"), 2);
+        assert!(again.profiles().first().await.expect("first").is_some());
+    }
+
+    #[tokio::test]
+    async fn a_migration_edited_after_it_was_applied_is_refused() {
+        let (_dir, path) = at_version(1).await;
+        let mut conn = open_plain(&path).await;
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = x'00' WHERE version = 1")
+            .execute(&mut conn)
+            .await
+            .expect("tamper");
+        conn.close().await.expect("close");
+
+        let result = Database::open(&path).await;
+        assert!(
+            matches!(result, Err(StorageError::MigrationChanged(1))),
+            "{result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_that_is_not_ours_fails_cleanly_and_is_left_alone() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        let mut conn = open_plain(&path).await;
+        sqlx::query("CREATE TABLE profiles (only_column TEXT)")
+            .execute(&mut conn)
+            .await
+            .expect("create");
+        conn.close().await.expect("close");
+
+        let result = Database::open(&path).await;
+        assert!(
+            matches!(result, Err(StorageError::Migration(_))),
+            "{result:?}"
+        );
+        let mut check = open_plain(&path).await;
+        assert!(!table_exists(&mut check, "units").await);
+        assert!(backups_in(dir.path()).is_empty());
+    }
 }
