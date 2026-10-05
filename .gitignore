@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!apps/web/.env.development
 providers.toml
 
 # Build output

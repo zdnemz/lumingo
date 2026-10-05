@@ -8,6 +8,8 @@ const config: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   reactStrictMode: true,
+  // `next dev` would otherwise write AGENTS.md and CLAUDE.md into this folder.
+  agentRules: false,
 };
 
 export default config;
