@@ -1,0 +1,22 @@
+/* Sprite palette. Sprites keep their own colours, so Lumi looks the same in
+ * every theme; single-colour icons use the text colour instead. */
+
+:root {
+  --sprite-ink: #0b0a1a;
+  --sprite-gold: #ffca3a;
+  --sprite-gold-dark: #c98a00;
+  --sprite-glow: #fff6c2;
+  --sprite-eye: #1b1230;
+  --sprite-blush: #ff8fa3;
+  --sprite-mouth: #7a2d12;
+}
+
+.px-sprite .sp-k { fill: var(--sprite-ink); }
+.px-sprite .sp-g { fill: var(--sprite-gold); }
+.px-sprite .sp-G { fill: var(--sprite-gold-dark); }
+.px-sprite .sp-w { fill: var(--sprite-glow); }
+.px-sprite .sp-e { fill: var(--sprite-eye); }
+.px-sprite .sp-b { fill: var(--sprite-blush); }
+.px-sprite .sp-m { fill: var(--sprite-mouth); }
+.px-sprite .sp-x { fill: currentColor; }
+.px-sprite .sp-a { fill: var(--color-primary); }
