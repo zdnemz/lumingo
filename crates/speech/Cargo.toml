@@ -1,0 +1,15 @@
+[package]
+name = "speech"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Speech engine traits and shared primitives for Lumingo"
+
+[dependencies]
+thiserror = "2.0.21"
+serde = { version = "1.0.229", features = ["derive"] }
+
+[lints]
+workspace = true
