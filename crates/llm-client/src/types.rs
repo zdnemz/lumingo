@@ -269,8 +269,8 @@ pub struct StructuredOutput {
     pub ladder_level: LadderLevel,
     /// True when the first reply failed validation and the repair call fixed it.
     pub repaired: bool,
-    /// Provider requests made for this output, including a repair or a retry
-    /// with a larger limit.
+    /// Provider requests made for this output: the ones a provider rejected on the
+    /// way down the ladder, a retry with a larger limit, and a repair.
     pub calls: u8,
     /// Tokens summed over those requests, when the provider reports them.
     pub usage: Option<Usage>,

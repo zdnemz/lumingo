@@ -53,6 +53,8 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | native-tls | TLS backend choice: Schannel on Windows (no library to install), Security framework on macOS, OpenSSL on Linux | MIT OR Apache-2.0 | ok |
 | schannel | Windows binding used by native-tls | MIT | ok |
 | openssl, openssl-sys, openssl-probe | Linux binding used by native-tls. They link the system OpenSSL library and do not bundle it; building needs its headers | Apache-2.0, MIT, MIT OR Apache-2.0 | ok |
+| jsonschema, referencing, fluent-uri and the crates they use | Local validation of structured output in `llm-client`. Built without default features, so it cannot fetch a schema over HTTP or from a file | MIT (jsonschema); others MIT or MIT OR Apache-2.0 | ok |
+| borrow-or-share | Used by fluent-uri, under jsonschema | MIT-0 (OSI approved, MIT without the attribution clause). Allowed for this crate only by an exception in `deny.toml` | ok |
 
 ## 4. JavaScript packages
 
@@ -99,7 +101,6 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
 | SQLx, SQLite | Storage | MIT OR Apache-2.0, public domain | verify |
-| jsonschema | Local validation of structured output and units | MIT | verify |
 | harper-core | Rule-based grammar findings | Apache-2.0 | verify |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |
 | Supertonic 3 | TTS candidate | Model: OpenRAIL-M. Code: MIT. | review: read the use restrictions in full and show them before download |

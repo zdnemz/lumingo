@@ -22,7 +22,13 @@ allow = [
   "Unicode-3.0",
   "Unicode-DFS-2016",
 ]
-exceptions = []
+# MIT-0 is MIT without the attribution clause: OSI approved and no more
+# restrictive than the MIT licence in the allowlist. It is allowed for this one
+# crate only, which jsonschema (llm-client) pulls in through fluent-uri.
+# Register row: docs/LICENSE_REGISTER.md section 3.
+exceptions = [
+  { allow = ["MIT-0"], crate = "borrow-or-share" },
+]
 
 [bans]
 multiple-versions = "warn"

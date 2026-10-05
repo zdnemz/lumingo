@@ -12,9 +12,13 @@ pub mod anthropic;
 pub mod caps;
 pub mod client;
 pub mod error;
+#[cfg(test)]
+mod fake;
 pub mod http;
 pub mod key;
+mod ladder;
 pub mod openai;
+mod probe;
 pub mod profile;
 pub mod redact;
 pub mod schema;
@@ -22,6 +26,7 @@ mod sse;
 mod stream;
 mod transport;
 pub mod types;
+mod validate;
 
 pub use adapter::{
     AdapterConfig, ClientOptions, Completion, CompletionRequest, Format, Limits, ProtocolAdapter,
@@ -33,6 +38,7 @@ pub use client::LlmClient;
 pub use error::{InvalidOutput, InvalidReason, LlmError, TimeoutKind, TransportKind};
 pub use http::{GuardedClient, HttpClientFactory, SetupHosts, is_loopback_url};
 pub use key::{ApiKey, KeyError};
+pub use ladder::{ProviderClient, REPROBE_BELOW, VALIDITY_WINDOW};
 pub use openai::OpenAiChat;
 pub use profile::Protocol;
 pub use schema::Contract;

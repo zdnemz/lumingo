@@ -17,7 +17,7 @@ use futures_util::stream;
 use llm_client::{
     AdapterConfig, AnthropicMessages, ApiKey, Capabilities, CapsHandle, ChatMessage, ClientOptions,
     Completion, CompletionRequest, Format, HttpClientFactory, Limits, LlmError, OpenAiChat,
-    ProtocolAdapter, TextRequest,
+    ProtocolAdapter, ProviderClient, TextRequest,
 };
 use reqwest::Url;
 use serde_json::{Value, json};
@@ -342,4 +342,67 @@ pub async fn anthropic_rig() -> (Rig, AnthropicMessages) {
     let rig = rig("", Some(TEST_KEY), quick_options()).await;
     let adapter = AnthropicMessages::new(rig.config.clone()).expect("adapter");
     (rig, adapter)
+}
+
+/// A valid instance of one contract, written by hand in `tests/fixtures/contract_samples`.
+pub fn sample(name: &str) -> Value {
+    serde_json::from_slice(&fixture(&format!("contract_samples/{name}.json")))
+        .expect("sample is JSON")
+}
+
+pub const CONTRACT_NAMES: [&str; 4] = [
+    "turn_analysis",
+    "rubric_score",
+    "practice_items",
+    "reading_passage",
+];
+
+/// An `openai_chat` non-streaming reply whose message content is `content`.
+pub fn openai_reply(content: &str) -> Reply {
+    Reply::json_text(
+        200,
+        &json!({
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": content, "refusal": null },
+                "finish_reason": "stop"
+            }],
+            "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 }
+        })
+        .to_string(),
+    )
+}
+
+/// An `anthropic_messages` reply with one text block.
+pub fn anthropic_text_reply(content: &str) -> Reply {
+    Reply::json_text(
+        200,
+        &json!({
+            "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-test",
+            "content": [{ "type": "text", "text": content }],
+            "stop_reason": "end_turn", "stop_sequence": null,
+            "usage": { "input_tokens": 10, "output_tokens": 5 }
+        })
+        .to_string(),
+    )
+}
+
+/// An `anthropic_messages` reply that answers a forced tool call.
+pub fn anthropic_tool_reply(name: &str, input: &Value) -> Reply {
+    Reply::json_text(
+        200,
+        &json!({
+            "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-test",
+            "content": [{ "type": "tool_use", "id": "toolu_test", "name": name, "input": input }],
+            "stop_reason": "tool_use", "stop_sequence": null,
+            "usage": { "input_tokens": 10, "output_tokens": 5 }
+        })
+        .to_string(),
+    )
+}
+
+pub fn client_for(adapter: impl ProtocolAdapter + 'static, caps: &CapsHandle) -> ProviderClient {
+    ProviderClient::from_adapter(Arc::new(adapter), caps.clone())
 }
