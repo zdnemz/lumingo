@@ -43,6 +43,8 @@ export const en = {
   "settings.theme.system": "Follow system",
   "settings.theme.night": "Night",
   "settings.theme.day": "Day",
+  "settings.theme.forest": "Forest",
+  "settings.theme.ember": "Ember",
   "settings.language": "Language",
   "settings.language.id": "Bahasa Indonesia",
   "settings.language.en": "English",

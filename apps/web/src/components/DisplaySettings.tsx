@@ -1,12 +1,15 @@
 "use client";
 
-import { LANGUAGES, MOTION_SETTINGS, THEME_SETTINGS } from "@/state/preferences";
+import { LANGUAGES, MOTION_SETTINGS, THEME_SETTINGS, type Theme, type ThemeSetting } from "@/state/preferences";
 import { usePreferences, useT } from "@/state/PreferencesProvider";
 import { Panel } from "@/ui/Panel";
 import { Segmented } from "@/ui/Segmented";
 import { Switch } from "@/ui/Switch";
 
-export function DisplaySettings() {
+/** Night and Day are always available. The other themes are rewards the learner has unlocked. */
+const ALWAYS_AVAILABLE: readonly Theme[] = ["night", "day"];
+
+export function DisplaySettings({ unlockedThemes = [] }: { unlockedThemes?: readonly Theme[] }) {
   const t = useT();
   const { prefs, setPrefs } = usePreferences();
   return (
@@ -23,7 +26,10 @@ export function DisplaySettings() {
           legend={t("settings.theme")}
           value={prefs.theme}
           onChange={(theme) => setPrefs({ theme })}
-          options={THEME_SETTINGS.map((value) => ({ value, label: t(`settings.theme.${value}`) }))}
+          options={THEME_SETTINGS.filter(
+            (value: ThemeSetting) =>
+              value === "system" || ALWAYS_AVAILABLE.includes(value) || unlockedThemes.includes(value) || value === prefs.theme,
+          ).map((value) => ({ value, label: t(`settings.theme.${value}`) }))}
         />
         <Segmented
           legend={t("settings.language")}

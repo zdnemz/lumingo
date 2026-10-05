@@ -43,6 +43,8 @@ export const id = {
   "settings.theme.system": "Ikuti sistem",
   "settings.theme.night": "Malam",
   "settings.theme.day": "Siang",
+  "settings.theme.forest": "Hutan",
+  "settings.theme.ember": "Bara",
   "settings.language": "Bahasa",
   "settings.language.id": "Bahasa Indonesia",
   "settings.language.en": "English",
