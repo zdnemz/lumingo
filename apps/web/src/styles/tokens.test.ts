@@ -90,25 +90,36 @@ describe.each(Object.entries(THEMES))("theme %s", (_name, selector) => {
   });
 
   it("keeps borders and the focus ring visible (3:1 for non-text)", () => {
-    for (const surface of ["--color-bg", "--color-surface"]) {
+    for (const surface of ["--color-bg", "--color-surface", "--color-surface-raised", "--color-bg-deep"]) {
       expect(contrast(colour("--color-border"), colour(surface)), `border on ${surface}`).toBeGreaterThanOrEqual(3);
       expect(contrast(colour("--color-focus"), colour(surface)), `focus on ${surface}`).toBeGreaterThanOrEqual(3);
     }
   });
 
-  it("keeps status and link colours readable as text", () => {
+  // Components paint on all four of these: the page, panels, raised panels and buttons, and inset wells and badges.
+  const BACKGROUNDS = ["--color-bg", "--color-bg-deep", "--color-surface", "--color-surface-raised"];
+
+  it("keeps status and link colours readable as text on every background", () => {
     for (const token of ["--color-success", "--color-danger", "--color-warning", "--color-info", "--color-link"]) {
-      for (const surface of ["--color-bg", "--color-surface"]) {
+      for (const surface of BACKGROUNDS) {
         expect(contrast(colour(token), colour(surface)), `${token} on ${surface}`).toBeGreaterThanOrEqual(4.5);
       }
     }
   });
 
-  it("keeps the four skill colours visible on every surface", () => {
+  it("keeps the four skill colours readable as text on every background", () => {
     for (const skill of ["listening", "speaking", "reading", "writing"]) {
-      for (const surface of ["--color-bg", "--color-surface"]) {
-        expect(contrast(colour(`--color-skill-${skill}`), colour(surface)), `${skill} on ${surface}`).toBeGreaterThanOrEqual(3);
+      for (const surface of BACKGROUNDS) {
+        expect(contrast(colour(`--color-skill-${skill}`), colour(surface)), `${skill} on ${surface}`).toBeGreaterThanOrEqual(4.5);
       }
+    }
+  });
+
+  it("keeps the primary colour readable as text where it is used as text on a dark theme", () => {
+    // Primary is used as an accent on dark themes. On Day it is only ever a fill.
+    if (!/dark/.test(theme.get("color-scheme") ?? "")) return;
+    for (const surface of BACKGROUNDS) {
+      expect(contrast(colour("--color-primary"), colour(surface)), `primary on ${surface}`).toBeGreaterThanOrEqual(4.5);
     }
   });
 });
