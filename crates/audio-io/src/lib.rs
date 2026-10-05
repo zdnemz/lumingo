@@ -14,6 +14,7 @@ mod gate;
 mod playback;
 mod resample;
 mod ring;
+mod session;
 mod sync;
 
 pub use capture::{CapturePath, Pumped};
@@ -33,3 +34,7 @@ pub use playback::{
 pub use resample::{CaptureConverter, MonoResampler, ResampleError};
 
 pub use ring::{CaptureConsumer, CaptureCounters, CaptureProducer, CaptureSnapshot, capture_ring};
+pub use session::{
+    AudioEvent, AudioSession, FrameSink, PlaybackHandle, SessionConfig, SessionError, SessionStats,
+    StopReport,
+};

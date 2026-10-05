@@ -40,6 +40,7 @@ struct State {
     live_threads: AtomicUsize,
     opened: AtomicUsize,
     input_tone: Mutex<Option<f32>>,
+    failing: Mutex<Vec<Direction>>,
     rendered: Mutex<Vec<f32>>,
     period: Duration,
 }
@@ -78,6 +79,7 @@ impl FakeBackend {
                 live_threads: AtomicUsize::new(0),
                 opened: AtomicUsize::new(0),
                 input_tone: Mutex::new(None),
+                failing: Mutex::new(Vec::new()),
                 rendered: Mutex::new(Vec::new()),
                 period,
             }),
@@ -152,6 +154,16 @@ impl FakeBackend {
         *lock(&self.state.input_tone) = hz;
     }
 
+    /// Makes every later `open_input` or `open_output` fail (or work again), to
+    /// test start-up that fails halfway.
+    pub fn set_open_failure(&self, direction: Direction, failing: bool) {
+        let mut list = lock(&self.state.failing);
+        list.retain(|d| *d != direction);
+        if failing {
+            list.push(direction);
+        }
+    }
+
     /// Streams that are open right now.
     pub fn live_streams(&self) -> usize {
         self.state.live_streams.load(Ordering::Acquire)
@@ -182,6 +194,11 @@ impl FakeBackend {
         on_error: StreamErrorCallback,
         mut tick: impl FnMut(&State, &mut Vec<f32>, usize) + Send + 'static,
     ) -> Result<Box<dyn AudioStream>, DeviceError> {
+        if lock(&self.state.failing).contains(&device.direction) {
+            return Err(DeviceError::Backend(
+                "the fake backend was told to fail".to_owned(),
+            ));
+        }
         if !self.device_present(device) {
             return Err(DeviceError::NotFound {
                 direction: device.direction,

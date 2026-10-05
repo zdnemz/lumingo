@@ -139,7 +139,7 @@ pub enum PrefsError {
 
 /// Where device choices are remembered. `app-core` can implement this over its
 /// settings storage; [`FilePrefs`] is the stand-alone version.
-pub trait PrefsStore: Send {
+pub trait PrefsStore: Send + Sync {
     /// A store with nothing saved yet returns the default preferences.
     fn load(&self) -> Result<DevicePrefs, PrefsError>;
     fn save(&self, prefs: &DevicePrefs) -> Result<(), PrefsError>;
