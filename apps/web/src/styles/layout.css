@@ -1,0 +1,107 @@
+/* Page-level layout: the shell, the hero, and the server link panel. */
+
+.boot {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-4);
+  min-height: 100dvh;
+  text-align: center;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+.shell__bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: var(--color-bg-deep);
+  border-bottom: var(--bw) solid var(--color-border);
+}
+.shell__bar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-5);
+  padding-block: var(--space-2);
+}
+.shell__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-h);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.shell__name {
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+}
+.shell__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shell__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  text-decoration: none;
+}
+.shell__link:hover {
+  background: var(--color-surface);
+}
+.shell__link[aria-current="page"] {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.shell__main {
+  flex: 1;
+  padding-block: var(--space-6);
+}
+.shell__main:focus {
+  outline: none;
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.link__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+.link__facts dt {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.link__facts dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+}
+.link__events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
