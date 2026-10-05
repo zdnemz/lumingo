@@ -11,6 +11,7 @@ mod prompt;
 mod review;
 mod session;
 mod support;
+mod topics;
 
 pub use analysis::*;
 pub use chunker::SentenceChunker;
@@ -26,3 +27,6 @@ pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,
 };
 pub use support::{Clock, system_clock};
+pub use topics::{
+    ConversationTopic, LevelBank, LocalizedText, ReadingTopic, TopicBank, WritingPrompt,
+};
