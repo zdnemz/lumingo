@@ -3,10 +3,12 @@
 #![forbid(unsafe_code)]
 
 mod chunker;
+mod drafts;
 mod review;
 mod session;
 
 pub use chunker::SentenceChunker;
+pub use drafts::{DraftComparison, DraftError, EarlierError, Resolution, compare_drafts};
 pub use review::{Grade, ReviewState, due_order, update_mastery};
 pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,

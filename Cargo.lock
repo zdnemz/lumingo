@@ -1603,6 +1603,7 @@ dependencies = [
 name = "tutor-engine"
 version = "0.0.0"
 dependencies = [
+ "assessment-engine",
  "serde",
  "thiserror",
 ]

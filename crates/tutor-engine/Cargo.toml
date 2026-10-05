@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Tutoring logic for Lumingo: sessions, turns, prompts and the free modes"
 
 [dependencies]
+assessment-engine = { version = "0.0.0", path = "../assessment-engine" }
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"
 
