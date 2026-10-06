@@ -23,8 +23,8 @@ mod workshop;
 pub use activity::*;
 pub use analysis::*;
 pub use chat::{
-    ChatConfig, ChatDeps, ChatReply, ChatSummary, ChatTopic, ErrorPattern, MAX_TOPIC_CHARS,
-    ReplyOutcome, TextChat, UnitRoleplay, clean_topic,
+    ChatConfig, ChatDeps, ChatObserver, ChatReply, ChatSummary, ChatTopic, ErrorPattern,
+    MAX_TOPIC_CHARS, ReplyOutcome, TextChat, UnitRoleplay, clean_topic, session_summary,
 };
 pub use chunker::SentenceChunker;
 pub use drafts::{DraftComparison, DraftError, EarlierError, Resolution, compare_drafts};

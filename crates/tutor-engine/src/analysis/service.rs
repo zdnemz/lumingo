@@ -163,6 +163,9 @@ struct Queued {
 
 struct State {
     queue: VecDeque<Queued>,
+    /// Turns whose text a call has been sent for and not yet settled. Their text
+    /// can no longer be amended, because the model already has it.
+    in_flight: HashSet<i64>,
     cadence: Cadence,
     notes: Notes,
     window: DropWindow,
@@ -216,6 +219,7 @@ impl TurnAnalyzer {
                 clock,
                 state: Mutex::new(State {
                     queue: VecDeque::new(),
+                    in_flight: HashSet::new(),
                     cadence: Cadence::Every,
                     notes: Notes::default(),
                     window: DropWindow::default(),
@@ -255,6 +259,25 @@ impl TurnAnalyzer {
     /// Turns waiting for a call, flagged or not.
     pub fn waiting(&self) -> usize {
         lock(&self.inner.state).queue.len()
+    }
+
+    /// Replaces the learner's text of a turn that is still waiting for its
+    /// analysis, so that the analysis is of the corrected words. Returns `false`
+    /// when the turn is not waiting (it was analysed already, or a call for it is
+    /// on its way): its analysis is of the text as it was then, and the caller
+    /// must say so.
+    pub fn amend_waiting(&self, turn_id: i64, learner_text: &str) -> bool {
+        let mut state = lock(&self.inner.state);
+        if state.in_flight.contains(&turn_id) {
+            return false;
+        }
+        match state.queue.iter_mut().find(|q| q.turn.turn_id == turn_id) {
+            Some(queued) => {
+                learner_text.clone_into(&mut queued.turn.learner_text);
+                true
+            }
+            None => false,
+        }
     }
 
     /// Whether the filters removed more than a third of the entries of the last
@@ -319,7 +342,9 @@ impl TurnAnalyzer {
                 break;
             };
             calls += 1;
-            match self.call_and_store(&batch, cancel).await {
+            let result = self.call_and_store(&batch, cancel).await;
+            lock(&self.inner.state).in_flight.clear();
+            match result {
                 Ok(records) => {
                     let covered = records.len() >= batch.len();
                     self.settle_success(&batch, &records);
@@ -354,7 +379,7 @@ impl TurnAnalyzer {
     /// The next batch to send, or `None` when the cadence says to wait. Turns
     /// stay in the queue until their analysis is stored.
     fn next_batch(&self, drain: bool) -> Option<Vec<TurnToAnalyse>> {
-        let state = lock(&self.inner.state);
+        let mut state = lock(&self.inner.state);
         let due = match state.cadence {
             Cadence::Every => !state.queue.is_empty(),
             Cadence::Batched => {
@@ -374,6 +399,7 @@ impl TurnAnalyzer {
             .take(MAX_BATCH_TURNS)
             .map(|q| q.turn.clone())
             .collect();
+        state.in_flight = batch.iter().map(|t| t.turn_id).collect();
         Some(batch)
     }
 

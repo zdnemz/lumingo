@@ -24,8 +24,8 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::analysis::{
-    AnalysisKind, AnalyzerConfig, InputMode as AnalysisInput, ObjectiveRef, TurnAnalyzer,
-    TurnToAnalyse,
+    AnalysisKind, AnalyzerConfig, InputMode as AnalysisInput, ObjectiveRef, RunReport,
+    TurnAnalyzer, TurnToAnalyse,
 };
 use crate::error::{EngineError, Result};
 use crate::evidence::{EvidenceRecorder, Subject};
@@ -134,9 +134,22 @@ pub struct ChatSummary {
     pub analysis_unreliable: bool,
 }
 
+/// Hears about what happens to a chat outside the call that is running. The
+/// program around the chat uses it to tell the screen, so the engine itself has
+/// no idea who is listening. Both methods run on the engine's own tasks and must
+/// return quickly and never block.
+pub trait ChatObserver: Send + Sync {
+    /// The learner's message was stored. `seq` is its position in the session.
+    fn learner_turn_stored(&self, turn_id: i64, seq: i64);
+    /// The background analysis of a message finished. `report.analysed` is empty
+    /// when the call failed or the turn is waiting for a batch.
+    fn analysis_finished(&self, report: &RunReport);
+}
+
 pub struct TextChat {
     config: ChatConfig,
     deps: ChatDeps,
+    observer: Option<Arc<dyn ChatObserver>>,
     recorder: EvidenceRecorder,
     session: Session,
     session_id: i64,
@@ -319,12 +332,20 @@ impl TextChat {
             recorder: EvidenceRecorder::new(deps.db.clone(), deps.clock.clone()),
             config,
             deps,
+            observer: None,
             analyzer,
             tasks: JoinSet::new(),
             analysis_cancel: CancellationToken::new(),
             last_tutor_text: String::new(),
             empty_streak: 0,
         })
+    }
+
+    /// Lets `observer` hear about stored messages and finished analyses.
+    #[must_use]
+    pub fn with_observer(mut self, observer: Arc<dyn ChatObserver>) -> Self {
+        self.observer = Some(observer);
+        self
     }
 
     pub fn session_id(&self) -> i64 {
@@ -393,6 +414,9 @@ impl TextChat {
                 created_at: now,
             })
             .await?;
+        if let Some(observer) = &self.observer {
+            observer.learner_turn_stored(learner.id, learner.seq);
+        }
         if !matches!(self.config.topic, ChatTopic::Unit(_)) {
             self.record_attempt(learner.seq, words).await?;
         }
@@ -472,9 +496,15 @@ impl TextChat {
     fn spawn_analysis(&mut self, turn: TurnToAnalyse) {
         let analyzer = self.analyzer.clone();
         let cancel = self.analysis_cancel.clone();
+        let observer = self.observer.clone();
         self.tasks.spawn(async move {
-            if let Err(error) = analyzer.turn_finished(turn, &cancel).await {
-                tracing::warn!(%error, "turn analysis failed");
+            match analyzer.turn_finished(turn, &cancel).await {
+                Ok(report) => {
+                    if let Some(observer) = observer {
+                        observer.analysis_finished(&report);
+                    }
+                }
+                Err(error) => tracing::warn!(%error, "turn analysis failed"),
             }
         });
     }
@@ -692,42 +722,54 @@ impl TextChat {
 
     /// The summary of what has been analysed so far.
     pub async fn summary(&self) -> Result<ChatSummary> {
-        let turns = self.deps.db.turns().list(self.session_id).await?;
-        let learner: Vec<_> = turns
-            .iter()
-            .filter(|t| t.role == TurnRole::Learner)
-            .collect();
-        let mut patterns: Vec<ErrorPattern> = Vec::new();
-        let mut unanalysed = Vec::new();
-        for turn in &learner {
-            if self.deps.db.analysis().get(turn.id).await?.is_none() {
-                unanalysed.push(turn.seq);
-            }
-            for event in self.deps.db.analysis().error_events(turn.id).await? {
-                match patterns.iter_mut().find(|p| p.category == event.category) {
-                    Some(pattern) => pattern.count += 1,
-                    None => patterns.push(ErrorPattern {
-                        category: event.category,
-                        count: 1,
-                        quote: event.quote,
-                        correction: event.correction,
-                    }),
-                }
+        session_summary(&self.deps.db, self.session_id, self.analyzer.unreliable()).await
+    }
+}
+
+/// The end summary of a conversation session, text or voice, read from what is
+/// stored: how many learner turns there were, the five most frequent error
+/// categories with one example each, and the turns that have no analysis.
+/// `analysis_unreliable` is the analyzer's mark, which the caller knows.
+pub async fn session_summary(
+    db: &Database,
+    session_id: i64,
+    analysis_unreliable: bool,
+) -> Result<ChatSummary> {
+    let turns = db.turns().list(session_id).await?;
+    let learner: Vec<_> = turns
+        .iter()
+        .filter(|t| t.role == TurnRole::Learner)
+        .collect();
+    let mut patterns: Vec<ErrorPattern> = Vec::new();
+    let mut unanalysed = Vec::new();
+    for turn in &learner {
+        if db.analysis().get(turn.id).await?.is_none() {
+            unanalysed.push(turn.seq);
+        }
+        for event in db.analysis().error_events(turn.id).await? {
+            match patterns.iter_mut().find(|p| p.category == event.category) {
+                Some(pattern) => pattern.count += 1,
+                None => patterns.push(ErrorPattern {
+                    category: event.category,
+                    count: 1,
+                    quote: event.quote,
+                    correction: event.correction,
+                }),
             }
         }
-        patterns.sort_by(|a, b| {
-            b.count
-                .cmp(&a.count)
-                .then_with(|| a.category.cmp(&b.category))
-        });
-        patterns.truncate(5);
-        Ok(ChatSummary {
-            learner_turns: learner.len(),
-            top_errors: patterns,
-            unanalysed_turns: unanalysed,
-            analysis_unreliable: self.analyzer.unreliable(),
-        })
     }
+    patterns.sort_by(|a, b| {
+        b.count
+            .cmp(&a.count)
+            .then_with(|| a.category.cmp(&b.category))
+    });
+    patterns.truncate(5);
+    Ok(ChatSummary {
+        learner_turns: learner.len(),
+        top_errors: patterns,
+        unanalysed_turns: unanalysed,
+        analysis_unreliable,
+    })
 }
 
 #[cfg(test)]
