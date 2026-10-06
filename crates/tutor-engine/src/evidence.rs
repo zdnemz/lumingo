@@ -86,7 +86,7 @@ impl EngineStamp {
 }
 
 /// Who answered what: everything an attempt row carries besides the score.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Subject {
     pub profile_id: i64,
     pub session_id: Option<i64>,
@@ -502,25 +502,28 @@ impl EvidenceRecorder {
             .collect()
     }
 
-    /// Queues a productive response for the rubric scorer: one `pending_llm`
-    /// attempt per rubric dimension and one entry in the pending queue, on the
-    /// first of them. The payload must carry everything the scorer needs.
+    /// Queues a response that waits for a provider: one `pending_llm` attempt per
+    /// dimension and one entry in the pending queue, on the first of them. The
+    /// payload must carry everything the scorer needs, and a `kind` that the
+    /// service which drains the queue recognises.
     ///
     /// Authored responses are stored as counting: the status keeps them out of
     /// every estimate until a score arrives, and [`Self::complete_rubric`] turns
     /// the flag off if the confidence turns out to be below the floor.
-    pub async fn queue_rubric(
+    pub async fn queue(
         &self,
         subject: &Subject,
-        meta: &RubricMeta<'_>,
+        scorer_version: &str,
+        dimensions: &[&str],
+        response_text: &str,
         payload: &Value,
     ) -> Result<Recorded> {
         let now = (self.clock)();
-        let version = rubric_scorer_version(meta.rubric, meta.model);
-        let rows: Vec<NewAttempt> = Self::dimension_names(meta.rubric)
-            .into_iter()
+        let rows: Vec<NewAttempt> = dimensions
+            .iter()
             .map(|dimension| {
-                let mut row = attempt_row(subject, dimension, Scorer::RubricLlm, &version, now);
+                let mut row =
+                    attempt_row(subject, dimension, Scorer::RubricLlm, scorer_version, now);
                 row.status = AttemptStatus::PendingLlm;
                 row.counts_toward_estimate =
                     counts_toward_estimate(subject.may_count(), row.status, None);
@@ -529,12 +532,14 @@ impl EvidenceRecorder {
             .collect();
         let stored = self.db.attempts().insert_response(&rows).await?;
         let Some(first) = stored.first() else {
-            return Err(EngineError::Refused("a rubric has at least one dimension"));
+            return Err(EngineError::Refused(
+                "a response has at least one dimension",
+            ));
         };
         self.evidence(
             first.id,
             EvidenceKind::ResponseText,
-            Some(meta.response_text.to_owned()),
+            Some(response_text.to_owned()),
             None,
             now,
         )
@@ -547,6 +552,65 @@ impl EvidenceRecorder {
             response_id: subject.response_id.clone(),
             attempts: stored,
         })
+    }
+
+    /// Queues a productive response for the rubric scorer, one waiting attempt
+    /// per rubric dimension.
+    pub async fn queue_rubric(
+        &self,
+        subject: &Subject,
+        meta: &RubricMeta<'_>,
+        payload: &Value,
+    ) -> Result<Recorded> {
+        let version = rubric_scorer_version(meta.rubric, meta.model);
+        self.queue(
+            subject,
+            &version,
+            &Self::dimension_names(meta.rubric),
+            meta.response_text,
+            payload,
+        )
+        .await
+    }
+
+    /// Closes the waiting attempts of a response that turned out to have nothing
+    /// to score (a draft with no rubric): status `insufficient`, the reason as
+    /// evidence, never counting.
+    pub async fn finish_unscored(&self, attempts: &[Attempt], reason: &str) -> Result<()> {
+        let now = (self.clock)();
+        for attempt in attempts {
+            self.db
+                .attempts()
+                .update_score(
+                    attempt.id,
+                    &ScoreUpdate {
+                        scorer_version: attempt.scorer_version.clone(),
+                        raw_score: None,
+                        max_score: None,
+                        normalized: None,
+                        confidence: None,
+                        status: AttemptStatus::Insufficient,
+                    },
+                )
+                .await?;
+            if attempt.counts_toward_estimate {
+                self.db
+                    .attempts()
+                    .set_counts_toward_estimate(attempt.id, false)
+                    .await?;
+            }
+        }
+        if let Some(first) = attempts.first() {
+            self.evidence(
+                first.id,
+                EvidenceKind::ScorerReason,
+                Some(reason.to_owned()),
+                None,
+                now,
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     /// Stores a rubric outcome as new attempts, one per dimension.

@@ -15,9 +15,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::support::{names_a_level, states_a_percentage, truncate_words};
 
+mod catalog;
 mod outcome;
+mod scorer;
 
+pub use catalog::{CatalogRubric, RubricCatalog, RubricCatalogError, TaskFamily};
 pub use outcome::{CheckedRun, MAX_BAND_GAP, RubricOutcome, ScoredDimension};
+pub use scorer::{
+    BacklogReport, InputMode, MAX_OUTPUT_TRIES, PENDING_KIND, RubricScorer, Runs, ScoreRequest,
+    ScoreResult, ScorerEnv,
+};
+pub(crate) use scorer::{checked_run, grammar_findings};
 
 pub const RUBRIC_SCORE_VERSION: &str = "rubric_score/1";
 
@@ -117,16 +125,18 @@ pub fn system_prompt(l1_name: &str) -> String {
 }
 
 /// The user message: one JSON object. The learner's text only travels inside a
-/// JSON string.
+/// JSON string. `input_mode` is `text` or `voice`; for `voice` the prompt tells
+/// the model to ignore spelling, capitals and punctuation.
 pub fn user_message(
     level: Level,
+    input_mode: &str,
     task: &WorkshopTask,
     rubric: &WorkshopRubric,
     response: &str,
 ) -> String {
     let message = RubricMessage {
         level: level.as_str(),
-        input_mode: "text",
+        input_mode,
         task_prompt: &task.prompt,
         content_points: &task.content_points,
         rubric: rubric

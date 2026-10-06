@@ -41,11 +41,14 @@ pub use prompt::{
 pub use reading::*;
 pub use review::{Grade, ReviewState, due_order, update_mastery};
 pub use rubric::{
-    Alarm, CheckedRun, ConfidenceInputs, CrossCheck, CurriculumWords, Dimension, DimensionResult,
-    DimensionStatus, MAX_BAND_GAP, MAX_FEEDBACK_WORDS, PointResult, RUBRIC_ALGORITHM_VERSION,
-    RUBRIC_SCORE_VERSION, RawDimension, RawPoint, RawRubric, RubricDimension, RubricOutcome,
-    RubricResult, ScoredDimension, WorkshopRubric, WorkshopTask, cross_check, merge_rerun,
-    rubric_confidence, system_prompt as rubric_system_prompt, user_message as rubric_user_message,
+    Alarm, BacklogReport, CatalogRubric, CheckedRun, ConfidenceInputs, CrossCheck, CurriculumWords,
+    Dimension, DimensionResult, DimensionStatus, InputMode as RubricInputMode, MAX_BAND_GAP,
+    MAX_FEEDBACK_WORDS, MAX_OUTPUT_TRIES, PENDING_KIND as RUBRIC_PENDING_KIND, PointResult,
+    RUBRIC_ALGORITHM_VERSION, RUBRIC_SCORE_VERSION, RawDimension, RawPoint, RawRubric,
+    RubricCatalog, RubricCatalogError, RubricDimension, RubricOutcome, RubricResult, RubricScorer,
+    Runs, ScoreRequest, ScoreResult, ScoredDimension, ScorerEnv, TaskFamily, WorkshopRubric,
+    WorkshopTask, cross_check, merge_rerun, rubric_confidence,
+    system_prompt as rubric_system_prompt, user_message as rubric_user_message,
 };
 pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,
