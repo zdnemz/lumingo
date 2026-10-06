@@ -5,6 +5,8 @@ import OnboardingPage from "@/app/onboarding/page";
 import DiagnosticsPage from "@/app/settings/diagnostics/page";
 import PrivacyPage from "@/app/settings/privacy/page";
 import SettingsPage from "@/app/settings/page";
+import ProgressPage from "@/app/progress/page";
+import { EVIDENCE, FULL_PROGRESS, GAME, UNITS } from "@/progress/fixtures";
 import type { ProviderInfo } from "@/generated/ProviderInfo";
 import type { SaveProviderRequest } from "@/generated/SaveProviderRequest";
 import type { Settings } from "@/generated/Settings";
@@ -46,6 +48,8 @@ const ROUTES: readonly { method: string; pattern: RegExp }[] = [
   { method: "POST", pattern: /^\/api\/providers\/\d+\/test$/ },
   { method: "POST", pattern: /^\/api\/providers\/\d+\/activate$/ },
   { method: "GET", pattern: /^\/api\/progress$/ },
+  { method: "GET", pattern: /^\/api\/game$/ },
+  { method: "GET", pattern: /^\/api\/attempts\/\d+\/evidence$/ },
   { method: "GET", pattern: /^\/api\/settings$/ },
   { method: "PUT", pattern: /^\/api\/settings$/ },
   { method: "DELETE", pattern: /^\/api\/sessions\/\d+$/ },
@@ -64,6 +68,7 @@ let sockets: string[] = [];
 let blobUrls: string[] = [];
 let providers: ProviderInfo[] = [];
 let settings: Settings;
+let showProgress = false;
 
 function json(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" }, ...init });
@@ -74,7 +79,9 @@ function backend(url: string, init?: RequestInit): Response {
   requests.push({ method, url });
   const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined;
   if (method === "GET" && url === "/api/state") return json({ ...SNAPSHOT, provider: providers.find((p) => p.is_active) ?? null, unavailable: ["sessions", "speech", "models"] });
-  if (method === "GET" && url === "/api/units") return json({ content_version: "v1", units: [], issues: [] });
+  if (method === "GET" && url === "/api/units") return json(showProgress ? UNITS : { content_version: "v1", units: [], issues: [] });
+  if (method === "GET" && url === "/api/game") return json(GAME);
+  if (method === "GET" && url === `/api/attempts/${EVIDENCE.attempt_id}/evidence`) return json(EVIDENCE);
   if (method === "GET" && url === "/api/providers") return json(providerList(providers));
   if (method === "POST" && url === "/api/providers") {
     const request = body as SaveProviderRequest;
@@ -102,7 +109,7 @@ function backend(url: string, init?: RequestInit): Response {
     providers = providers.map((p) => ({ ...p, is_active: url.includes(`/${p.id}/`) }));
     return json(providers.find((p) => p.is_active));
   }
-  if (method === "GET" && url === "/api/progress") return json(progressWith(SESSIONS));
+  if (method === "GET" && url === "/api/progress") return json(showProgress ? FULL_PROGRESS : progressWith(SESSIONS));
   if (method === "GET" && url === "/api/settings") return json(settings);
   if (method === "PUT" && url === "/api/settings") {
     settings = body as Settings;
@@ -138,6 +145,7 @@ beforeEach(() => {
   sockets = [];
   blobUrls = [];
   providers = [];
+  showProgress = false;
   settings = { display_name: "Sari", ui_language: "en", l1: "id", l1_help_mode: "auto", adaptive_timing: "auto", keep_recordings: false };
   router.push.mockClear();
   router.replace.mockClear();
@@ -268,6 +276,27 @@ describe("requests made by the setup, settings, privacy and diagnostics screens"
     renderApp(<DiagnosticsPage />);
     await screen.findByText("abc123");
     expectOnlyOwnOriginAndRealRoutes();
+  });
+
+  it("progress: the profile, a drill-down to one attempt's evidence, and the game", async () => {
+    const user = userEvent.setup();
+    showProgress = true;
+    renderApp(<ProgressPage />);
+    await screen.findByText("Speaking: A2 (estimate, medium confidence), based on 14 scored tasks");
+    await screen.findByText("Sparks in total");
+    await user.click(screen.getByRole("button", { name: /See the work behind this estimate \(Writing\)/ }));
+    await user.type(screen.getByLabelText("Attempt number"), String(EVIDENCE.attempt_id));
+    await user.click(screen.getByRole("button", { name: "Show the evidence" }));
+    await screen.findByText("The sentence is complete and correct.");
+
+    expectOnlyOwnOriginAndRealRoutes();
+    expect(sockets).toHaveLength(1);
+    // Four reads, one each for the screen's data, and nothing that changes anything.
+    const seen = requests.filter((r) => r.url !== "/api/state").map((r) => `${r.method} ${r.url}`).sort();
+    expect(seen).toEqual(["GET /api/attempts/12/evidence", "GET /api/game", "GET /api/progress", "GET /api/units"]);
+    expect(requests.every((r) => r.method === "GET")).toBe(true);
+    // Not even the learner's text left the page as a link or a resource.
+    expect(externalResources()).toEqual([]);
   });
 
   it("the only link that leaves this origin is a plain link the learner follows, and it carries no referrer", async () => {

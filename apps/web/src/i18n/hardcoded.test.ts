@@ -6,11 +6,14 @@ import { describe, expect, it } from "vitest";
 // Vitest runs from apps/web.
 const SRC = join(process.cwd(), "src") + "/";
 
-/** Folders and files written for setup, settings, privacy and diagnostics. Every learner-facing word in them comes from the dictionaries. */
+/** Folders and files written for setup, settings, privacy, diagnostics, progress and the game panel. Every learner-facing word in them comes from the dictionaries. */
 const CHECKED = [
   "onboarding",
   "settings",
   "providers",
+  "progress",
+  "game/GamePanel.tsx",
+  "app/progress",
   "app/onboarding",
   "app/settings",
   "components/ConnectionBanner.tsx",
