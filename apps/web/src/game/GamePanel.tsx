@@ -55,7 +55,7 @@ function Game({ game }: { game: GameState }) {
           <dd className="gamefacts__number">{game.xp_total}</dd>
         </div>
         <div>
-          <dt>{t("game.rank")}</dt>
+          <dt>{t("progress.game.rank.title")}</dt>
           <dd>
             <span>{t("game.rank.value", { number: rank.rank, name: rankName(t, rank.rank) })}</span>
             <Meter value={rank.progress_percent} label={t("progress.game.rank.progress")} tone="success" />
@@ -76,7 +76,7 @@ function Game({ game }: { game: GameState }) {
         </div>
         <div>
           <dt>
-            <Sprite name="icon-star" scale={2} /> {t("game.rest")}
+            <Sprite name="icon-star" scale={2} /> {t("progress.game.rest.title")}
           </dt>
           <dd>
             <span>{t("progress.game.rest.tokens", { count: streak.rest_tokens_available })}</span>

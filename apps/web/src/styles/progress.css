@@ -148,3 +148,9 @@
 .gamepanel :focus-visible {
   outline-offset: var(--px);
 }
+
+/* The sticky header would cover a heading that receives focus when the drill-down opens. */
+#skill-drilldown,
+#skill-drilldown-title {
+  scroll-margin-top: 12rem;
+}

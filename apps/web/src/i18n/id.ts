@@ -675,4 +675,6 @@ export const id = {
   "progress.game.unlock.equipped": "Sedang dipakai",
   "progress.game.unlock.none": "Belum ada hadiah yang terdaftar.",
   "progress.evidence.reference": "Teks yang harus dibaca keras",
+  "progress.game.rank.title": "Peringkat",
+  "progress.game.rest.title": "Hari istirahat",
 } as const satisfies Record<MessageKey, string>;

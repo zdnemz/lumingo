@@ -431,6 +431,9 @@ describe("game panel", () => {
     expect(within(game).getByText("Forest theme")).toBeInTheDocument();
     expect(within(game).getByText("Unlocked")).toBeInTheDocument();
     expect(within(game).getByText(/Unlocks at Glow rank 5/)).toBeInTheDocument();
+    expect(within(game).getByText("Rest days")).toBeInTheDocument();
+    // No {slot} was left unfilled anywhere on the page.
+    expect(document.body.textContent).not.toMatch(/\{\w+\}/);
     // An id the dictionaries do not know yet is shown as it is.
     expect(within(game).getByText("accessory-new-thing")).toBeInTheDocument();
   });
