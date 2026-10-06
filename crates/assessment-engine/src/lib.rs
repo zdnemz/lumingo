@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 pub mod deterministic;
+pub mod review;
 
 use std::collections::{BTreeMap, HashSet};
 
