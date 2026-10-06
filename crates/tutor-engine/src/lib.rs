@@ -9,6 +9,7 @@ mod chunker;
 mod drafts;
 mod error;
 mod evidence;
+mod no_provider;
 mod practice;
 mod prompt;
 mod reading;
@@ -23,7 +24,7 @@ pub use activity::*;
 pub use analysis::*;
 pub use chat::{
     ChatConfig, ChatDeps, ChatReply, ChatSummary, ChatTopic, ErrorPattern, MAX_TOPIC_CHARS,
-    ReplyOutcome, TextChat, clean_topic,
+    ReplyOutcome, TextChat, UnitRoleplay, clean_topic,
 };
 pub use chunker::SentenceChunker;
 pub use drafts::{DraftComparison, DraftError, EarlierError, Resolution, compare_drafts};
@@ -33,6 +34,7 @@ pub use evidence::{
     PRON_ALGORITHM_VERSION, PRON_CONFIDENCE_CAP, PronRecord, RECORDER_VERSION, Recorded,
     RubricMeta, Subject, counts_toward_estimate, rubric_scorer_version,
 };
+pub use no_provider::NoProvider;
 pub use practice::*;
 pub use prompt::{
     FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, MAX_NOTES, PronFinding, ReplyLimits,

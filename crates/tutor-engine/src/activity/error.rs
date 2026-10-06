@@ -28,6 +28,4 @@ pub enum ActivityError {
     NoAudio(String),
     #[error("the roleplay allows {max} learner turns and they are used")]
     NoTurnsLeft { max: u8 },
-    #[error("the roleplay is not open: open it before the first learner turn")]
-    NotOpen,
 }

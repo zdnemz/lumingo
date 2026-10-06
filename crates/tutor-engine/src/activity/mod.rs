@@ -14,15 +14,25 @@
 //! sizes of responses, which are refused when over [`MAX_TEXT_CHARS`],
 //! [`MAX_CLIP_SAMPLES`], [`MAX_TOTAL_SAMPLES`] or [`MAX_CLIPS`].
 
+mod drill;
+mod drills;
 mod error;
 mod feedback;
+mod player;
 mod present;
+mod productive;
 mod replay;
 mod response;
+mod roleplay;
 mod score;
 
+pub use drill::{DrillError, DrillReport, DrillRequest, DrillScorer, PronEngineDrill};
 pub use error::ActivityError;
 pub use feedback::{Feedback, ItemFeedback, ItemOutcome};
+pub use player::{
+    ActivityResult, AudioPlay, CheckpointReport, CheckpointRow, ResultOutcome, UnitConfig, UnitEnv,
+    UnitPlayer, UnitSummary, UnscoredReason, checkpoint_report, ensure_indexed, settle_unit,
+};
 pub use present::{
     AudioLine, Body, PairItem, PairView, Presentation, QuestionView, audio_of, match_display_order,
     minimal_pair_spoken, present,
@@ -32,4 +42,5 @@ pub use response::{
     Clip, MAX_CLIP_SAMPLES, MAX_CLIPS, MAX_TEXT_CHARS, MAX_TOTAL_SAMPLES, Response, SpokenResponse,
     check_clips, check_text,
 };
+pub use roleplay::RoleplayRun;
 pub use score::{Scored, evidence_skill, score_deterministic};
