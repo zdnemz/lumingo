@@ -100,6 +100,51 @@ classified as speech to the first tutor sample the output callback consumed
 "Output start" is found by polling the playback counters every 2 ms, so it carries that
 resolution, and it includes the conversion of the audio to the device rate.
 
+## `unit`: play a unit to its checkpoint
+
+```
+tutor-cli unit run <unit.json> --script <responses.json> [--db <file>] [--out <file>] [--offline]
+tutor-cli unit run <unit.json> --interactive
+tutor-cli unit score-pending --db <file>
+```
+
+`unit run` plays every activity of the unit in order with `tutor_engine::UnitPlayer`,
+prints the activity and then its task score (0 to 1, never a level), stores one
+attempt row per scored dimension with its evidence, and decides the unit checkpoint
+from the stored rows. The database is a new file in the temporary folder unless
+`--db` is given; its path is printed. The example unit and a matching script:
+
+```
+cargo run -p tutor-cli -- unit run curriculum/examples/a1-u01.example.json \
+  --script tools/tutor-cli/scripts/a1-u01-responses.json --offline
+```
+
+* **Provider.** The same sources as `chat`. With none (or `--offline`) the objective
+  activities are scored normally and the productive ones (`guided_speaking`,
+  `guided_writing`, `mediation`, a scored `roleplay`) are stored as `pending_llm` and
+  queued; the checkpoint is then provisional and the unit stays `in_progress`. When a
+  provider is reachable, `unit score-pending --db <file>` scores the queue and exits
+  with 3 if the provider cannot be reached.
+* **Rubrics** come from `--rubrics` or `catalogs/rubrics` next to the unit's folder.
+  A rubric the unit names and the folder lacks leaves that response stored as unscored,
+  with the reason.
+* **Script format.** One JSON object `{ "responses": { "<activity id>": { ... } } }`.
+  The fields per activity type are the table at the top of `src/unit_script.rs`. A
+  match is given by phrase and meaning, a listening minimal pair by the word heard,
+  option indexes count from 0, `plays` is how many times audio is played first. An
+  activity with no entry is skipped and listed; an entry the activity cannot take is
+  refused by name and the run goes on.
+* **`--interactive`** reads typed answers (numbers count from 1, `-` is blank, `/skip`
+  skips, `/end` ends a roleplay). Audio items are printed as text, because this tool has
+  no speaker, unless `--hide-audio-text` is given.
+* **Pronunciation drills** need a recording (`wav:` or `clips`) and a pronunciation
+  engine. This tool links none, so a drill is stored as not scored, with the reason.
+* **`--out <file>`** writes the scores, statuses and checkpoint as JSON.
+
+Exit codes: 0 when the checkpoint was decided, 1 when it was not (an activity of it was
+skipped or refused) or on any other failure, 2 for a usage error, 3 when
+`score-pending` finds no reachable provider, 130 on Ctrl-C.
+
 ## Scripts
 
 One turn per line. Text is typed for the learner. `wav: <path>` is a recorded utterance
@@ -213,10 +258,17 @@ By tests that run here without hardware or network (`cargo test -p app-core -p t
 * no request to any host but the configured provider, and a redirect not followed;
 * script parsing, WAV reading, result-file shape, exit codes, and a scripted voice run
   through the CLI with the fake engines;
+* `unit run`: a full scripted completion of the example unit with a fake provider
+  (test code only), including its reading set, listening set (with a replay limit)
+  and writing tasks; the typed-input path; the offline run through the real binary
+  with its pending rows, result file and `score-pending` exit code (`tests/unit.rs`);
 * the sherpa feature compiles (`SHERPA_ONNX_LIB_DIR` pointing at an empty folder, so
   nothing is linked) and the cpal device code compiles for `x86_64-pc-windows-msvc`.
 
 ## UNVERIFIED
+
+* **`unit run` with a real provider.** Only a fake provider answered rubric and tutor calls.
+* **Pronunciation drills with a real phoneme model** and any recording of a learner.
 
 Everything below needs hardware, a model or a provider that this container does not
 have. None of it has run.
