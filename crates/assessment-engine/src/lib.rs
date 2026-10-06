@@ -8,6 +8,7 @@
 mod checkpoint;
 mod deterministic;
 mod estimate;
+mod metrics;
 mod normalise;
 mod placement;
 mod types;
@@ -20,6 +21,10 @@ pub use deterministic::{
 pub use estimate::{
     ALGORITHM_VERSION, Confidence, EstimateStatus, LevelEvidence, Profile, SkillEstimate,
     confidence_band, estimate_profile, estimate_skill, wilson_lower_bound,
+};
+pub use metrics::{
+    MAX_SPANS, MetricsError, PAUSE_THRESHOLD_MS, TextCounts, TimingMetrics, VocabularyProfile,
+    VoicedSpan, WordList, text_counts, timing_metrics, vocabulary_profile, word_count, words,
 };
 pub use normalise::{NORM_VERSION, edit_distance, normalize};
 pub use placement::{BLOCK_SIZE, MAX_BLOCKS, Placement, START_LEVEL, Step};

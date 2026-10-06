@@ -24,6 +24,10 @@ struct Fixture {
     session_id: i64,
 }
 
+fn recorder(f: &Fixture) -> tutor_engine::EvidenceRecorder {
+    tutor_engine::EvidenceRecorder::new(f.db.clone(), test_clock())
+}
+
 async fn fixture() -> Fixture {
     let (dir, db) = temp_db().await;
     let profile = make_profile(&db).await;
@@ -350,13 +354,12 @@ async fn answers_are_scored_and_never_count_toward_an_estimate() {
     let mut scores = Vec::new();
     for (item, answer) in set.items.iter().zip(&answers) {
         let (score, attempt) = record_practice_attempt(
-            &f.db,
+            &recorder(&f),
             f.profile_id,
             f.session_id,
             &unit,
             item,
             answer,
-            common::ts(100),
         )
         .await
         .unwrap();
@@ -387,13 +390,12 @@ async fn a_replayed_authored_item_is_practice_and_does_not_count_either() {
     };
     let right: Vec<String> = gap.answers.iter().map(|a| a[0].clone()).collect();
     let (score, attempt) = record_practice_attempt(
-        &f.db,
+        &recorder(&f),
         f.profile_id,
         f.session_id,
         &unit,
         item,
         &PracticeAnswer::Gaps(right),
-        common::ts(100),
     )
     .await
     .unwrap();
@@ -410,14 +412,18 @@ async fn an_answer_of_the_wrong_kind_is_refused() {
         .queue_structured(Ok(items(vec![mcq("Dewi says: I ___ a student.", 0)])));
     let set = f.generator.generate(&unit, 1, &[], &never()).await.unwrap();
     let result = record_practice_attempt(
-        &f.db,
+        &recorder(&f),
         f.profile_id,
         f.session_id,
         &unit,
         &set.items[0],
         &PracticeAnswer::Gaps(vec!["am".into()]),
-        common::ts(100),
     )
     .await;
-    assert!(matches!(result, Err(tutor_engine::EngineError::Refused(_))));
+    assert!(matches!(
+        result,
+        Err(tutor_engine::EngineError::Activity(
+            tutor_engine::ActivityError::WrongKind { .. }
+        ))
+    ));
 }

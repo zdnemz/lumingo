@@ -3,6 +3,7 @@
 use llm_client::LlmError;
 use storage::StorageError;
 
+use crate::activity::ActivityError;
 use crate::session::TransitionError;
 
 /// Why a service call failed. A provider that is down is an `Llm` error; the
@@ -16,6 +17,12 @@ pub enum EngineError {
     Llm(#[from] LlmError),
     #[error("{0}")]
     Transition(#[from] TransitionError),
+    #[error("activity: {0}")]
+    Activity(#[from] ActivityError),
+    /// The caller cancelled the call, for work that is not a model call: a
+    /// pronunciation analysis. A cancelled model call is `Llm(Cancelled)`.
+    #[error("the call was cancelled")]
+    Cancelled,
     /// The model's output passed its schema but could not be read into the typed form.
     /// The message names the contract and never carries model text.
     #[error("the {0} output did not fit its typed form")]

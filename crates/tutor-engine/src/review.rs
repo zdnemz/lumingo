@@ -20,9 +20,11 @@ pub enum Grade {
 }
 
 impl Grade {
-    /// Maps a 0 to 1 score from an objective item to a grade.
+    /// Maps a 0 to 1 score from an objective item to a grade. A score that is not
+    /// a number is a failed measurement and counts as not recalled: comparing NaN
+    /// with the bands would otherwise grade it as the easiest.
     pub fn from_score(score: f64) -> Self {
-        if score < 0.5 {
+        if score.is_nan() || score < 0.5 {
             Self::Again
         } else if score < 0.7 {
             Self::Hard
@@ -130,8 +132,12 @@ const MASTERY_WEIGHT: f64 = 0.3;
 
 /// Objective mastery of an item or a grammar point: a moving average of its
 /// results, so recent work counts more than old work. `None` for something that
-/// has not been practised yet.
+/// has not been practised yet. A score that is not a number is no result: the
+/// mastery stays as it was, or 0 when there was none.
 pub fn update_mastery(previous: Option<f64>, score: f64) -> f64 {
+    if score.is_nan() {
+        return previous.unwrap_or(0.0);
+    }
     let score = score.clamp(0.0, 1.0);
     match previous {
         None => score,
@@ -256,5 +262,126 @@ mod tests {
         let recovered = update_mastery(Some(after_miss), 1.0);
         assert!(recovered > after_miss);
         assert!(update_mastery(Some(0.5), 5.0) <= 1.0, "scores are clamped");
+    }
+
+    #[test]
+    fn a_score_that_is_not_a_number_is_not_recalled_and_is_no_mastery_result() {
+        assert_eq!(Grade::from_score(f64::NAN), Grade::Again);
+        assert_eq!(update_mastery(Some(0.6), f64::NAN), 0.6);
+        assert_eq!(update_mastery(None, f64::NAN), 0.0);
+        assert_eq!(Grade::from_score(f64::INFINITY), Grade::Easy);
+        assert_eq!(Grade::from_score(f64::NEG_INFINITY), Grade::Again);
+        assert_eq!(update_mastery(Some(0.5), f64::INFINITY), 0.3 + 0.7 * 0.5);
+    }
+
+    #[test]
+    fn after_a_lapse_the_item_climbs_the_same_first_steps_again_with_a_lower_ease() {
+        let mut state = ReviewState::new(0);
+        let mut day = 0;
+        for _ in 0..4 {
+            state = state.reviewed(Grade::Good, day);
+            day = state.due;
+        }
+        let grown = state.interval_days;
+        assert!(grown > 3);
+        let ease_before = state.ease;
+        state = state.reviewed(Grade::Again, day);
+        day = state.due;
+        assert_eq!(
+            (state.repetitions, state.interval_days, state.lapses),
+            (0, 1, 1)
+        );
+        let mut gaps = Vec::new();
+        for _ in 0..3 {
+            state = state.reviewed(Grade::Good, day);
+            gaps.push(state.interval_days);
+            day = state.due;
+        }
+        assert_eq!(gaps[..2], [1, 3], "back to the first two steps");
+        assert!(gaps[2] > 3);
+        assert!(
+            state.ease < ease_before,
+            "a lapse is remembered in the ease"
+        );
+        assert_eq!(state.lapses, 1);
+    }
+
+    #[test]
+    fn every_grade_schedules_at_least_a_day_ahead_and_stamps_the_due_day() {
+        for grade in [Grade::Again, Grade::Hard, Grade::Good, Grade::Easy] {
+            let state = ReviewState::new(100).reviewed(grade, 100);
+            assert!(state.interval_days >= 1, "{grade:?}");
+            assert_eq!(state.due, 100 + i64::from(state.interval_days), "{grade:?}");
+            assert!(!state.is_due(100), "{grade:?}");
+            assert!(state.is_due(state.due), "due on the day itself");
+            assert!(state.is_due(state.due + 5), "and after it");
+        }
+    }
+
+    #[test]
+    fn the_first_easy_review_skips_the_first_step() {
+        let state = ReviewState::new(0).reviewed(Grade::Easy, 0);
+        assert_eq!(state.interval_days, 3);
+        assert!(state.ease > 2.5);
+    }
+
+    #[test]
+    fn reviewing_never_changes_the_state_it_started_from() {
+        let before = ReviewState::new(7);
+        let copy = before.clone();
+        let _ = before.reviewed(Grade::Good, 7);
+        assert_eq!(before, copy);
+    }
+
+    #[test]
+    fn the_due_list_holds_exactly_the_items_due_by_the_day_and_is_stable_between_calls() {
+        let at = |due: i64| {
+            let mut state = ReviewState::new(0);
+            state.due = due;
+            state
+        };
+        let states = [at(3), at(10), at(10), at(11), at(-4)];
+        let on_ten = due_order(&states, 10);
+        assert_eq!(
+            on_ten,
+            [4, 0, 1, 2],
+            "most overdue first, ties in input order, tomorrow left out"
+        );
+        assert_eq!(due_order(&states, 10), on_ten);
+        assert_eq!(due_order(&states, 11), [4, 0, 1, 2, 3]);
+        assert!(due_order(&states, -5).is_empty());
+        assert!(due_order(&[], 10).is_empty());
+    }
+
+    #[test]
+    fn mastery_stays_between_zero_and_one_for_any_run_of_results_and_follows_recent_work() {
+        let runs: [&[f64]; 4] = [
+            &[1.0; 20],
+            &[0.0; 20],
+            &[1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0],
+            &[0.2, 0.9, 5.0, -3.0, 0.5, 1.0],
+        ];
+        for run in runs {
+            let mut mastery = None;
+            for score in run {
+                let next = update_mastery(mastery, *score);
+                assert!((0.0..=1.0).contains(&next), "{run:?}");
+                mastery = Some(next);
+            }
+        }
+        // The same results in the opposite order end differently: recent work counts more.
+        let rising = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+            .iter()
+            .fold(None, |m, s| Some(update_mastery(m, *s)))
+            .unwrap();
+        let falling = [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+            .iter()
+            .fold(None, |m, s| Some(update_mastery(m, *s)))
+            .unwrap();
+        assert!(rising > falling);
+        // A constant result is a fixed point, and mastery moves toward it from either side.
+        assert!((update_mastery(Some(0.8), 0.8) - 0.8).abs() < 1e-12);
+        assert!(update_mastery(Some(0.2), 0.8) > 0.2 && update_mastery(Some(0.2), 0.8) < 0.8);
+        assert!(update_mastery(Some(0.95), 0.8) < 0.95 && update_mastery(Some(0.95), 0.8) > 0.8);
     }
 }

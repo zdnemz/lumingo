@@ -9,6 +9,7 @@ description = "Scoring, evidence and level estimation for Lumingo"
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.21"
 
 [lints]
 workspace = true

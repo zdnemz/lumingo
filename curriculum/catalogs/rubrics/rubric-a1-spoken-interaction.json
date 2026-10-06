@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "id": "rubric-a1-spoken-interaction",
+  "version": 1,
+  "level": "A1",
+  "task_family": "spoken_interaction",
+  "dimensions": {
+    "task_achievement": [
+      { "band": 0, "description": { "en": "None of the goals of the conversation is reached, or the learner talks about something else." } },
+      { "band": 1, "description": { "en": "One goal is touched with a word or two. Most goals are missed." } },
+      { "band": 2, "description": { "en": "Some goals are reached, but at least one important goal is missed." } },
+      { "band": 3, "description": { "en": "All the goals of the conversation are reached, in short simple sentences." } },
+      { "band": 4, "description": { "en": "All the goals are reached, and the learner adds one useful detail of their own." } }
+    ],
+    "range": [
+      { "band": 0, "description": { "en": "No usable English words." } },
+      { "band": 1, "description": { "en": "Single words or memorised chunks only, repeated again and again." } },
+      { "band": 2, "description": { "en": "A small set of familiar words and phrases, with a lot of repeating." } },
+      { "band": 3, "description": { "en": "Enough familiar words and phrases for the conversation without much repeating." } },
+      { "band": 4, "description": { "en": "Familiar words and phrases used with some variety, and one or two words beyond the unit's own list." } }
+    ],
+    "accuracy": [
+      { "band": 0, "description": { "en": "So many mistakes that the meaning is lost." } },
+      { "band": 1, "description": { "en": "Many mistakes, including in the basic patterns of the unit. The meaning is often unclear." } },
+      { "band": 2, "description": { "en": "Mistakes in the unit's basic patterns in about half of the sentences. The meaning can still be followed." } },
+      { "band": 3, "description": { "en": "The unit's basic patterns are mostly right. A few mistakes do not hide the meaning." } },
+      { "band": 4, "description": { "en": "The unit's basic patterns are right almost every time." } }
+    ],
+    "coherence": [
+      { "band": 0, "description": { "en": "Nothing is connected. No reply follows from the one before it." } },
+      { "band": 1, "description": { "en": "Separate words or phrases with no link to what was just said." } },
+      { "band": 2, "description": { "en": "Short replies that follow the conversation in a loose way." } },
+      { "band": 3, "description": { "en": "Short replies that fit what was just said, in a sensible order." } },
+      { "band": 4, "description": { "en": "Replies that fit what was just said and link to earlier turns with simple words such as and, but or because." } }
+    ],
+    "interaction": [
+      { "band": 0, "description": { "en": "The learner does not reply to the other speaker." } },
+      { "band": 1, "description": { "en": "Replies with a word or two, often not to the question that was asked." } },
+      { "band": 2, "description": { "en": "Answers simple questions but rarely asks one or keeps the exchange going." } },
+      { "band": 3, "description": { "en": "Answers simple questions and asks at least one question of their own." } },
+      { "band": 4, "description": { "en": "Keeps the exchange going: answers, asks, and reacts to what the other speaker says." } }
+    ]
+  }
+}

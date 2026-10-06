@@ -17,4 +17,8 @@ pub mod results;
 pub mod script;
 #[cfg(feature = "sherpa")]
 mod sherpa;
+pub mod unit;
+pub mod unit_script;
+pub mod unit_source;
+pub mod unit_view;
 pub mod wav;

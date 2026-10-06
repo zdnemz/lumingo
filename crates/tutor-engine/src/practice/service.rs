@@ -5,19 +5,17 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use assessment_engine::{NORM_VERSION, score_gap_fill, score_mcq, score_reorder};
 use curriculum::validate::WordLevels;
 use curriculum::{Activity, GeneratedType, Unit};
 use llm_client::{ChatMessage, Contract, LlmClient, LlmError, StructuredRequest};
 use serde_json::json;
-use storage::{
-    Attempt, AttemptOrigin, AttemptStatus, Database, GeneratedKind, LlmCallType, NewAttempt,
-    NewGeneratedContent, Scorer, Timestamp,
-};
+use storage::{Attempt, AttemptOrigin, Database, GeneratedKind, LlmCallType, NewGeneratedContent};
 use tokio_util::sync::CancellationToken;
 
+use crate::activity::{Response, evidence_skill, score_deterministic};
 use crate::error::{EngineError, Result};
-use crate::support::{CallLog, Clock};
+use crate::evidence::{EvidenceRecorder, Subject};
+use crate::support::{CallLog, Clock, assessment_level, assessment_origin};
 
 use super::prompt::{PRACTICE_ITEMS_VERSION, PracticeContext, system_prompt, user_message};
 use super::{RawItem, RawItems, Rejection, Vocabulary, check_item, item_text};
@@ -318,28 +316,6 @@ impl PracticeGenerator {
     }
 }
 
-fn assessment_level(level: curriculum::Level) -> assessment_engine::Level {
-    match level {
-        curriculum::Level::A1 => assessment_engine::Level::A1,
-        curriculum::Level::A2 => assessment_engine::Level::A2,
-        curriculum::Level::B1 => assessment_engine::Level::B1,
-        curriculum::Level::B2 => assessment_engine::Level::B2,
-        curriculum::Level::C1 => assessment_engine::Level::C1,
-        curriculum::Level::C2 => assessment_engine::Level::C2,
-    }
-}
-
-fn storage_level(level: curriculum::Level) -> storage::Level {
-    match level {
-        curriculum::Level::A1 => storage::Level::A1,
-        curriculum::Level::A2 => storage::Level::A2,
-        curriculum::Level::B1 => storage::Level::B1,
-        curriculum::Level::B2 => storage::Level::B2,
-        curriculum::Level::C1 => storage::Level::C1,
-        curriculum::Level::C2 => storage::Level::C2,
-    }
-}
-
 /// Authored items to practise with when generation is not possible: the ones the
 /// learner got wrong first, in the order given, then the other authored items
 /// of an allowed type. At most `limit`.
@@ -407,50 +383,44 @@ pub enum PracticeAnswer {
 /// counted when it was first answered in the unit, and counting it again would
 /// let a learner raise an estimate by repeating the same item; so replays are
 /// stored with their authored origin and `counts_toward_estimate = false`.
+///
+/// The score is the one of the activity runtime ([`crate::score_deterministic`]),
+/// so a practice answer and a unit answer are marked by the same code, and the
+/// row is written by the recorder like every other.
 pub async fn record_practice_attempt(
-    db: &Database,
+    recorder: &EvidenceRecorder,
     profile_id: i64,
     session_id: i64,
     unit: &Unit,
     item: &PracticeItem,
     answer: &PracticeAnswer,
-    now: Timestamp,
 ) -> Result<(f64, Attempt)> {
-    let (activity_type, score) = match (&item.activity, answer) {
-        (Activity::Mcq(a), PracticeAnswer::Choice(i)) => {
-            ("mcq", score_mcq(*i, usize::from(a.answer_index)))
-        }
-        (Activity::GapFill(a), PracticeAnswer::Gaps(given)) => {
-            ("gap_fill", score_gap_fill(given, &a.answers).score)
-        }
-        (Activity::Reorder(a), PracticeAnswer::Order(given)) => {
-            let expected: Vec<String> = a.answer.split_whitespace().map(str::to_owned).collect();
-            ("reorder", score_reorder(given, &expected))
-        }
-        _ => return Err(EngineError::Refused("the answer does not fit the item")),
+    let response = match answer {
+        PracticeAnswer::Choice(index) => Response::Choice(*index),
+        PracticeAnswer::Gaps(given) => Response::Gaps(given.clone()),
+        PracticeAnswer::Order(given) => Response::Order(given.clone()),
     };
+    let scored = score_deterministic(&item.activity, &response)?;
     let activity_id = item.activity.id().to_owned();
-    let new = NewAttempt {
+    let subject = Subject::new(
         profile_id,
-        session_id: Some(session_id),
-        unit_id: Some(unit.id.clone()),
-        activity_id: activity_id.clone(),
-        activity_type: activity_type.to_owned(),
-        response_id: format!("practice-{session_id}-{activity_id}-{now}"),
-        origin: item.origin,
-        level: storage_level(unit.level),
-        skill: "grammar".to_owned(),
-        dimension: "overall".to_owned(),
-        scorer: Scorer::Deterministic,
-        scorer_version: NORM_VERSION.to_owned(),
-        raw_score: Some(score),
-        max_score: Some(1.0),
-        normalized: Some(score),
-        confidence: Some(1.0),
-        status: AttemptStatus::Scored,
-        counts_toward_estimate: false,
-        created_at: now,
-    };
-    let stored = db.attempts().insert(&new).await?;
-    Ok((score, stored))
+        Some(session_id),
+        Some(unit.id.clone()),
+        activity_id.clone(),
+        item.activity.activity_type().as_str(),
+        assessment_level(unit.level),
+        evidence_skill(&item.activity, false),
+        assessment_origin(item.origin),
+        recorder.new_response_id(&activity_id),
+    )
+    .never_counts();
+    let recorded = recorder
+        .record_deterministic(&subject, &scored.record)
+        .await?;
+    let attempt = recorded
+        .attempts
+        .into_iter()
+        .next()
+        .ok_or(EngineError::Refused("no attempt was stored"))?;
+    Ok((scored.record.normalized, attempt))
 }

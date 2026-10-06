@@ -177,6 +177,7 @@ name = "assessment-engine"
 version = "0.0.0"
 dependencies = [
  "serde",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3689,16 +3690,21 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "app-core",
+ "assessment-engine",
+ "async-trait",
  "audio-io",
  "clap",
  "curriculum",
+ "futures-util",
  "llm-client",
+ "pron-engine",
  "serde",
  "serde_json",
  "speech",
  "storage",
  "tempfile",
  "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -3716,8 +3722,10 @@ dependencies = [
  "futures-util",
  "jsonschema",
  "llm-client",
+ "pron-engine",
  "serde",
  "serde_json",
+ "speech",
  "storage",
  "tempfile",
  "thiserror 2.0.21",

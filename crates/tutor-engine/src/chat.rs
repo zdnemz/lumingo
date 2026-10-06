@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use assessment_engine::Level;
+use assessment_engine::{Level, Origin};
 use futures_util::StreamExt;
 use llm_client::{
     ChatMessage, FinishReason, LlmClient, LlmError, Role, StreamEvent, StreamSummary, TextRequest,
@@ -17,32 +17,54 @@ use llm_client::{
 use serde::Serialize;
 use serde_json::json;
 use storage::{
-    AttemptOrigin, AttemptStatus, Database, EvidenceKind, InputMode, LlmCallType, LlmOutcome,
-    NewAttempt, NewEvidence, NewSession, NewTurn, Scorer, SessionMode, SessionStatus, Timestamp,
-    TurnRole,
+    AttemptStatus, Database, InputMode, LlmCallType, LlmOutcome, NewSession, NewTurn, Scorer,
+    SessionMode, SessionStatus, TurnRole,
 };
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::analysis::{
-    AnalysisKind, AnalyzerConfig, InputMode as AnalysisInput, TurnAnalyzer, TurnToAnalyse,
+    AnalysisKind, AnalyzerConfig, InputMode as AnalysisInput, ObjectiveRef, TurnAnalyzer,
+    TurnToAnalyse,
 };
 use crate::error::{EngineError, Result};
+use crate::evidence::{EvidenceRecorder, Subject};
 use crate::prompt::{
     FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, TutorContext, bounded_history,
     reply_limits, system_prompt, user_message,
 };
 use crate::session::{Channel, EndReason, Event, Phase, Session, SessionKind};
-use crate::support::{CallLog, Clock, single_line, storage_level};
+use crate::support::{CallLog, Clock, single_line};
 use crate::topics::ConversationTopic;
 
 /// Longest typed topic, in characters. It goes into the system prompt, so it is
 /// kept to a title.
 pub const MAX_TOPIC_CHARS: usize = 80;
 
+/// A roleplay of a unit: the scenario, the two roles, the goals and the language
+/// the unit wants brought out, all authored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnitRoleplay {
+    pub unit_id: String,
+    pub unit_title: String,
+    pub activity_id: String,
+    pub scenario: String,
+    pub tutor_role: String,
+    pub learner_role: String,
+    pub goals: Vec<String>,
+    /// Vocabulary and grammar of the unit's targets, for the prompt.
+    pub target_language: Vec<String>,
+    /// The unit's objectives the roleplay serves, for the turn analysis.
+    pub objectives: Vec<ObjectiveRef>,
+}
+
 /// Where the conversation's scenario comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChatTopic {
+    /// A roleplay activity of a unit. Its turns belong to the unit's session
+    /// and its messages are not stored as free-mode attempts: the roleplay's own
+    /// response is recorded when it ends.
+    Unit(UnitRoleplay),
     /// An entry of the topic bank for the learner's level.
     Bank(ConversationTopic),
     /// A topic the learner typed.
@@ -115,8 +137,12 @@ pub struct ChatSummary {
 pub struct TextChat {
     config: ChatConfig,
     deps: ChatDeps,
+    recorder: EvidenceRecorder,
     session: Session,
     session_id: i64,
+    /// False when the chat runs inside a session that belongs to someone else (a
+    /// unit's lesson session): finishing the chat then leaves that session open.
+    owns_session: bool,
     system: String,
     analyzer: TurnAnalyzer,
     tasks: JoinSet<()>,
@@ -133,6 +159,13 @@ pub fn clean_topic(topic: &str) -> String {
 
 fn context(config: &ChatConfig) -> Option<TutorContext> {
     let (focus, scenario, tutor_role, learner_role, goals) = match &config.topic {
+        ChatTopic::Unit(roleplay) => (
+            Focus::Unit(roleplay.unit_title.clone()),
+            roleplay.scenario.clone(),
+            roleplay.tutor_role.clone(),
+            roleplay.learner_role.clone(),
+            roleplay.goals.clone(),
+        ),
         ChatTopic::Bank(topic) => (
             Focus::Topic(topic.title.en.clone()),
             topic.scenario.en.clone(),
@@ -166,7 +199,10 @@ fn context(config: &ChatConfig) -> Option<TutorContext> {
         tutor_role,
         learner_role,
         goals,
-        target_language: Vec::new(),
+        target_language: match &config.topic {
+            ChatTopic::Unit(roleplay) => roleplay.target_language.clone(),
+            _ => Vec::new(),
+        },
         mode: config.mode,
         pronunciation_findings: false,
     })
@@ -208,17 +244,25 @@ impl TextChat {
     /// Creates the stored session and the analysis service.
     pub async fn start(deps: ChatDeps, config: ChatConfig) -> Result<Self> {
         let ctx = context(&config).ok_or(EngineError::Refused("the topic is empty"))?;
-        let activity_id = match &config.topic {
-            ChatTopic::Bank(topic) => Some(topic.id.clone()),
-            ChatTopic::Typed(_) => None,
+        let (activity_id, unit_id) = match &config.topic {
+            ChatTopic::Bank(topic) => (Some(topic.id.clone()), None),
+            ChatTopic::Typed(_) => (None, None),
+            ChatTopic::Unit(roleplay) => (
+                Some(roleplay.activity_id.clone()),
+                Some(roleplay.unit_id.clone()),
+            ),
         };
         let stored = deps
             .db
             .sessions()
             .create(&NewSession {
                 profile_id: config.profile_id,
-                kind: storage::SessionKind::TextChat,
-                unit_id: None,
+                kind: if unit_id.is_some() {
+                    storage::SessionKind::Lesson
+                } else {
+                    storage::SessionKind::TextChat
+                },
+                unit_id,
                 activity_id,
                 mode: Some(session_mode(config.mode)),
                 provider_profile_id: config.provider_profile_id,
@@ -226,17 +270,42 @@ impl TextChat {
                 started_at: (deps.clock)(),
             })
             .await?;
+        Self::attach(deps, config, ctx, stored.id, true)
+    }
+
+    /// Runs the chat inside a session that already exists, such as the lesson
+    /// session of a unit. The turns and their analysis are stored with that
+    /// session; [`TextChat::finish`] does not close it.
+    pub fn start_in(deps: ChatDeps, config: ChatConfig, session_id: i64) -> Result<Self> {
+        let ctx = context(&config).ok_or(EngineError::Refused("the topic is empty"))?;
+        Self::attach(deps, config, ctx, session_id, false)
+    }
+
+    fn attach(
+        deps: ChatDeps,
+        config: ChatConfig,
+        ctx: TutorContext,
+        session_id: i64,
+        owns_session: bool,
+    ) -> Result<Self> {
+        let (objectives, target_language) = match &config.topic {
+            ChatTopic::Unit(roleplay) => (
+                roleplay.objectives.clone(),
+                roleplay.target_language.clone(),
+            ),
+            _ => (Vec::new(), Vec::new()),
+        };
         let analyzer = TurnAnalyzer::new(
             AnalyzerConfig {
                 profile_id: config.profile_id,
-                session_id: stored.id,
+                session_id,
                 provider_profile_id: config.provider_profile_id,
                 model: config.model.clone(),
                 level: config.level,
                 first_language: config.first_language.clone(),
                 kind: AnalysisKind::Turn,
-                objectives: Vec::new(),
-                target_language: Vec::new(),
+                objectives,
+                target_language,
             },
             deps.client.clone(),
             deps.db.clone(),
@@ -245,7 +314,9 @@ impl TextChat {
         Ok(Self {
             system: system_prompt(&ctx),
             session: Session::new(SessionKind::TextChat, Channel::Text),
-            session_id: stored.id,
+            session_id,
+            owns_session,
+            recorder: EvidenceRecorder::new(deps.db.clone(), deps.clock.clone()),
             config,
             deps,
             analyzer,
@@ -322,7 +393,9 @@ impl TextChat {
                 created_at: now,
             })
             .await?;
-        self.record_attempt(learner.seq, words, now).await?;
+        if !matches!(self.config.topic, ChatTopic::Unit(_)) {
+            self.record_attempt(learner.seq, words).await?;
+        }
 
         // The window before this message, then this message with the notes.
         let window = self
@@ -369,43 +442,29 @@ impl TextChat {
     /// One attempt row per message. Chat is not scored, so the row has no score and
     /// the status `insufficient`; it exists so the learner can look back, and its
     /// origin keeps it out of every estimate.
-    async fn record_attempt(&self, seq: i64, words: i64, now: Timestamp) -> Result<()> {
-        let attempt = self
-            .deps
-            .db
-            .attempts()
-            .insert(&NewAttempt {
-                profile_id: self.config.profile_id,
-                session_id: Some(self.session_id),
-                unit_id: None,
-                activity_id: "text_chat".to_owned(),
-                activity_type: "text_chat".to_owned(),
-                response_id: format!("chat-{}-{seq}", self.session_id),
-                origin: AttemptOrigin::FreeMode,
-                level: storage_level(self.config.level),
-                skill: "writing".to_owned(),
-                dimension: "chat_message".to_owned(),
-                scorer: Scorer::Deterministic,
-                scorer_version: "text_chat/1".to_owned(),
-                raw_score: None,
-                max_score: None,
-                normalized: None,
-                confidence: None,
-                status: AttemptStatus::Insufficient,
-                counts_toward_estimate: false,
-                created_at: now,
-            })
-            .await?;
-        self.deps
-            .db
-            .evidence()
-            .add(&NewEvidence {
-                attempt_id: attempt.id,
-                kind: EvidenceKind::Metric,
-                content: None,
-                data: Some(json!({ "words": words })),
-                created_at: now,
-            })
+    async fn record_attempt(&self, seq: i64, words: i64) -> Result<()> {
+        let subject = Subject::new(
+            self.config.profile_id,
+            Some(self.session_id),
+            None,
+            "text_chat",
+            "text_chat",
+            self.config.level,
+            "writing",
+            Origin::FreeMode,
+            format!("chat-{}-{seq}", self.session_id),
+        );
+        self.recorder
+            .record_unscored(
+                &subject,
+                Scorer::Deterministic,
+                "text_chat/1",
+                "chat_message",
+                AttemptStatus::Insufficient,
+                "Free chat is practice and has no score.",
+                None,
+                json!({ "words": words }),
+            )
             .await?;
         Ok(())
     }
@@ -615,12 +674,15 @@ impl TextChat {
             EndReason::Finished => SessionStatus::Completed,
             EndReason::Cancelled => SessionStatus::Aborted,
         };
-        let value = serde_json::to_value(&summary).map_err(|_| EngineError::Output("summary"))?;
-        self.deps
-            .db
-            .sessions()
-            .finish(self.session_id, status, &(self.deps.clock)(), Some(&value))
-            .await?;
+        if self.owns_session {
+            let value =
+                serde_json::to_value(&summary).map_err(|_| EngineError::Output("summary"))?;
+            self.deps
+                .db
+                .sessions()
+                .finish(self.session_id, status, &(self.deps.clock)(), Some(&value))
+                .await?;
+        }
         self.session.apply(match reason {
             EndReason::Finished => Event::Finish,
             EndReason::Cancelled => Event::Cancel,

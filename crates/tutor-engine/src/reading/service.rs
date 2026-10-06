@@ -5,20 +5,20 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use assessment_engine::{Level, NORM_VERSION, score_share};
+use assessment_engine::{Level, Origin, score_share};
 use curriculum::Unit;
 use curriculum::validate::WordLevels;
 use llm_client::{ChatMessage, Contract, LlmClient, LlmError, StructuredRequest};
 use serde_json::json;
 use storage::{
-    AttemptOrigin, AttemptStatus, Database, EvidenceKind, GeneratedKind, LlmCallType, NewAttempt,
-    NewEvidence, NewGeneratedContent, NewSession, Scorer, SessionStatus, Timestamp,
+    Database, GeneratedKind, LlmCallType, NewGeneratedContent, NewSession, SessionStatus, Timestamp,
 };
 use tokio_util::sync::CancellationToken;
 
 use crate::chat::clean_topic;
 use crate::error::{EngineError, Result};
-use crate::support::{CallLog, Clock, storage_level};
+use crate::evidence::{DeterministicRecord, EvidenceRecorder, Subject};
+use crate::support::{CallLog, Clock};
 use crate::topics::ReadingTopic;
 
 use super::check::{ReadingProblem, check_reading};
@@ -123,6 +123,7 @@ pub struct StoredReading {
 pub struct ReadingSession {
     config: ReadingConfig,
     deps: ReadingDeps,
+    recorder: EvidenceRecorder,
     session_id: i64,
 }
 
@@ -149,6 +150,7 @@ impl ReadingSession {
             })
             .await?;
         Ok(Self {
+            recorder: EvidenceRecorder::new(deps.db.clone(), deps.clock.clone()),
             config,
             deps,
             session_id: stored.id,
@@ -358,43 +360,30 @@ impl ReadingSession {
         let total = questions.len();
         let score = score_share(correct, total);
 
-        let now = (self.deps.clock)();
-        let attempt = self
-            .deps
-            .db
-            .attempts()
-            .insert(&NewAttempt {
-                profile_id: self.config.profile_id,
-                session_id: Some(self.session_id),
-                unit_id,
-                activity_id: activity_id.clone(),
-                activity_type: "graded_reading".to_owned(),
-                response_id: format!("reading-{}-{activity_id}-{now}", self.session_id),
-                origin: AttemptOrigin::FreeMode,
-                level: storage_level(self.config.level),
-                skill: "reading".to_owned(),
-                dimension: "comprehension".to_owned(),
-                scorer: Scorer::Deterministic,
-                scorer_version: NORM_VERSION.to_owned(),
-                raw_score: Some(correct as f64),
-                max_score: Some(total as f64),
-                normalized: Some(score),
-                confidence: Some(1.0),
-                status: AttemptStatus::Scored,
-                counts_toward_estimate: false,
-                created_at: now,
-            })
-            .await?;
-        self.deps
-            .db
-            .evidence()
-            .add(&NewEvidence {
-                attempt_id: attempt.id,
-                kind: EvidenceKind::Metric,
-                content: None,
-                data: Some(json!({ "correct": correct, "total": total })),
-                created_at: now,
-            })
+        let subject = Subject::new(
+            self.config.profile_id,
+            Some(self.session_id),
+            unit_id,
+            activity_id.clone(),
+            "graded_reading",
+            self.config.level,
+            "reading",
+            Origin::FreeMode,
+            self.recorder.new_response_id(&activity_id),
+        );
+        self.recorder
+            .record_deterministic(
+                &subject,
+                &DeterministicRecord {
+                    normalized: score,
+                    raw: correct as f64,
+                    max: total as f64,
+                    algorithm: "graded_reading/1",
+                    response_text: None,
+                    details: json!({ "correct": correct, "total": total }),
+                    notes: Vec::new(),
+                },
+            )
             .await?;
         Ok(ReadingScore {
             correct,

@@ -23,6 +23,91 @@ pub struct Cli {
 pub enum Command {
     /// Hold a conversation with the tutor, or run a script of turns.
     Chat(ChatArgs),
+    /// Play a unit from its first activity to its checkpoint, or score the
+    /// responses that waited for a provider.
+    Unit(UnitArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct UnitArgs {
+    #[command(subcommand)]
+    pub command: UnitCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum UnitCommand {
+    /// Play a unit with scripted or typed responses and print the scores.
+    Run(UnitRunArgs),
+    /// Score the responses of earlier runs that were stored as pending because
+    /// no provider could be reached.
+    ScorePending(ScorePendingArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+#[command(group(clap::ArgGroup::new("responses").required(true).args(["script", "interactive"])))]
+pub struct UnitRunArgs {
+    /// The unit file.
+    pub unit: PathBuf,
+    /// A JSON file of responses, one entry per activity id (see
+    /// tools/tutor-cli/README.md).
+    #[arg(long)]
+    pub script: Option<PathBuf>,
+    /// Type the responses at the terminal instead of reading a script.
+    #[arg(long)]
+    pub interactive: bool,
+    /// The folder of rubric files. Defaults to `catalogs/rubrics` next to the
+    /// unit's folder.
+    #[arg(long)]
+    pub rubrics: Option<PathBuf>,
+    /// A word list, one `word,LEVEL` per line, for the vocabulary profile and the
+    /// range cross-check.
+    #[arg(long)]
+    pub word_list: Option<PathBuf>,
+    /// The database file the attempts are written to. A new file in the
+    /// temporary folder when not given; the run prints its path.
+    #[arg(long)]
+    pub db: Option<PathBuf>,
+    /// Write the scores, the statuses and the checkpoint as one JSON file.
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+    /// The learner's first language, written in English.
+    #[arg(long, default_value = "Indonesian")]
+    pub first_language: String,
+    /// Do not print the text of audio items. By default it is printed, because no
+    /// speaker is attached to this tool.
+    #[arg(long)]
+    pub hide_audio_text: bool,
+    /// Do not look for a provider: productive responses are stored as pending.
+    #[arg(long)]
+    pub offline: bool,
+    /// The provider profile: `env` for the TUTOR_LLM_* variables or a `.env` file,
+    /// or the name of a profile in providers.toml.
+    #[arg(long)]
+    pub provider: Option<String>,
+    /// providers.toml. Defaults to the one in the data directory.
+    #[arg(long)]
+    pub providers_file: Option<PathBuf>,
+    /// The data directory (providers.toml).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+    /// The whole time, in milliseconds, the provider gets to start a reply.
+    #[arg(long, default_value_t = 16_000)]
+    pub provider_timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ScorePendingArgs {
+    /// The database of the earlier run.
+    #[arg(long)]
+    pub db: PathBuf,
+    #[arg(long)]
+    pub provider: Option<String>,
+    #[arg(long)]
+    pub providers_file: Option<PathBuf>,
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+    #[arg(long, default_value_t = 16_000)]
+    pub provider_timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

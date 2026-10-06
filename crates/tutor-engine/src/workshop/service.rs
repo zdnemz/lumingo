@@ -10,20 +10,13 @@
 //! its attempts have origin `free_mode` and never count toward an estimate.
 
 use std::sync::Arc;
-use std::time::Instant;
 
-use assessment_engine::Level;
+use assessment_engine::{Level, Origin};
 use curriculum::validate::{GrammarCheck, WordLevels};
-use llm_client::{
-    ChatMessage, Contract, LadderLevel, LlmClient, LlmError, StructuredOutput, StructuredRequest,
-};
+use llm_client::{LlmClient, LlmError};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use storage::{
-    Attempt, AttemptOrigin, AttemptStatus, Database, EvidenceKind, InputMode, LlmCallType,
-    NewAttempt, NewEvidence, NewSession, NewTurn, ScoreUpdate, Scorer, SessionStatus, Timestamp,
-    TurnRole,
-};
+use storage::{Attempt, Database, InputMode, NewSession, NewTurn, SessionStatus, TurnRole};
 use tokio_util::sync::CancellationToken;
 
 use crate::analysis::{
@@ -32,12 +25,12 @@ use crate::analysis::{
 };
 use crate::drafts::{DraftComparison, DraftError, compare_drafts};
 use crate::error::{EngineError, Result};
-use crate::support::{CallLog, Clock, storage_level};
-
-use super::rubric::{
-    CrossCheck, DimensionResult, DimensionStatus, RUBRIC_SCORE_VERSION, RawRubric, RubricResult,
-    WorkshopRubric, WorkshopTask, cross_check, merge_rerun, system_prompt, user_message,
+use crate::evidence::{EvidenceRecorder, RubricMeta, Subject, rubric_scorer_version};
+use crate::rubric::{
+    CheckedRun, InputMode as RubricInputMode, RubricOutcome, RubricResult, Runs, ScoreRequest,
+    ScorerEnv, WorkshopRubric, WorkshopTask, checked_run, grammar_findings,
 };
+use crate::support::Clock;
 
 /// What the workshop works with. Cheap to clone.
 #[derive(Clone)]
@@ -49,7 +42,7 @@ pub struct WorkshopEnv {
     pub provider_profile_id: Option<i64>,
     /// The rule-based checker. Harper is wired in a later task; any
     /// implementation of the trait works.
-    pub grammar: Arc<dyn GrammarCheck + Send + Sync>,
+    pub grammar: Option<Arc<dyn GrammarCheck + Send + Sync>>,
     /// Word levels for the range cross-check (X4). Optional.
     pub word_levels: Option<Arc<WordLevels>>,
     /// Whether the provider passed scorer qualification. It sets the starting
@@ -79,6 +72,9 @@ pub struct DraftSubmission {
     pub text: String,
     pub words: usize,
     /// Layer one: findings of the rule-based checker.
+    /// False when no rule-based checker is linked: the list is then empty
+    /// because nothing was checked, not because the text is clean.
+    pub rule_checked: bool,
     pub rule_findings: Vec<String>,
     /// The draft is shorter than the task's minimum.
     pub below_minimum: bool,
@@ -162,14 +158,14 @@ fn analyzer_for(
 }
 
 /// Runs the checker off the async worker threads: a grammar engine is CPU work.
-async fn rule_findings(env: &WorkshopEnv, text: &str) -> Vec<String> {
-    let grammar = env.grammar.clone();
+async fn rule_findings(env: &WorkshopEnv, text: &str) -> Option<Vec<String>> {
+    let grammar = env.grammar.clone()?;
     let owned = text.to_owned();
     match tokio::task::spawn_blocking(move || grammar.findings(&owned)).await {
-        Ok(findings) => findings,
+        Ok(findings) => Some(findings),
         Err(error) => {
             tracing::warn!(%error, "the rule-based checker failed");
-            Vec::new()
+            None
         }
     }
 }
@@ -238,7 +234,9 @@ impl Workshop {
                 created_at: (self.env.clock)(),
             })
             .await?;
-        let mut findings = rule_findings(&self.env, text).await;
+        let checked = rule_findings(&self.env, text).await;
+        let rule_checked = checked.is_some();
+        let mut findings = checked.unwrap_or_default();
         findings.dedup();
         let below_minimum = self
             .config
@@ -250,6 +248,7 @@ impl Workshop {
             turn_seq: turn.seq,
             text: text.to_owned(),
             words,
+            rule_checked,
             rule_findings: findings,
             below_minimum,
         })
@@ -303,9 +302,9 @@ impl Workshop {
 
         if pending.rubric.is_some() {
             match run_rubric(&self.env, &pending, cancel).await {
-                Ok(result) => {
-                    write_scores(&self.env, &pending, &result, &[]).await?;
-                    feedback.rubric = Some(result);
+                Ok(run) => {
+                    write_scores(&self.env, &pending, &run, &[]).await?;
+                    feedback.rubric = Some(run.result);
                 }
                 Err(error @ EngineError::Llm(LlmError::Cancelled)) => {
                     enqueue_pending(&self.env, &pending).await?;
@@ -420,244 +419,98 @@ async fn run_errors(
     Ok((record, comparison))
 }
 
-struct RubricRun {
-    raw: RawRubric,
-    repaired: bool,
-    ladder_level: LadderLevel,
+/// The scorer's view of the workshop's environment.
+fn scorer_env(env: &WorkshopEnv) -> ScorerEnv {
+    ScorerEnv {
+        client: env.client.clone(),
+        db: env.db.clone(),
+        clock: env.clock.clone(),
+        model: env.model.clone(),
+        provider_profile_id: env.provider_profile_id,
+        grammar: env.grammar.clone(),
+        word_levels: env.word_levels.clone(),
+        provider_qualified: env.provider_qualified,
+    }
 }
 
-async fn rubric_call(
-    env: &WorkshopEnv,
-    pending: &PendingDraft,
-    rubric: &WorkshopRubric,
-    cancel: &CancellationToken,
-) -> Result<RubricRun> {
-    let request = StructuredRequest::new(
-        Contract::RubricScore,
-        system_prompt(&pending.first_language),
-        vec![ChatMessage::user(user_message(
-            pending.level,
-            &pending.task,
-            rubric,
-            &pending.text,
-        ))],
-        u32::try_from(500 + 150 * rubric.dimensions.len()).unwrap_or(1500),
+/// The subject of a draft's attempts: workshop work is practice.
+fn subject_of(pending: &PendingDraft) -> Subject {
+    Subject::new(
+        pending.profile_id,
+        Some(pending.session_id),
+        None,
+        "writing_workshop",
+        "writing_workshop",
+        pending.level,
+        "writing",
+        Origin::FreeMode,
+        pending.response_id.clone(),
     )
-    .with_temperature(0.0);
-    let started_at = (env.clock)();
-    let timer = Instant::now();
-    let result: std::result::Result<StructuredOutput, LlmError> =
-        env.client.structured(request, cancel.clone()).await;
-    CallLog {
-        db: &env.db,
-        provider_profile_id: env.provider_profile_id,
-        call_type: LlmCallType::RubricScore,
-        model: &env.model,
-        started_at,
-        elapsed: timer.elapsed(),
-    }
-    .structured(&result)
-    .await;
-    let output = result?;
-    let raw: RawRubric =
-        serde_json::from_value(output.value).map_err(|_| EngineError::Output("rubric_score"))?;
-    Ok(RubricRun {
-        raw,
-        repaired: output.repaired,
-        ladder_level: output.ladder_level,
-    })
 }
 
 /// Layer three: one run, and one rerun when the evidence of a dimension did not
-/// hold (X1).
+/// hold (X1). The run is the shared one of the rubric scorer.
 async fn run_rubric(
     env: &WorkshopEnv,
     pending: &PendingDraft,
     cancel: &CancellationToken,
-) -> Result<RubricResult> {
+) -> Result<CheckedRun> {
     let Some(rubric) = &pending.rubric else {
         return Err(EngineError::Refused("no rubric is set for this task"));
     };
-    let findings = rule_findings(env, &pending.text).await.len();
-    let check = |run: &RubricRun| {
-        cross_check(
-            &run.raw,
-            &CrossCheck {
-                response: &pending.text,
-                level: pending.level,
-                task: &pending.task,
-                rubric,
-                grammar_findings: findings,
-                word_levels: env.word_levels.as_deref(),
-                provider_qualified: env.provider_qualified,
-                repaired: run.repaired,
-                ladder_level: run.ladder_level,
-            },
-        )
+    let scorer = scorer_env(env);
+    let request = ScoreRequest {
+        subject: subject_of(pending),
+        rubric: rubric.clone(),
+        task: pending.task.clone(),
+        response: pending.text.clone(),
+        input_mode: RubricInputMode::Text,
+        runs: Runs::One,
+        first_language: pending.first_language.clone(),
+        timing: None,
     };
-    let first_run = rubric_call(env, pending, rubric, cancel).await?;
-    let first = check(&first_run);
-    if first.rejected.is_empty() {
-        return Ok(first);
-    }
-    let second_run = rubric_call(env, pending, rubric, cancel).await?;
-    let second = check(&second_run);
-    Ok(merge_rerun(first, &second))
+    let findings = grammar_findings(&scorer, &pending.text, RubricInputMode::Text).await;
+    let (run, _) = checked_run(&scorer, &request, findings, cancel).await?;
+    Ok(run)
 }
 
 fn scorer_version(env: &WorkshopEnv, rubric: &WorkshopRubric) -> String {
-    format!(
-        "{}/{}+{RUBRIC_SCORE_VERSION}+{}",
-        rubric.id, rubric.version, env.model
-    )
+    rubric_scorer_version(rubric, Some(&env.model))
 }
 
-fn dimension_score(result: &DimensionResult, confidence: f64) -> ScoreUpdateParts {
-    match (result.status, result.band) {
-        (DimensionStatus::Scored, Some(band)) => ScoreUpdateParts {
-            raw: Some(f64::from(band)),
-            max: Some(4.0),
-            normalized: Some(f64::from(band) / 4.0),
-            confidence: Some(confidence),
-            status: AttemptStatus::Scored,
-        },
-        _ => ScoreUpdateParts {
-            raw: None,
-            max: None,
-            normalized: None,
-            confidence: None,
-            status: AttemptStatus::NeedsReview,
-        },
-    }
-}
-
-struct ScoreUpdateParts {
-    raw: Option<f64>,
-    max: Option<f64>,
-    normalized: Option<f64>,
-    confidence: Option<f64>,
-    status: AttemptStatus,
-}
-
-fn attempt_row(
-    pending: &PendingDraft,
-    dimension: &str,
-    scorer_version: &str,
-    status: AttemptStatus,
-    now: Timestamp,
-) -> NewAttempt {
-    NewAttempt {
-        profile_id: pending.profile_id,
-        session_id: Some(pending.session_id),
-        unit_id: None,
-        activity_id: "writing_workshop".to_owned(),
-        activity_type: "writing_workshop".to_owned(),
-        response_id: pending.response_id.clone(),
-        origin: AttemptOrigin::FreeMode,
-        level: storage_level(pending.level),
-        skill: "writing".to_owned(),
-        dimension: dimension.to_owned(),
-        scorer: Scorer::RubricLlm,
-        scorer_version: scorer_version.to_owned(),
-        raw_score: None,
-        max_score: None,
-        normalized: None,
-        confidence: None,
-        status,
-        counts_toward_estimate: false,
-        created_at: now,
-    }
-}
-
-/// Stores the rubric result: updates the pending attempts when there are some,
-/// inserts the rows otherwise, and adds the evidence.
+/// Stores the rubric result: fills in the waiting attempts when there are some,
+/// stores new ones otherwise, with the evidence.
 async fn write_scores(
     env: &WorkshopEnv,
     pending: &PendingDraft,
-    result: &RubricResult,
+    run: &CheckedRun,
     existing: &[Attempt],
 ) -> Result<()> {
     let Some(rubric) = &pending.rubric else {
         return Ok(());
     };
-    let version = scorer_version(env, rubric);
-    let now = (env.clock)();
-    let mut rows: Vec<Attempt> = existing.to_vec();
-    if rows.is_empty() {
-        let new: Vec<NewAttempt> = result
-            .dimensions
-            .iter()
-            .map(|d| {
-                attempt_row(
-                    pending,
-                    d.dimension.as_str(),
-                    &version,
-                    AttemptStatus::PendingLlm,
-                    now,
-                )
-            })
-            .collect();
-        rows = env.db.attempts().insert_response(&new).await?;
-    }
-    for (index, attempt) in rows.iter().enumerate() {
-        let Some(dimension) = result
-            .dimensions
-            .iter()
-            .find(|d| d.dimension.as_str() == attempt.dimension)
-        else {
-            continue;
-        };
-        let parts = dimension_score(dimension, result.confidence);
-        env.db
-            .attempts()
-            .update_score(
-                attempt.id,
-                &ScoreUpdate {
-                    scorer_version: version.clone(),
-                    raw_score: parts.raw,
-                    max_score: parts.max,
-                    normalized: parts.normalized,
-                    confidence: parts.confidence,
-                    status: parts.status,
-                },
-            )
+    let recorder = EvidenceRecorder::new(env.db.clone(), env.clock.clone());
+    let subject = subject_of(pending);
+    let outcome = RubricOutcome::join(
+        std::slice::from_ref(run),
+        env.provider_qualified,
+        pending.level,
+    );
+    let meta = RubricMeta {
+        rubric,
+        model: Some(&env.model),
+        input_mode: "text",
+        response_text: &pending.text,
+        metrics: serde_json::Value::Null,
+        provider_qualified: env.provider_qualified,
+        ladder_level: None,
+    };
+    if existing.is_empty() {
+        recorder.record_rubric(&subject, &meta, &outcome).await?;
+    } else {
+        recorder
+            .complete_rubric(existing, &subject, &meta, &outcome)
             .await?;
-        if index == 0 {
-            env.db
-                .evidence()
-                .add(&NewEvidence {
-                    attempt_id: attempt.id,
-                    kind: EvidenceKind::ResponseText,
-                    content: Some(pending.text.clone()),
-                    data: None,
-                    created_at: now,
-                })
-                .await?;
-        }
-        for quote in &dimension.evidence_quotes {
-            env.db
-                .evidence()
-                .add(&NewEvidence {
-                    attempt_id: attempt.id,
-                    kind: EvidenceKind::Quote,
-                    content: Some(quote.clone()),
-                    data: None,
-                    created_at: now,
-                })
-                .await?;
-        }
-        if !dimension.reason.trim().is_empty() {
-            env.db
-                .evidence()
-                .add(&NewEvidence {
-                    attempt_id: attempt.id,
-                    kind: EvidenceKind::ScorerReason,
-                    content: Some(dimension.reason.clone()),
-                    data: None,
-                    created_at: now,
-                })
-                .await?;
-        }
     }
     Ok(())
 }
@@ -677,7 +530,6 @@ async fn enqueue_pending(env: &WorkshopEnv, pending: &PendingDraft) -> Result<()
         // two was stored may already exist only if a queue entry does too.
         return Ok(());
     }
-    let now = (env.clock)();
     let version = pending.rubric.as_ref().map_or_else(
         || "writing_workshop/1".to_owned(),
         |r| scorer_version(env, r),
@@ -690,19 +542,17 @@ async fn enqueue_pending(env: &WorkshopEnv, pending: &PendingDraft) -> Result<()
             .collect(),
         None => vec!["draft_feedback"],
     };
-    let rows: Vec<NewAttempt> = dimensions
-        .iter()
-        .map(|d| attempt_row(pending, d, &version, AttemptStatus::PendingLlm, now))
-        .collect();
-    let stored = env.db.attempts().insert_response(&rows).await?;
     let payload =
         serde_json::to_value(pending).map_err(|_| EngineError::Output("pending draft"))?;
-    if let Some(first) = stored.first() {
-        env.db
-            .pending_scoring()
-            .enqueue(first.id, &payload, &now)
-            .await?;
-    }
+    EvidenceRecorder::new(env.db.clone(), env.clock.clone())
+        .queue(
+            &subject_of(pending),
+            &version,
+            &dimensions,
+            &pending.text,
+            &payload,
+        )
+        .await?;
     Ok(())
 }
 
@@ -760,28 +610,15 @@ pub async fn process_pending_drafts(
                 feedback.comparison = comparison;
             }
             if pending.rubric.is_some() {
-                let result = run_rubric(env, &pending, cancel).await?;
+                let run = run_rubric(env, &pending, cancel).await?;
                 let rows = env.db.attempts().by_response(&pending.response_id).await?;
-                write_scores(env, &pending, &result, &rows).await?;
-                feedback.rubric = Some(result);
+                write_scores(env, &pending, &run, &rows).await?;
+                feedback.rubric = Some(run.result);
             } else {
                 let rows = env.db.attempts().by_response(&pending.response_id).await?;
-                for row in rows {
-                    env.db
-                        .attempts()
-                        .update_score(
-                            row.id,
-                            &ScoreUpdate {
-                                scorer_version: row.scorer_version.clone(),
-                                raw_score: None,
-                                max_score: None,
-                                normalized: None,
-                                confidence: None,
-                                status: AttemptStatus::Insufficient,
-                            },
-                        )
-                        .await?;
-                }
+                EvidenceRecorder::new(env.db.clone(), env.clock.clone())
+                    .finish_unscored(&rows, "The draft had no rubric, so there are no bands.")
+                    .await?;
             }
             Ok(())
         }

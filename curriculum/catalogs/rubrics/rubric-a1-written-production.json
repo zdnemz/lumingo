@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "id": "rubric-a1-written-production",
+  "version": 1,
+  "level": "A1",
+  "task_family": "written_production",
+  "dimensions": {
+    "task_achievement": [
+      { "band": 0, "description": { "en": "Nothing is written about the task, or the text is about something else." } },
+      { "band": 1, "description": { "en": "Only a word or two touch the task. Most of what was asked is missing." } },
+      { "band": 2, "description": { "en": "Some of what was asked is written, but at least one important part is left out." } },
+      { "band": 3, "description": { "en": "Everything the task asked for is written, in short simple sentences." } },
+      { "band": 4, "description": { "en": "Everything is written, and the writer adds one useful detail that was not asked for." } }
+    ],
+    "range": [
+      { "band": 0, "description": { "en": "No usable English words." } },
+      { "band": 1, "description": { "en": "Single words or copied chunks only, and the same few words come back again and again." } },
+      { "band": 2, "description": { "en": "A small set of familiar words and phrases, with a lot of repeating." } },
+      { "band": 3, "description": { "en": "Enough familiar words and phrases to do the task without much repeating." } },
+      { "band": 4, "description": { "en": "Familiar words and phrases used with some variety, and one or two words beyond the unit's own list." } }
+    ],
+    "accuracy": [
+      { "band": 0, "description": { "en": "So many mistakes that the meaning is lost." } },
+      { "band": 1, "description": { "en": "Many mistakes in the basic patterns of the unit and in spelling. The meaning is often unclear." } },
+      { "band": 2, "description": { "en": "Mistakes in the unit's basic patterns in about half of the sentences. The meaning can still be followed." } },
+      { "band": 3, "description": { "en": "The unit's basic patterns are mostly right, and most words are spelled correctly. A few mistakes do not hide the meaning." } },
+      { "band": 4, "description": { "en": "The unit's basic patterns are right almost every time, with capital letters and full stops in the right places." } }
+    ],
+    "coherence": [
+      { "band": 0, "description": { "en": "Nothing is connected. No sentence follows from another." } },
+      { "band": 1, "description": { "en": "Separate words or phrases with no link between them." } },
+      { "band": 2, "description": { "en": "Short sentences that follow each other in a loose order." } },
+      { "band": 3, "description": { "en": "Short sentences in a sensible order, joined with simple words such as and." } },
+      { "band": 4, "description": { "en": "Sentences in a clear order, linked with simple words such as and, but or because." } }
+    ]
+  }
+}
