@@ -29,6 +29,27 @@ pub(crate) fn storage_level(level: Level) -> storage::Level {
     }
 }
 
+/// The assessment crate's level for a unit's level.
+pub(crate) fn assessment_level(level: curriculum::Level) -> Level {
+    match level {
+        curriculum::Level::A1 => Level::A1,
+        curriculum::Level::A2 => Level::A2,
+        curriculum::Level::B1 => Level::B1,
+        curriculum::Level::B2 => Level::B2,
+        curriculum::Level::C1 => Level::C1,
+        curriculum::Level::C2 => Level::C2,
+    }
+}
+
+/// The assessment crate's origin for a stored one.
+pub(crate) fn assessment_origin(origin: storage::AttemptOrigin) -> assessment_engine::Origin {
+    match origin {
+        storage::AttemptOrigin::Authored => assessment_engine::Origin::Authored,
+        storage::AttemptOrigin::Generated => assessment_engine::Origin::Generated,
+        storage::AttemptOrigin::FreeMode => assessment_engine::Origin::FreeMode,
+    }
+}
+
 pub(crate) fn curriculum_level(level: Level) -> curriculum::Level {
     match level {
         Level::A1 => curriculum::Level::A1,

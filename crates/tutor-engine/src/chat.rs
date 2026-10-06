@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use assessment_engine::Level;
+use assessment_engine::{Level, Origin};
 use futures_util::StreamExt;
 use llm_client::{
     ChatMessage, FinishReason, LlmClient, LlmError, Role, StreamEvent, StreamSummary, TextRequest,
@@ -17,9 +17,8 @@ use llm_client::{
 use serde::Serialize;
 use serde_json::json;
 use storage::{
-    AttemptOrigin, AttemptStatus, Database, EvidenceKind, InputMode, LlmCallType, LlmOutcome,
-    NewAttempt, NewEvidence, NewSession, NewTurn, Scorer, SessionMode, SessionStatus, Timestamp,
-    TurnRole,
+    AttemptStatus, Database, InputMode, LlmCallType, LlmOutcome, NewSession, NewTurn, Scorer,
+    SessionMode, SessionStatus, TurnRole,
 };
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -28,12 +27,13 @@ use crate::analysis::{
     AnalysisKind, AnalyzerConfig, InputMode as AnalysisInput, TurnAnalyzer, TurnToAnalyse,
 };
 use crate::error::{EngineError, Result};
+use crate::evidence::{EvidenceRecorder, Subject};
 use crate::prompt::{
     FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, TutorContext, bounded_history,
     reply_limits, system_prompt, user_message,
 };
 use crate::session::{Channel, EndReason, Event, Phase, Session, SessionKind};
-use crate::support::{CallLog, Clock, single_line, storage_level};
+use crate::support::{CallLog, Clock, single_line};
 use crate::topics::ConversationTopic;
 
 /// Longest typed topic, in characters. It goes into the system prompt, so it is
@@ -115,6 +115,7 @@ pub struct ChatSummary {
 pub struct TextChat {
     config: ChatConfig,
     deps: ChatDeps,
+    recorder: EvidenceRecorder,
     session: Session,
     session_id: i64,
     system: String,
@@ -246,6 +247,7 @@ impl TextChat {
             system: system_prompt(&ctx),
             session: Session::new(SessionKind::TextChat, Channel::Text),
             session_id: stored.id,
+            recorder: EvidenceRecorder::new(deps.db.clone(), deps.clock.clone()),
             config,
             deps,
             analyzer,
@@ -322,7 +324,7 @@ impl TextChat {
                 created_at: now,
             })
             .await?;
-        self.record_attempt(learner.seq, words, now).await?;
+        self.record_attempt(learner.seq, words).await?;
 
         // The window before this message, then this message with the notes.
         let window = self
@@ -369,43 +371,29 @@ impl TextChat {
     /// One attempt row per message. Chat is not scored, so the row has no score and
     /// the status `insufficient`; it exists so the learner can look back, and its
     /// origin keeps it out of every estimate.
-    async fn record_attempt(&self, seq: i64, words: i64, now: Timestamp) -> Result<()> {
-        let attempt = self
-            .deps
-            .db
-            .attempts()
-            .insert(&NewAttempt {
-                profile_id: self.config.profile_id,
-                session_id: Some(self.session_id),
-                unit_id: None,
-                activity_id: "text_chat".to_owned(),
-                activity_type: "text_chat".to_owned(),
-                response_id: format!("chat-{}-{seq}", self.session_id),
-                origin: AttemptOrigin::FreeMode,
-                level: storage_level(self.config.level),
-                skill: "writing".to_owned(),
-                dimension: "chat_message".to_owned(),
-                scorer: Scorer::Deterministic,
-                scorer_version: "text_chat/1".to_owned(),
-                raw_score: None,
-                max_score: None,
-                normalized: None,
-                confidence: None,
-                status: AttemptStatus::Insufficient,
-                counts_toward_estimate: false,
-                created_at: now,
-            })
-            .await?;
-        self.deps
-            .db
-            .evidence()
-            .add(&NewEvidence {
-                attempt_id: attempt.id,
-                kind: EvidenceKind::Metric,
-                content: None,
-                data: Some(json!({ "words": words })),
-                created_at: now,
-            })
+    async fn record_attempt(&self, seq: i64, words: i64) -> Result<()> {
+        let subject = Subject::new(
+            self.config.profile_id,
+            Some(self.session_id),
+            None,
+            "text_chat",
+            "text_chat",
+            self.config.level,
+            "writing",
+            Origin::FreeMode,
+            format!("chat-{}-{seq}", self.session_id),
+        );
+        self.recorder
+            .record_unscored(
+                &subject,
+                Scorer::Deterministic,
+                "text_chat/1",
+                "chat_message",
+                AttemptStatus::Insufficient,
+                "Free chat is practice and has no score.",
+                None,
+                json!({ "words": words }),
+            )
             .await?;
         Ok(())
     }
