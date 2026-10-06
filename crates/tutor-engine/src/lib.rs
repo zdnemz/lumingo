@@ -7,6 +7,7 @@ mod chat;
 mod chunker;
 mod drafts;
 mod error;
+mod evidence;
 mod practice;
 mod prompt;
 mod reading;
@@ -25,6 +26,11 @@ pub use chat::{
 pub use chunker::SentenceChunker;
 pub use drafts::{DraftComparison, DraftError, EarlierError, Resolution, compare_drafts};
 pub use error::{EngineError, Result};
+pub use evidence::{
+    CONFIDENCE_FLOOR, DeterministicRecord, EngineRole, EngineStamp, EvidenceRecorder,
+    PRON_ALGORITHM_VERSION, PRON_CONFIDENCE_CAP, PronRecord, RECORDER_VERSION, Recorded,
+    RubricMeta, Subject, counts_toward_estimate, rubric_scorer_version,
+};
 pub use practice::*;
 pub use prompt::{
     FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, MAX_NOTES, PronFinding, ReplyLimits,
@@ -33,10 +39,11 @@ pub use prompt::{
 pub use reading::*;
 pub use review::{Grade, ReviewState, due_order, update_mastery};
 pub use rubric::{
-    Alarm, CrossCheck, Dimension, DimensionResult, DimensionStatus, MAX_FEEDBACK_WORDS,
-    PointResult, RUBRIC_SCORE_VERSION, RawDimension, RawPoint, RawRubric, RubricDimension,
-    RubricResult, WorkshopRubric, WorkshopTask, cross_check, merge_rerun,
-    system_prompt as rubric_system_prompt, user_message as rubric_user_message,
+    Alarm, CheckedRun, ConfidenceInputs, CrossCheck, CurriculumWords, Dimension, DimensionResult,
+    DimensionStatus, MAX_BAND_GAP, MAX_FEEDBACK_WORDS, PointResult, RUBRIC_ALGORITHM_VERSION,
+    RUBRIC_SCORE_VERSION, RawDimension, RawPoint, RawRubric, RubricDimension, RubricOutcome,
+    RubricResult, ScoredDimension, WorkshopRubric, WorkshopTask, cross_check, merge_rerun,
+    rubric_confidence, system_prompt as rubric_system_prompt, user_message as rubric_user_message,
 };
 pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,

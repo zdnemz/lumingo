@@ -15,7 +15,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::support::{names_a_level, states_a_percentage, truncate_words};
 
+mod outcome;
+
+pub use outcome::{CheckedRun, MAX_BAND_GAP, RubricOutcome, ScoredDimension};
+
 pub const RUBRIC_SCORE_VERSION: &str = "rubric_score/1";
+
+/// The version of the cross-checks X1 to X7 and the confidence table that turn a
+/// model's reply into a stored score. Stored with every rubric attempt next to
+/// the contract version, so a change to either is visible in old rows.
+pub const RUBRIC_ALGORITHM_VERSION: &str = "rubric_xcheck/1";
 
 /// Words in each feedback text, at most.
 pub const MAX_FEEDBACK_WORDS: usize = 40;
