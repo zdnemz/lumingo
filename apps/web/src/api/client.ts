@@ -1,9 +1,11 @@
 // The only place the UI talks to the server. Everything else gets an
 // `ApiClient`, so screens can be tested against a fake one.
 
+import type { AttemptEvidence } from "@/generated/AttemptEvidence";
 import type { DeleteDataResult } from "@/generated/DeleteDataResult";
 import type { DeleteSessionResult } from "@/generated/DeleteSessionResult";
 import type { DiagnosticsReport } from "@/generated/DiagnosticsReport";
+import type { GameState } from "@/generated/GameState";
 import type { ProbeReport } from "@/generated/ProbeReport";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
 import type { ProviderInfo } from "@/generated/ProviderInfo";
@@ -77,6 +79,10 @@ export interface ApiClient {
   getProgress: (signal?: AbortSignal) => Promise<ProgressOverview>;
   /** `GET /api/units` */
   listUnits: (signal?: AbortSignal) => Promise<UnitList>;
+  /** `GET /api/game`. Cosmetic state only: it holds no attempt, evidence or estimate. */
+  getGame: (signal?: AbortSignal) => Promise<GameState>;
+  /** `GET /api/attempts/{id}/evidence` */
+  getAttemptEvidence: (attemptId: number, signal?: AbortSignal) => Promise<AttemptEvidence>;
   /** `DELETE /api/sessions/{id}` */
   deleteSession: (id: number) => Promise<DeleteSessionResult>;
   /** `DELETE /api/data` */
@@ -192,6 +198,9 @@ export function createApiClient(options: ClientOptions = {}): ApiClient {
     getDiagnostics: (signal) => json<DiagnosticsReport>("GET", "/api/diagnostics", { signal }),
     getProgress: (signal) => json<ProgressOverview>("GET", "/api/progress", { signal }),
     listUnits: (signal) => json<UnitList>("GET", "/api/units", { signal }),
+    getGame: (signal) => json<GameState>("GET", "/api/game", { signal }),
+    getAttemptEvidence: (attemptId, signal) =>
+      json<AttemptEvidence>("GET", `/api/attempts/${encodeURIComponent(String(attemptId))}/evidence`, { signal }),
     deleteSession: (id) => json<DeleteSessionResult>("DELETE", `/api/sessions/${id}`),
     deleteAllData: () => json<DeleteDataResult>("DELETE", "/api/data"),
     async exportData() {

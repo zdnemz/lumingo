@@ -64,6 +64,8 @@ describe("typed client requests", () => {
     await api.getDiagnostics();
     await api.getProgress();
     await api.listUnits();
+    await api.getGame();
+    await api.getAttemptEvidence(12);
     await api.deleteSession(7);
     await api.deleteAllData();
     await api.exportData();
@@ -80,6 +82,8 @@ describe("typed client requests", () => {
       "GET /api/diagnostics",
       "GET /api/progress",
       "GET /api/units",
+      "GET /api/game",
+      "GET /api/attempts/12/evidence",
       "DELETE /api/sessions/7",
       "DELETE /api/data",
       "GET /api/export",
