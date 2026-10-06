@@ -1,0 +1,34 @@
+{
+  "responses": {
+    "a01-listen-question": { "choice": 0 },
+    "a02-greeting-by-time": { "choice": 1 },
+    "a03-gap-am": { "gaps": ["am", "from"] },
+    "a04-reorder-name": { "order": ["My", "name", "is", "Dewi"] },
+    "a05-match-phrases": {
+      "pairs": {
+        "Good morning": "Selamat pagi",
+        "Thank you": "Terima kasih",
+        "See you": "Sampai jumpa",
+        "Nice to meet you": "Senang bertemu dengan Anda"
+      }
+    },
+    "a06-dictation-from": { "text": "Where are you from?" },
+    "a08-pairs-th": { "heard": ["thank", "tree", "think"] },
+    "a09-shadow-dialogue": { "done": true },
+    "a10-speak-introduce": {
+      "spoken": "Hello. My name is Dewi. I'm from Bandung.",
+      "spans": [[200, 2200], [2700, 4700]]
+    },
+    "a11-roleplay-classmate": {
+      "turns": ["Hello, I am Dewi.", "I am from Bandung. Where are you from?"]
+    },
+    "a12-write-introduce": {
+      "text": "Hello! My name is Dewi. I am from Bandung. Nice to meet you."
+    },
+    "a13-read-budi": { "choice": 1 },
+    "a14-read-set-class-chat": { "answers": [1, 2, 2, 0] },
+    "a15-listen-set-putu": { "answers": [0, 1, 1], "plays": 2 },
+    "a16-fix-missing-am": { "text": "I am Dewi." },
+    "a17-fix-missing-from": { "text": "I am from Bandung." }
+  }
+}
