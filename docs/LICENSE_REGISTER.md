@@ -33,6 +33,9 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | Crate | Use | License | Status |
 |---|---|---|---|
 | axum | HTTP API and WebSocket in `apps/server` | MIT | ok |
+| reqwest 0.13.5 | HTTP client for `llm-client` (rustls with aws-lc-rs) | MIT OR Apache-2.0, read from crate metadata 2026-10-07 | ok |
+| webpki-root-certs 1.0.9 (through reqwest) | Mozilla CA certificate list | CDLA-Permissive-2.0, permissive data license (attribution, no copyleft). Allowed by a per-crate exception in `deny.toml`. Attribution line in `NOTICE`. | ok |
+| aws-lc-sys 0.45.0 (through reqwest) | Native crypto for rustls | ISC, MIT, MIT-0, BSD-3-Clause and Apache-2.0 terms; passes `cargo deny`. Building it needs cmake and a C compiler, so the Windows build machine needs both (note for `docs/ENVIRONMENT.md`). | ok |
 | tokio, tokio-util | Async runtime and cancellation | MIT | ok |
 | tower, http-body-util, tokio-tungstenite, futures-util | Server tests | MIT | ok |
 | rust-embed | Embeds the exported UI in the executable | MIT | ok |
@@ -90,7 +93,6 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
 | SQLx, SQLite | Storage | MIT OR Apache-2.0, public domain | verify |
-| reqwest | LLM HTTP client | MIT OR Apache-2.0 | verify |
 | jsonschema | Local validation of structured output and units | MIT | verify |
 | harper-core | Rule-based grammar findings | Apache-2.0 | verify |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |

@@ -22,7 +22,11 @@ allow = [
   "Unicode-3.0",
   "Unicode-DFS-2016",
 ]
-exceptions = []
+# CDLA-Permissive-2.0 is a permissive data license (attribution, no copyleft). It covers
+# the Mozilla CA certificate list that reqwest's TLS stack uses. See docs/LICENSE_REGISTER.md.
+exceptions = [
+  { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
+]
 
 [bans]
 multiple-versions = "warn"

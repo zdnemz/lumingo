@@ -28,3 +28,9 @@ Build-time data:
 - caniuse-lite, browser support data used by the Next.js build, is licensed
   under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). It is not part
   of the shipped application.
+
+Bundled certificate data:
+
+- webpki-root-certs, the Mozilla CA certificate list used by the TLS stack, is
+  licensed under the Community Data License Agreement Permissive 2.0
+  (https://cdla.dev/permissive-2-0/).
