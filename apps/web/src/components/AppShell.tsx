@@ -20,6 +20,7 @@ interface NavItem {
 // A screen appears here when it exists. Links to screens that are not built yet would be dead ends.
 const NAV: readonly NavItem[] = [
   { href: "/", label: "nav.home", icon: "icon-map" },
+  { href: "/progress/", label: "nav.progress", icon: "icon-star" },
   { href: "/settings/", label: "nav.settings", icon: "icon-gear" },
 ];
 

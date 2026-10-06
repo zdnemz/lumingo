@@ -674,6 +674,7 @@ export const en = {
   "progress.game.unlock.unlocked": "Unlocked",
   "progress.game.unlock.equipped": "In use now",
   "progress.game.unlock.none": "No unlockables are listed.",
+  "progress.evidence.reference": "The text that was to be read aloud",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -1,0 +1,150 @@
+/* Progress and evidence screens.
+ *
+ * Nothing here has a fixed width in text units. Long identifiers wrap, rows
+ * stack on a narrow window, and the only element allowed to scroll sideways is
+ * a table inside its own wrapper, so the page itself never scrolls sideways at
+ * 375 px or at 150 percent zoom.
+ */
+
+/* ---- Four-skill profile ------------------------------------------------- */
+
+.profile {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.profile__row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--color-bg-deep);
+}
+.profile__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+}
+.profile__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+}
+.profile__sentence {
+  margin: 0;
+  max-width: none;
+  overflow-wrap: anywhere;
+}
+
+/* The ladder is decoration: the sentence beside it says the same in words. */
+.ladder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+}
+.ladder__step {
+  min-width: calc(var(--px) * 9);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.ladder__step[data-current="true"] {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+/* ---- Evidence ------------------------------------------------------------ */
+
+.evidence__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.evidence__row {
+  min-width: 0;
+}
+.evidence__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: var(--px) solid var(--color-border);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.review__ref {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+.rows__item[data-role="free"] .px-badge,
+.rows__item[data-role="practice"] .px-badge {
+  white-space: normal;
+}
+.rows__item .px-badge {
+  max-width: 100%;
+  line-height: var(--leading-body);
+}
+
+/* ---- Pronunciation: experimental and apart from the four skills ---------- */
+
+.pronpanel {
+  --edge-color: var(--color-info);
+  border-style: dashed;
+}
+
+/* ---- Game: cosmetic, and drawn so it cannot be mistaken for the assessment - */
+
+.gamepanel {
+  position: relative;
+  margin: var(--px);
+  padding: var(--space-4);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 var(--space-3), color-mix(in srgb, var(--color-primary) 10%, transparent) var(--space-3) var(--space-4)),
+    var(--color-surface);
+  outline: var(--px) dashed var(--color-primary);
+  outline-offset: calc(var(--px) * -2);
+}
+.gamepanel h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.gamefacts dd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.gamefacts dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.gamefacts__number {
+  font-family: var(--font-display);
+  font-size: var(--display-2);
+}
+.gamepanel :focus-visible {
+  outline-offset: var(--px);
+}
