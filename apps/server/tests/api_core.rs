@@ -152,20 +152,30 @@ async fn a_missing_unit_folder_is_reported_not_fatal() {
 }
 
 #[tokio::test]
-async fn groups_that_are_not_built_in_are_a_json_404_not_a_page() {
+async fn without_a_session_service_the_session_routes_answer_a_typed_501_not_a_404() {
     let h = harness(false).await;
     for req in [
         Req::post("/api/sessions", json!({"kind": "lesson"})),
-        Req::post("/api/activities/submit", json!({})),
-        Req::post("/api/tts/speak", json!({})),
+        Req::post(
+            "/api/activities/submit",
+            json!({"session_id": 1, "activity_id": "a", "answer": {"kind": "done"}}),
+        ),
+        Req::post(
+            "/api/tts/speak",
+            json!({"source": "turn", "session_id": 1, "turn_seq": 1}),
+        ),
     ] {
         let uri = req.uri.clone();
         let response = send(&h.router, req.authed(&h.cookie)).await;
-        assert_eq!(response.status(), 404, "{uri}");
+        assert_eq!(response.status(), 501, "{uri}");
         let text = body_text(response).await;
         let body: serde_json::Value = serde_json::from_str(&text).expect("JSON");
-        assert_eq!(body["error"], "not_found", "{uri}");
+        assert_eq!(body["error"], "not_available", "{uri}");
+        assert_eq!(body["feature"], "sessions", "{uri}");
     }
+    // An address that is in no group is still a JSON 404.
+    let (status, body) = h.get_json("/api/no-such-group").await;
+    assert_eq!((status, body["error"].as_str()), (404, Some("not_found")));
 }
 
 #[tokio::test]
