@@ -1,0 +1,42 @@
+# F3: read exactly as written. The errors are deliberate; do not correct them.
+# id|text
+f3-001|Yesterday I go to the market.
+f3-002|She have two brother.
+f3-003|He don't like coffee in the morning.
+f3-004|I am agree with you.
+f3-005|They was very tired after the trip.
+f3-006|My sister work in a hospital.
+f3-007|I didn't saw him at the station.
+f3-008|We goes to school by bus.
+f3-009|She is more taller than her friend.
+f3-010|I have twenty years old.
+f3-011|There is three books on the table.
+f3-012|He can speaks English very well.
+f3-013|Last week we visit our grandmother.
+f3-014|I look forward to meet you.
+f3-015|She don't have any money today.
+f3-016|The childrens are playing in the garden.
+f3-017|I am living here since two years.
+f3-018|He asked me where was the bank.
+f3-019|Do you can help me with this?
+f3-020|I will call you when I will arrive.
+f3-021|She married with a doctor last year.
+f3-022|We discussed about the problem.
+f3-023|He is the most smartest student in class.
+f3-024|I enjoy to swim on weekends.
+f3-025|If it will rain, we stay at home.
+f3-026|They has lived in Jakarta for ten years.
+f3-027|I bought a new furnitures yesterday.
+f3-028|She said me that she was busy.
+f3-029|My brother is student at the university.
+f3-030|Can you explain me this word?
+f3-031|I have been to Bali last summer.
+f3-032|He goed to bed very late.
+f3-033|The weather is very cold than yesterday.
+f3-034|I am interesting in learning music.
+f3-035|She writed a long letter to her mother.
+f3-036|We need some informations about the course.
+f3-037|He is afraid from dogs.
+f3-038|I wake up at six o'clock every days.
+f3-039|They arrived to the airport at noon.
+f3-040|Nobody don't know the answer.

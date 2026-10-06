@@ -1,0 +1,122 @@
+# F2: 120 sentences for the owner to read naturally. 40 short (2-4 s), 40 medium (4-7 s), 40 long (7-10 s).
+# id|text
+f2-001|My name is Sari.
+f2-002|I live in a small town.
+f2-003|She likes tea with milk.
+f2-004|We eat dinner at seven.
+f2-005|Where is the bus station?
+f2-006|He works in a bank.
+f2-007|Please open the window.
+f2-008|The shop closes at nine.
+f2-009|I have two brothers.
+f2-010|It is cold today.
+f2-011|What time is the meeting?
+f2-012|My phone is on the table.
+f2-013|They play football on Sunday.
+f2-014|Can I have some water?
+f2-015|The park is near my house.
+f2-016|She is reading a book.
+f2-017|I need a new bag.
+f2-018|The train was late again.
+f2-019|He drives to work every day.
+f2-020|Do you like spicy food?
+f2-021|We went to the beach.
+f2-022|My teacher is very kind.
+f2-023|The soup is too hot.
+f2-024|I forgot my umbrella.
+f2-025|She speaks three languages.
+f2-026|Let us meet at noon.
+f2-027|The film starts at eight.
+f2-028|I usually walk to school.
+f2-029|How much is this shirt?
+f2-030|He cannot find his keys.
+f2-031|The baby is sleeping now.
+f2-032|I am learning to cook.
+f2-033|There is a cat under the car.
+f2-034|My uncle lives in Surabaya.
+f2-035|Turn left at the corner.
+f2-036|I will call you tomorrow.
+f2-037|She bought a red dress.
+f2-038|The exam was not difficult.
+f2-039|We need more time.
+f2-040|Thank you for your help.
+f2-041|I get up at six and have breakfast with my family.
+f2-042|The library is open until eight in the evening on weekdays.
+f2-043|My best friend has just moved to a bigger apartment downtown.
+f2-044|Could you tell me how to get to the nearest pharmacy?
+f2-045|We are planning a short trip to the mountains next month.
+f2-046|He has been studying English for almost three years now.
+f2-047|The restaurant on the corner serves the best noodles in town.
+f2-048|I would like to book a table for four people tonight.
+f2-049|She missed the first bus, so she had to wait for an hour.
+f2-050|My parents usually visit us during the long holiday.
+f2-051|It rained all morning, but the sun came out after lunch.
+f2-052|They are building a new shopping centre near the river.
+f2-053|I think the second answer is correct, but I am not sure.
+f2-054|Our neighbour grows vegetables in a small garden behind the house.
+f2-055|He lost his wallet on the train and reported it to the police.
+f2-056|The concert was so crowded that we could hardly see the stage.
+f2-057|Would you mind turning down the music a little bit?
+f2-058|She spends most of her free time painting and reading novels.
+f2-059|I have never tried durian, although many people love it.
+f2-060|The new teacher gave us a lot of homework on the first day.
+f2-061|We usually celebrate birthdays with a big dinner at home.
+f2-062|He was late because there was a terrible traffic jam.
+f2-063|My phone battery is almost empty, so I need a charger.
+f2-064|If you have any questions, please ask me after the lesson.
+f2-065|The hotel is clean and quiet, but the breakfast is expensive.
+f2-066|I am looking for a job that lets me work from home.
+f2-067|She has lived abroad for five years and misses her family.
+f2-068|The doctor told him to drink more water and sleep earlier.
+f2-069|We stayed inside because the weather was too windy to go out.
+f2-070|Please send me the report before the end of the week.
+f2-071|There are many tourists here in the summer, especially in July.
+f2-072|He decided to learn the guitar after watching a street musician.
+f2-073|The bakery near my office sells fresh bread every single morning.
+f2-074|I would have called earlier, but I did not have your number.
+f2-075|Our flight was delayed, so we spent hours reading in the airport.
+f2-076|She asked whether the museum was open on public holidays.
+f2-077|The children were excited because it was the last day of school.
+f2-078|I prefer travelling by train because it is cheaper and more relaxing.
+f2-079|He apologised for being late and promised to arrive earlier next time.
+f2-080|My cousin is studying medicine at a university in another city.
+f2-081|If I had more free time, I would join a swimming club and train three times a week.
+f2-082|The company announced that it will open two new offices in Asia before the end of next year.
+f2-083|Although the instructions looked simple, it took us nearly two hours to assemble the wardrobe.
+f2-084|She has been working on her presentation since morning, and she still wants to change the last slides.
+f2-085|Many people believe that learning a language is easier when you live in a country where it is spoken.
+f2-086|The manager explained that the project would be finished on time only if everyone worked together carefully.
+f2-087|When I was a child, my grandfather used to tell us stories about the village where he grew up.
+f2-088|Unless the weather improves by tomorrow morning, the organisers will move the festival to the sports hall.
+f2-089|He could not understand why the train was cancelled when the weather had been perfectly fine all week.
+f2-090|After comparing several laptops, she chose the lighter one because she travels a great deal for work.
+f2-091|The city council has promised to plant a thousand trees along the main roads over the next three years.
+f2-092|Even though he was nervous, he spoke clearly during the interview and answered every question honestly.
+f2-093|I have been meaning to write to you for weeks, but there never seemed to be a quiet moment.
+f2-094|Most of the students agreed that the second chapter was the hardest, mainly because of its long technical words.
+f2-095|If you leave the documents with the receptionist, she will make sure they reach the right department today.
+f2-096|The village is famous for its handmade baskets, which are sold at markets all over the region.
+f2-097|By the time we arrived at the cinema, the film had already started, so we decided to have dinner instead.
+f2-098|She was disappointed with the service at the restaurant, but she still left a polite note for the staff.
+f2-099|Scientists say that regular exercise and enough sleep can improve both memory and concentration in adults.
+f2-100|We would have booked the tickets sooner if we had known that the prices were going to rise so quickly.
+f2-101|Our neighbours, who moved here last spring, have already become some of the most helpful people on the street.
+f2-102|It is important to read the contract carefully before signing it, even if the salary sounds generous.
+f2-103|The museum offers free guided tours on the first Saturday of every month, though you must register in advance.
+f2-104|He has not decided yet whether to accept the offer abroad or to stay with his current company.
+f2-105|The journey took longer than expected because a fallen tree was blocking the road near the old bridge.
+f2-106|As soon as the rain stopped, the children ran outside to play in the puddles behind the school.
+f2-107|She told me that she would rather take the night bus than pay double for a plane ticket.
+f2-108|The report suggests that most customers are satisfied, although a small group complained about the delivery times.
+f2-109|I was surprised to learn that the oldest building in this district was once a market for spices.
+f2-110|Whenever I feel stressed, I go for a long walk by the lake and listen to quiet music.
+f2-111|They argued for an hour about where to spend the holiday, and finally agreed to visit the coast.
+f2-112|If the results are published on time, students will be able to apply for scholarships before the deadline.
+f2-113|The more she practised speaking with her colleagues, the more confident she became in meetings.
+f2-114|I could not hear the announcement at the station, so I asked a stranger which platform to use.
+f2-115|The farmer said that this year's harvest was smaller than usual because the rainy season started so late.
+f2-116|Despite living in the capital for ten years, he still prefers the quiet mornings of his home town.
+f2-117|You should keep a copy of the receipt, because the shop will not exchange the item without it.
+f2-118|Her grandmother taught her how to make traditional cakes, and now she sells them on weekends.
+f2-119|The project was a success largely because every member of the team took responsibility for their own part.
+f2-120|Before the meeting begins, could everyone please switch off their phones and take a seat near the front.
