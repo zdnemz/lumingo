@@ -1,8 +1,14 @@
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
+import { ServerStateProvider } from "@/api/ServerState";
 import type { ApiClient, EventStreamHandlers } from "@/api/client";
 import { Providers } from "@/components/Providers";
+import type { ProbeFailureKind } from "@/generated/ProbeFailureKind";
+import type { ProbeReport } from "@/generated/ProbeReport";
+import type { ProviderCapabilities } from "@/generated/ProviderCapabilities";
+import type { ProviderInfo } from "@/generated/ProviderInfo";
+import type { ProviderList } from "@/generated/ProviderList";
 import type { ServerEvent } from "@/generated/ServerEvent";
 import type { StateSnapshot } from "@/generated/StateSnapshot";
 
@@ -52,6 +58,52 @@ export const SNAPSHOT: StateSnapshot = {
   },
   unavailable: [],
 };
+
+export const CAPS: ProviderCapabilities = {
+  probe_version: 1,
+  auth_ok: true,
+  stream_ok: true,
+  ttft_ms: 420,
+  tokens_per_second: 55,
+  structured_level: 1,
+  contracts_ok: ["t1", "t2"],
+  rate_limit_rpm: 15,
+  rate_limit_rpd: null,
+};
+
+export const FILE_PROVIDER: ProviderInfo = {
+  id: 2,
+  name: "my-gemini",
+  protocol: "openai_chat",
+  base_url: "https://api.example.test/v1",
+  model: "tutor-model",
+  has_key: true,
+  key_last4: "4321",
+  source: "file",
+  is_active: true,
+  capabilities: null,
+  probed_at: null,
+  qualified_at: null,
+};
+
+export const ENV_PROVIDER: ProviderInfo = {
+  ...FILE_PROVIDER,
+  id: 1,
+  name: "env",
+  source: "env",
+  key_last4: "9876",
+  is_active: false,
+};
+
+export function providerList(providers: ProviderInfo[], problems: string[] = []): ProviderList {
+  return { providers, active_id: providers.find((p) => p.is_active)?.id ?? null, problems };
+}
+
+export const PROBE_OK: ProbeReport = { provider_id: 2, ok: true, capabilities: CAPS, failure: null, duration_ms: 2300 };
+
+export function probeFailure(kind: ProbeFailureKind): ProbeReport {
+  return { provider_id: 2, ok: false, capabilities: null, failure: { kind, message: `test failure: ${kind}` }, duration_ms: 900 };
+}
 
 export interface FakeApi extends ApiClient {
   emit: (event: ServerEvent) => void;
@@ -111,4 +163,38 @@ export function renderApp(ui: ReactElement, client?: ApiClient) {
   return render(ui, {
     wrapper: ({ children }: { children: ReactNode }) => <Providers client={client}>{children}</Providers>,
   });
+}
+
+/** Renders a screen that reads the shared event stream, as the app shell provides it. */
+export function renderScreen(ui: ReactElement, client: ApiClient) {
+  return renderApp(<ServerStateProvider>{ui}</ServerStateProvider>, client);
+}
+
+/** Opens the fake stream and delivers the first snapshot, as the real server does on connect. */
+export async function connect(api: FakeApi, state: StateSnapshot = SNAPSHOT): Promise<void> {
+  await vi.waitFor(() => expect(api.opened()).toBeGreaterThan(0));
+  act(() => {
+    api.open();
+    api.emit({ type: "Snapshot", seq: 0, state });
+  });
+}
+
+/**
+ * Every piece of text a learner can read in `root`: the text of elements that
+ * hold only text, plus the accessible labels and placeholders. Used to prove a
+ * language switch changes a whole screen.
+ */
+export function visibleStrings(root: HTMLElement): string[] {
+  const found = new Set<string>();
+  const add = (text: string | null | undefined) => {
+    const value = text?.replace(/\s+/g, " ").trim();
+    if (value) found.add(value);
+  };
+  for (const element of root.querySelectorAll("*")) {
+    if (element.children.length === 0) add(element.textContent);
+    add(element.getAttribute("aria-label"));
+    add(element.getAttribute("placeholder"));
+    add(element.getAttribute("title"));
+  }
+  return [...found];
 }

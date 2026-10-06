@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { ServerStateProvider } from "@/api/ServerState";
+import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { Mascot } from "@/sprites/Mascot";
 import { Sprite } from "@/sprites/Sprite";
 import type { SpriteName } from "@/sprites/data";
@@ -24,10 +26,19 @@ const NAV: readonly NavItem[] = [
 function isCurrent(pathname: string | null, href: string): boolean {
   if (pathname === null) return false;
   const clean = (value: string) => (value.length > 1 ? value.replace(/\/$/, "") : value);
-  return clean(pathname) === clean(href);
+  // The settings pages are sub-pages, so "Settings" stays marked on all of them.
+  return href === "/" ? clean(pathname) === "/" : clean(pathname).startsWith(clean(href));
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <ServerStateProvider>
+      <Frame>{children}</Frame>
+    </ServerStateProvider>
+  );
+}
+
+function Frame({ children }: { children: ReactNode }) {
   const t = useT();
   const pathname = usePathname();
   return (
@@ -59,6 +70,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
+      <div className="px-container shell__banners">
+        <ConnectionBanner />
+      </div>
       <main id="main" className="px-container shell__main" tabIndex={-1}>
         {children}
       </main>
