@@ -31,6 +31,8 @@ pub enum LlmError {
     Timeout(&'static str),
     #[error("cancelled")]
     Cancelled,
+    #[error("the output did not match the schema, even after one repair (ladder level {level})")]
+    InvalidOutput { level: u8 },
     #[error(transparent)]
     Parse(#[from] ParseError),
 }

@@ -13,11 +13,13 @@ pub mod openai;
 pub mod policy;
 mod request;
 mod sse;
+mod structured;
 
-pub use client::{LlmClient, Protocol, ProviderConfig, Timeouts};
+pub use client::{Capabilities, LlmClient, Protocol, ProviderConfig, StructuredOutput, Timeouts};
 pub use env::{EnvError, load_env_profile, parse_dotenv, provider_from_vars};
 pub use error::{LlmError, ParseError};
 pub use event::{FinishReason, StreamEvent, Usage};
 pub use key::ApiKey;
 pub use request::{Message, Role, TextRequest};
 pub use sse::{SseDecoder, SseEvent};
+pub use structured::{Level, StructuredRequest, extract_json, validate};

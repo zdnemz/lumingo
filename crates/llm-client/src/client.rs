@@ -1,10 +1,13 @@
 use crate::{
-    ApiKey, LlmError, SseDecoder, SseEvent, StreamEvent, TextRequest, anthropic,
+    ApiKey, Level, LlmError, SseDecoder, SseEvent, StreamEvent, StructuredRequest, TextRequest,
+    anthropic, extract_json,
     key::redact,
     openai::{self, TokenParam},
     policy::{self, Failure},
+    structured, validate,
 };
 use reqwest::{Url, header::RETRY_AFTER};
+use serde_json::Value;
 use std::{
     sync::Mutex,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -62,9 +65,40 @@ pub struct LlmClient {
     key: ApiKey,
     timeouts: Timeouts,
     quirks: Mutex<Quirks>,
+    structured_level: Mutex<Level>,
 }
 
 type Events = mpsc::Receiver<Result<StreamEvent, LlmError>>;
+
+/// A validated structured answer and how it was obtained.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructuredOutput {
+    pub value: Value,
+    pub level: Level,
+    /// True when the first answer was invalid and the repair call fixed it.
+    pub repaired: bool,
+}
+
+/// What the probe learned, stored in `provider_profiles.capabilities_json`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Capabilities {
+    pub probe_version: u32,
+    pub auth_ok: bool,
+    pub stream_ok: bool,
+    pub ttft_ms: Option<u64>,
+    pub tokens_per_second: Option<f64>,
+    pub token_limit_param: String,
+    pub supports_temperature: bool,
+    pub supports_usage_in_stream: bool,
+    /// `None` when no level produced valid JSON.
+    pub structured_level: Option<u8>,
+}
+
+fn check_output(schema: &Value, text: &str) -> Result<Value, Vec<String>> {
+    let value = extract_json(text)
+        .ok_or_else(|| vec!["no complete JSON value was found in the reply".to_owned()])?;
+    validate(schema, &value).map(|()| value)
+}
 
 impl LlmClient {
     pub fn new(cfg: ProviderConfig, timeouts: Timeouts) -> Result<Self, LlmError> {
@@ -97,6 +131,7 @@ impl LlmClient {
                 send_temperature: true,
                 include_usage: true,
             }),
+            structured_level: Mutex::new(Level::NativeSchema),
         })
     }
 
@@ -108,49 +143,230 @@ impl LlmClient {
         req: TextRequest,
         cancel: CancellationToken,
     ) -> Result<Events, LlmError> {
-        let response = self.open(&req, &cancel).await?;
+        let response = self.open(&|q| self.text_body(&req, q), &cancel).await?;
         let (tx, rx) = mpsc::channel(64);
         tokio::spawn(pump(response, self.protocol, self.timeouts, cancel, tx));
         Ok(rx)
+    }
+
+    /// The ladder level structured calls start at. The probe sets it.
+    pub fn structured_level(&self) -> Level {
+        *self
+            .structured_level
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn set_structured_level(&self, level: Level) {
+        *self
+            .structured_level
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = level;
+    }
+
+    /// A structured call at the cached ladder level (PROMPT_CONTRACTS section 5): the
+    /// answer is extracted, validated, repaired once if needed, and otherwise
+    /// reported as `InvalidOutput`. The caller applies its own semantic filters.
+    pub async fn structured(
+        &self,
+        req: StructuredRequest,
+        cancel: CancellationToken,
+    ) -> Result<StructuredOutput, LlmError> {
+        self.structured_at(&req, self.structured_level(), &cancel)
+            .await
+    }
+
+    async fn structured_at(
+        &self,
+        req: &StructuredRequest,
+        level: Level,
+        cancel: &CancellationToken,
+    ) -> Result<StructuredOutput, LlmError> {
+        let first = self.call_level(req, level, cancel).await?;
+        let errors = match check_output(&req.schema, &first) {
+            Ok(value) => {
+                return Ok(StructuredOutput {
+                    value,
+                    level,
+                    repaired: false,
+                });
+            }
+            Err(errors) => errors,
+        };
+        let second = self
+            .call_level(&req.repair(&first, &errors), level, cancel)
+            .await?;
+        match check_output(&req.schema, &second) {
+            Ok(value) => Ok(StructuredOutput {
+                value,
+                level,
+                repaired: true,
+            }),
+            Err(_) => Err(LlmError::InvalidOutput {
+                level: level.number(),
+            }),
+        }
+    }
+
+    /// One non-streaming request at `level`. A reply with nothing in the expected
+    /// place comes back as empty text, which fails validation and triggers repair.
+    async fn call_level(
+        &self,
+        req: &StructuredRequest,
+        level: Level,
+        cancel: &CancellationToken,
+    ) -> Result<String, LlmError> {
+        let make = |q: Quirks| match self.protocol {
+            Protocol::OpenaiChat => structured::openai_body(req, level, q.token_param, &self.model),
+            Protocol::AnthropicMessages => structured::anthropic_body(req, level, &self.model),
+        };
+        let response = self.open(&make, cancel).await?;
+        let body = tokio::select! {
+            () = cancel.cancelled() => return Err(LlmError::Cancelled),
+            r = tokio::time::timeout(self.timeouts.total, response.text()) => match r {
+                Err(_) => return Err(LlmError::Timeout("the reply body")),
+                Ok(Err(e)) => return Err(LlmError::Transport(e.without_url().to_string())),
+                Ok(Ok(text)) => text,
+            },
+        };
+        let reply: Value =
+            serde_json::from_str(&body).map_err(|_| crate::ParseError::InvalidJson)?;
+        Ok(structured::output_text(self.protocol, level, &reply).unwrap_or_default())
+    }
+
+    /// The connection test (PROMPT_CONTRACTS section 4). One short streaming call
+    /// checks the key and measures speed (the spec's steps 1 and 2 in one request),
+    /// then structured calls with a three-field schema walk the ladder until one
+    /// level returns valid JSON, and that level is cached. Warming the contract
+    /// schemas and reading rate-limit headers (steps 4 and 5) are not done yet.
+    pub async fn probe(&self, cancel: CancellationToken) -> Capabilities {
+        let mut caps = Capabilities {
+            probe_version: 1,
+            ..Capabilities::default()
+        };
+        let started = Instant::now();
+        let hello = TextRequest {
+            model: self.model.clone(),
+            system: None,
+            messages: vec![crate::Message {
+                role: crate::Role::User,
+                content: "Reply with one short sentence.".into(),
+            }],
+            max_tokens: 40,
+            temperature: Some(0.0),
+        };
+        match self.stream_text(hello, cancel.clone()).await {
+            Ok(mut rx) => {
+                caps.auth_ok = true;
+                let mut first_token = None;
+                while let Some(event) = rx.recv().await {
+                    match event {
+                        Ok(StreamEvent::Text(_)) => {
+                            first_token.get_or_insert_with(|| started.elapsed());
+                            caps.stream_ok = true;
+                        }
+                        Ok(StreamEvent::Usage(u)) => {
+                            if let (Some(n), Some(t)) = (u.output_tokens, first_token) {
+                                let secs = started.elapsed().saturating_sub(t).as_secs_f64();
+                                if secs > 0.0 && n > 1 {
+                                    caps.tokens_per_second = Some((n - 1) as f64 / secs);
+                                }
+                            }
+                            caps.supports_usage_in_stream |= u.output_tokens.is_some();
+                        }
+                        Ok(_) => {}
+                        Err(_) => {
+                            caps.stream_ok = false;
+                            break;
+                        }
+                    }
+                }
+                caps.ttft_ms = first_token.map(|t| t.as_millis() as u64);
+            }
+            Err(LlmError::Auth(_)) => return caps,
+            Err(_) => {}
+        }
+        let quirks = self.quirks();
+        caps.token_limit_param = quirks.token_param.key().to_owned();
+        caps.supports_temperature = quirks.send_temperature;
+        caps.supports_usage_in_stream = caps.supports_usage_in_stream && quirks.include_usage;
+
+        let test = StructuredRequest {
+            system: None,
+            messages: vec![crate::Message {
+                role: crate::Role::User,
+                content: "Give the word \"tea\", its length, and whether it is a noun.".into(),
+            }],
+            schema_name: "probe_check".into(),
+            schema: serde_json::json!({
+                "type": "object",
+                "properties": { "word": { "type": "string" }, "length": { "type": "integer" }, "is_noun": { "type": "boolean" } },
+                "required": ["word", "length", "is_noun"],
+                "additionalProperties": false
+            }),
+            max_tokens: 100,
+        };
+        let mut level = Some(Level::NativeSchema);
+        while let Some(l) = level {
+            match self.structured_at(&test, l, &cancel).await {
+                Ok(out) => {
+                    caps.structured_level = Some(out.level.number());
+                    self.set_structured_level(out.level);
+                    break;
+                }
+                // These say nothing about the level: stop instead of walking down.
+                Err(
+                    LlmError::Auth(_)
+                    | LlmError::RateLimited { .. }
+                    | LlmError::Cancelled
+                    | LlmError::Transport(_)
+                    | LlmError::Timeout(_),
+                ) => break,
+                Err(_) => level = l.next(self.protocol),
+            }
+        }
+        caps
     }
 
     fn quirks(&self) -> Quirks {
         *self.quirks.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn request(&self, req: &TextRequest, q: Quirks) -> reqwest::RequestBuilder {
+    fn text_body(&self, req: &TextRequest, q: Quirks) -> Value {
         let mut req = req.clone();
         req.model.clone_from(&self.model);
         if !q.send_temperature {
             req.temperature = None;
         }
         match self.protocol {
-            Protocol::OpenaiChat => self
-                .http
-                .post(self.endpoint.clone())
-                .bearer_auth(self.key.expose())
-                .json(&openai::request_body(&req, q.token_param, q.include_usage)),
-            Protocol::AnthropicMessages => self
-                .http
-                .post(self.endpoint.clone())
-                .header("x-api-key", self.key.expose())
-                .header("anthropic-version", "2023-06-01")
-                .json(&anthropic::request_body(&req)),
+            Protocol::OpenaiChat => openai::request_body(&req, q.token_param, q.include_usage),
+            Protocol::AnthropicMessages => anthropic::request_body(&req),
         }
+    }
+
+    fn post(&self, body: &Value) -> reqwest::RequestBuilder {
+        let builder = self.http.post(self.endpoint.clone());
+        match self.protocol {
+            Protocol::OpenaiChat => builder.bearer_auth(self.key.expose()),
+            Protocol::AnthropicMessages => builder
+                .header("x-api-key", self.key.expose())
+                .header("anthropic-version", "2023-06-01"),
+        }
+        .json(body)
     }
 
     /// Sends the request, retrying as `policy::retry_wait` allows and adapting to
     /// `openai_chat` servers that reject a parameter we sent.
     async fn open(
         &self,
-        req: &TextRequest,
+        make_body: &dyn Fn(Quirks) -> Value,
         cancel: &CancellationToken,
     ) -> Result<reqwest::Response, LlmError> {
         let (mut attempt, mut adjustments) = (0u32, 0u32);
         loop {
             let sent = tokio::select! {
                 () = cancel.cancelled() => return Err(LlmError::Cancelled),
-                r = tokio::time::timeout(self.timeouts.total, self.request(req, self.quirks()).send()) => r,
+                r = tokio::time::timeout(self.timeouts.total, self.post(&make_body(self.quirks())).send()) => r,
             };
             let (failure, error) = match sent {
                 Err(_) => (Failure::Transport, LlmError::Timeout("the response")),

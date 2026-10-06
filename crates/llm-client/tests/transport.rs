@@ -364,3 +364,203 @@ fn plain_http_to_a_remote_host_is_refused_at_construction() {
         Err(LlmError::InvalidBaseUrl(_))
     ));
 }
+
+// ---- structured output, repair and the probe ----
+
+use llm_client::{Level, StructuredRequest};
+use serde_json::json;
+
+fn schema() -> serde_json::Value {
+    json!({
+        "type": "object",
+        "properties": { "word": { "type": "string" }, "count": { "type": "integer" } },
+        "required": ["word", "count"],
+        "additionalProperties": false
+    })
+}
+
+fn structured_request() -> StructuredRequest {
+    StructuredRequest {
+        system: None,
+        messages: vec![Message {
+            role: Role::User,
+            content: "Go".into(),
+        }],
+        schema_name: "test_schema".into(),
+        schema: schema(),
+        max_tokens: 100,
+    }
+}
+
+fn chat_reply(content: &str) -> Reply {
+    http(
+        "200 OK",
+        "Content-Type: application/json\r\n",
+        &json!({ "choices": [{ "message": { "content": content } }] }).to_string(),
+    )
+}
+
+fn tool_reply(arguments: &str) -> Reply {
+    let body = json!({ "choices": [{ "message": { "content": null, "tool_calls": [{ "function": { "arguments": arguments } }] } }] });
+    http(
+        "200 OK",
+        "Content-Type: application/json\r\n",
+        &body.to_string(),
+    )
+}
+
+const VALID: &str = "{\"word\":\"tea\",\"count\":3}";
+
+#[tokio::test]
+async fn a_valid_native_answer_comes_back_without_repair() {
+    let (base, seen) = serve(vec![chat_reply(VALID)]).await;
+    let out = client(Protocol::OpenaiChat, &base)
+        .structured(structured_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(
+        (out.value, out.level, out.repaired),
+        (
+            json!({ "word": "tea", "count": 3 }),
+            Level::NativeSchema,
+            false
+        )
+    );
+    let req = seen.lock().unwrap()[0].clone();
+    assert!(
+        req.contains("\"json_schema\"")
+            && req.contains("\"strict\":true")
+            && req.contains("\"stream\":false"),
+        "{req}"
+    );
+}
+
+#[tokio::test]
+async fn fenced_json_with_prose_is_accepted() {
+    let (base, _) = serve(vec![chat_reply(&format!(
+        "Here you go:\n```json\n{VALID}\n```"
+    ))])
+    .await;
+    let out = client(Protocol::OpenaiChat, &base)
+        .structured(structured_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(!out.repaired);
+}
+
+#[tokio::test]
+async fn an_invalid_answer_is_repaired_once_with_the_errors_in_the_prompt() {
+    let (base, seen) = serve(vec![chat_reply("{\"word\": 5}"), chat_reply(VALID)]).await;
+    let out = client(Protocol::OpenaiChat, &base)
+        .structured(structured_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(out.repaired);
+    let second = seen.lock().unwrap()[1].clone();
+    assert!(
+        second.contains("That JSON was not valid") && second.contains("{\\\"word\\\": 5}"),
+        "{second}"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_repair_is_invalid_output_and_makes_no_third_call() {
+    let (base, seen) = serve(vec![
+        chat_reply("not json"),
+        chat_reply("{\"word\": 5}"),
+        chat_reply(VALID),
+    ])
+    .await;
+    let err = client(Protocol::OpenaiChat, &base)
+        .structured(structured_request(), CancellationToken::new())
+        .await
+        .unwrap_err();
+    assert!(matches!(err, LlmError::InvalidOutput { level: 1 }), "{err}");
+    assert_eq!(seen.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn anthropic_native_structured_output_reads_the_text_block() {
+    let body = json!({ "content": [{ "type": "text", "text": VALID }], "stop_reason": "end_turn" })
+        .to_string();
+    let (base, seen) = serve(vec![http(
+        "200 OK",
+        "Content-Type: application/json\r\n",
+        &body,
+    )])
+    .await;
+    let out = client(Protocol::AnthropicMessages, &base)
+        .structured(structured_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(out.value["count"], 3);
+    assert!(seen.lock().unwrap()[0].contains("\"output_config\""));
+}
+
+#[tokio::test]
+async fn the_probe_walks_down_the_ladder_and_caches_the_level_that_works() {
+    let stream = sse(concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"Hi there.\"}}]}\n\n",
+        "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":4}}\n\n",
+        "data: [DONE]\n\n"
+    ));
+    let probe_valid = "{\"word\":\"tea\",\"length\":3,\"is_noun\":true}";
+    let (base, seen) = serve(vec![
+        stream,
+        status("400 Bad Request", "response_format is not supported"),
+        tool_reply(probe_valid),
+        tool_reply(probe_valid),
+    ])
+    .await;
+    let c = client(Protocol::OpenaiChat, &base);
+    let caps = c.probe(CancellationToken::new()).await;
+    assert!(
+        caps.auth_ok && caps.stream_ok && caps.ttft_ms.is_some() && caps.supports_usage_in_stream
+    );
+    assert_eq!(
+        (
+            caps.structured_level,
+            caps.token_limit_param.as_str(),
+            caps.supports_temperature
+        ),
+        (Some(2), "max_tokens", true)
+    );
+    assert_eq!(c.structured_level(), Level::ForcedTool);
+    // The next structured call starts at the cached level instead of retrying level 1.
+    let out = c
+        .structured(
+            StructuredRequest {
+                schema: json!({ "type": "object" }),
+                ..structured_request()
+            },
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(out.level, Level::ForcedTool);
+    assert!(seen.lock().unwrap()[3].contains("\"tool_choice\""));
+}
+
+#[tokio::test]
+async fn a_probe_with_a_bad_key_reports_auth_failed_and_stops() {
+    let (base, seen) = serve(vec![status("401 Unauthorized", "no")]).await;
+    let caps = client(Protocol::OpenaiChat, &base)
+        .probe(CancellationToken::new())
+        .await;
+    assert!(!caps.auth_ok && caps.structured_level.is_none());
+    assert_eq!(seen.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_probe_where_no_level_works_reports_none() {
+    let mut replies = vec![sse(OPENAI_OK)];
+    for _ in 0..8 {
+        replies.push(chat_reply("sorry, no"));
+    }
+    let (base, _) = serve(replies).await;
+    let caps = client(Protocol::OpenaiChat, &base)
+        .probe(CancellationToken::new())
+        .await;
+    assert!(caps.auth_ok);
+    assert_eq!(caps.structured_level, None);
+}
