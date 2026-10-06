@@ -55,6 +55,20 @@ impl Producer {
     pub fn overflowed(&self) -> u64 {
         self.0.overflowed.load(Ordering::Relaxed)
     }
+
+    /// Samples that fit right now.
+    pub fn free(&self) -> usize {
+        let s = &*self.0;
+        s.slots.len()
+            - s.head
+                .load(Ordering::Relaxed)
+                .wrapping_sub(s.tail.load(Ordering::Acquire))
+    }
+
+    /// Total samples ever written. Pair it with `Consumer::position` to name a point in the stream.
+    pub fn position(&self) -> usize {
+        self.0.head.load(Ordering::Relaxed)
+    }
 }
 
 impl Consumer {
@@ -70,6 +84,24 @@ impl Consumer {
         }
         s.tail.store(tail.wrapping_add(n), Ordering::Release);
         n
+    }
+
+    /// Total samples ever read or skipped.
+    pub fn position(&self) -> usize {
+        self.0.tail.load(Ordering::Relaxed)
+    }
+
+    /// Discards samples up to the absolute stream position `target`, at most what is buffered.
+    pub fn skip_to(&mut self, target: usize) {
+        let s = &*self.0;
+        let tail = s.tail.load(Ordering::Relaxed);
+        let head = s.head.load(Ordering::Acquire);
+        let want = target.wrapping_sub(tail);
+        if want != 0 && want <= head.wrapping_sub(tail) {
+            s.tail.store(target, Ordering::Release);
+        } else if want != 0 && (want as isize) > 0 {
+            s.tail.store(head, Ordering::Release);
+        }
     }
 
     pub fn len(&self) -> usize {
