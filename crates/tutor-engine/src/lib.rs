@@ -2,6 +2,7 @@
 //! contain tutoring, scoring or prompt logic themselves.
 #![forbid(unsafe_code)]
 
+mod activity;
 mod analysis;
 mod chat;
 mod chunker;
@@ -18,6 +19,7 @@ mod support;
 mod topics;
 mod workshop;
 
+pub use activity::*;
 pub use analysis::*;
 pub use chat::{
     ChatConfig, ChatDeps, ChatReply, ChatSummary, ChatTopic, ErrorPattern, MAX_TOPIC_CHARS,
