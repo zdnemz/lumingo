@@ -130,10 +130,16 @@ mod tests {
 
     #[test]
     fn a_missing_part_with_a_reason_is_a_501_with_the_reason_and_a_licence_refusal_a_409() {
-        let missing = ApiError::from(CoreError::unavailable(None, "the placement bank is missing"));
+        let missing = ApiError::from(CoreError::unavailable(
+            None,
+            "the placement bank is missing",
+        ));
         assert_eq!(missing.body().error, ErrorCode::NotAvailable);
         assert_eq!(missing.body().message, "the placement bank is missing");
-        assert_eq!(missing.into_response().status(), StatusCode::NOT_IMPLEMENTED);
+        assert_eq!(
+            missing.into_response().status(),
+            StatusCode::NOT_IMPLEMENTED
+        );
         let licence = ApiError::from(CoreError::LicenceNotAccepted("accept it first".to_owned()));
         assert_eq!(licence.body().error, ErrorCode::LicenceNotAccepted);
         assert_eq!(licence.into_response().status(), StatusCode::CONFLICT);

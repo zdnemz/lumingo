@@ -51,6 +51,50 @@ fn route_groups(cookie: &str) -> Vec<Req> {
         Req::get("/api/export"),
         // Diagnostics
         Req::get("/api/diagnostics"),
+        Req::get("/api/inspector"),
+        // Sessions and turns
+        Req::post(
+            "/api/sessions",
+            json!({"kind": "text_chat", "topic": {"kind": "typed", "text": "food"}}),
+        ),
+        Req::post("/api/sessions/1/stop", json!({"cancel": false})),
+        Req::post("/api/sessions/1/pause", json!({})),
+        Req::post("/api/sessions/1/resume", json!({})),
+        Req::post("/api/sessions/1/text", json!({"text": "hello"})),
+        Req::post("/api/sessions/1/turns/1/edit", json!({"text": "hello"})),
+        Req::post("/api/sessions/1/push-to-talk", json!({"pressed": true})),
+        Req::post("/api/tutor/stop-speaking", json!({})),
+        // Activities
+        Req::get("/api/sessions/1/next-activity"),
+        Req::post(
+            "/api/activities/submit",
+            json!({"session_id": 1, "activity_id": "a02-greeting-by-time",
+                   "answer": {"kind": "choice", "index": 1}}),
+        ),
+        // Free modes
+        Req::post("/api/writing/1/drafts", json!({"text": "I am Dewi."})),
+        Req::post(
+            "/api/reading/generate",
+            json!({"session_id": 1, "topic": {"kind": "typed", "text": "food"}}),
+        ),
+        Req::post(
+            "/api/reading/1/answers",
+            json!({"target": {"kind": "generated", "content_id": 1}, "answers": [0]}),
+        ),
+        // Speech
+        Req::post(
+            "/api/tts/speak",
+            json!({"source": "turn", "session_id": 1, "turn_seq": 1}),
+        ),
+        Req::get("/api/audio/devices"),
+        Req::post("/api/audio/test", json!({"duration_ms": 500})),
+        // Models
+        Req::get("/api/models"),
+        Req::post(
+            "/api/models/stt-test/download",
+            json!({"accept_licence": true, "license": "MIT", "license_url": "https://example.org"}),
+        ),
+        Req::post("/api/models/stt-test/cancel", json!({})),
     ];
     for request in &mut requests {
         request.cookie = Some(cookie.to_owned());
@@ -66,6 +110,14 @@ fn route_groups(cookie: &str) -> Vec<Req> {
 /// Every refusal must also leave the data as it was: a refused `DELETE /api/data`
 /// that still deleted would pass a status-only check.
 async fn assert_nothing_changed(h: &Harness) {
+    assert!(
+        h.core.snapshot().active_session.is_none(),
+        "a refused request started a session"
+    );
+    assert!(
+        h.core.inspector().entries.is_empty(),
+        "a refused request reached the provider"
+    );
     assert_eq!(h.core.settings().display_name, "Learner");
     assert_eq!(h.core.list_providers().providers.len(), 1);
     assert!(h.core.game_state().await.unwrap().xp_total > 0);
@@ -76,6 +128,9 @@ async fn harness_with_data(dev: bool) -> Harness {
     let h = common::harness_with(common::Options {
         dev,
         with_unit: true,
+        // A manager that would start a session if a refused request got through.
+        sessions: Some(common::Sessions::text_only(vec![])),
+        manifest: Some(common::MANIFEST.to_owned()),
         ..common::Options::default()
     })
     .await;
@@ -192,7 +247,7 @@ async fn every_api_route_refuses_a_missing_or_wrong_cookie_and_changes_nothing()
             checked += 1;
         }
     }
-    assert!(checked >= 3 * 19, "{checked}");
+    assert!(checked >= 3 * 39, "{checked}");
     assert_nothing_changed(&h).await;
 }
 
@@ -386,4 +441,65 @@ async fn dev_mode_allows_exactly_one_extra_origin() {
             .expect("cookie")
             .starts_with("tutor_session=")
     );
+}
+
+/// Every route that changes something refuses a body type a web page can send
+/// without a preflight (and a missing one), and acts on nothing.
+#[tokio::test]
+async fn every_state_changing_route_refuses_a_wrong_content_type() {
+    let h = harness_with_data(false).await;
+    let mut checked = 0;
+    for content_type in [
+        None,
+        Some("text/plain"),
+        Some("application/x-www-form-urlencoded"),
+        Some("multipart/form-data"),
+    ] {
+        for mut req in route_groups(&h.cookie) {
+            if req.method == Method::GET {
+                continue;
+            }
+            req.content_type = content_type;
+            let uri = req.uri.clone();
+            let response = send(&h.router, req).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "{uri} with {content_type:?}"
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked >= 4 * 24, "{checked}");
+    assert_nothing_changed(&h).await;
+}
+
+/// A body above the limit is refused with 413 before it is read, on every route
+/// that takes one, and no session starts.
+#[tokio::test]
+async fn an_oversized_body_is_refused_with_413_on_the_new_routes() {
+    let h = harness_with_data(false).await;
+    let big = "x".repeat(tutor_server::MAX_BODY_BYTES + 1);
+    for uri in [
+        "/api/sessions",
+        "/api/sessions/1/stop",
+        "/api/sessions/1/text",
+        "/api/sessions/1/turns/1/edit",
+        "/api/sessions/1/push-to-talk",
+        "/api/activities/submit",
+        "/api/writing/1/drafts",
+        "/api/reading/generate",
+        "/api/reading/1/answers",
+        "/api/tts/speak",
+        "/api/audio/test",
+        "/api/models/stt-test/download",
+    ] {
+        let req = Req::post(uri, json!({ "text": big })).authed(&h.cookie);
+        let response = send(&h.router, req).await;
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE, "{uri}");
+        let body = body_text(response).await;
+        assert!(body.contains("invalid_input"), "{uri}: {body}");
+        assert!(!body.contains("xxxx"), "the body is not echoed: {uri}");
+    }
+    assert_nothing_changed(&h).await;
 }

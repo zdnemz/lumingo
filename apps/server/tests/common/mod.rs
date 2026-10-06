@@ -10,8 +10,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use app_core::config::CoreConfig;
+use app_core::engines::Engines;
+use app_core::engines::testing::{FakeEngines, fake_engines};
 use app_core::error::CoreResult;
-use app_core::{AppCore, Clock};
+use app_core::voice::testing::{ScriptedLlm, Step};
+use app_core::{AppCore, Clock, SessionManager};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Method, Request, Response, header};
@@ -22,6 +25,30 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 use tutor_server::security::Guard;
 use tutor_server::{AppState, build_router};
+
+/// A model manifest with one entry that can be downloaded and one that cannot.
+pub const MANIFEST: &str = r#"
+[[model]]
+id = "stt-test"
+role = "stt"
+engine = "test-engine"
+version = "1"
+license = "MIT"
+license_url = "https://example.org/licence"
+license_text = "Permission is granted, free of charge, to use this test model."
+source = "http://127.0.0.1:9/models/stt-test"
+files = [{ path = "m.onnx", sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }]
+
+[[model]]
+id = "stt-candidate"
+role = "stt"
+engine = "test-engine"
+version = "candidate"
+license = "MIT"
+license_url = "https://example.org/licence"
+source = "https://example.org/models/stt-candidate"
+files = [{ path = "m.onnx", sha256 = "" }]
+"#;
 
 pub const PORT: u16 = 4321;
 pub const HOST: &str = "127.0.0.1:4321";
@@ -43,11 +70,56 @@ impl Clock for FixedClock {
     }
 }
 
+/// The session manager over fakes: a scripted language model and, when `audio`
+/// is set, fake devices and fake speech engines. Without it the manager has no
+/// audio and no speech, as the real server has with every feature off.
+pub struct Sessions {
+    pub steps: Vec<Step>,
+    pub transcripts: Vec<&'static str>,
+    pub audio: bool,
+}
+
+impl Sessions {
+    pub fn text_only(steps: Vec<Step>) -> Self {
+        Self {
+            steps,
+            transcripts: Vec::new(),
+            audio: false,
+        }
+    }
+}
+
+/// What a test can reach behind the manager.
+pub struct Attached {
+    pub manager: Arc<SessionManager>,
+    pub llm: Arc<ScriptedLlm>,
+    pub fake: Option<FakeEngines>,
+}
+
+pub async fn attach_sessions(core: &Arc<AppCore>, sessions: Sessions) -> Attached {
+    let (engines, fake) = if sessions.audio {
+        let fake = fake_engines(&sessions.transcripts);
+        (fake.engines.clone(), Some(fake))
+    } else {
+        (
+            Engines::without("this test has no audio and no speech"),
+            None,
+        )
+    };
+    let manager = SessionManager::attach(core, engines)
+        .await
+        .expect("attach the session manager");
+    let llm = ScriptedLlm::new(sessions.steps, None);
+    manager.use_llm(llm.clone());
+    Attached { manager, llm, fake }
+}
+
 pub struct Harness {
     pub router: Router,
     pub cookie: String,
     pub core: Arc<AppCore>,
     pub dir: TempDir,
+    pub attached: Option<Attached>,
 }
 
 /// What a test may choose about the core behind the router.
@@ -58,6 +130,10 @@ pub struct Options {
     pub env: Vec<(&'static str, &'static str)>,
     /// Copy the example unit into the unit folder before the core starts.
     pub with_unit: bool,
+    /// Attach the session manager over fakes.
+    pub sessions: Option<Sessions>,
+    /// The text of a model manifest. Without one the core has none.
+    pub manifest: Option<String>,
 }
 
 pub async fn harness(dev: bool) -> Harness {
@@ -91,12 +167,23 @@ pub async fn open_core(options: &Options) -> (Arc<AppCore>, TempDir) {
     config.env_lookup = Arc::new(move |name| vars.get(name).cloned());
     config.clock = Arc::new(FixedClock);
     config.hardware = Some(app_core::hardware::assess(Some(16_000_000_000), Some(8)));
+    config.catalogs_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../curriculum/catalogs");
+    if let Some(manifest) = &options.manifest {
+        let path = dir.path().join("manifest.toml");
+        std::fs::write(&path, format!("schema_version = 1\n{manifest}")).expect("manifest");
+        config.models_manifest = path;
+    }
     let core = AppCore::open(config).await.expect("open the core");
     (core, dir)
 }
 
-pub async fn harness_with(options: Options) -> Harness {
+pub async fn harness_with(mut options: Options) -> Harness {
     let (core, dir) = open_core(&options).await;
+    let attached = match options.sessions.take() {
+        Some(sessions) => Some(attach_sessions(&core, sessions).await),
+        None => None,
+    };
     let dev_origin = options.dev.then(|| DEV_ORIGIN.to_owned());
     let guard = Arc::new(Guard::new(PORT, dev_origin).expect("guard"));
     let cookie = guard
@@ -111,6 +198,7 @@ pub async fn harness_with(options: Options) -> Harness {
         cookie,
         core,
         dir,
+        attached,
     }
 }
 
