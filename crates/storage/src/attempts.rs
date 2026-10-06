@@ -310,6 +310,38 @@ impl Attempts<'_> {
         .await?;
         expect_changed(&result, "attempt")
     }
+
+    /// Sets whether an attempt counts toward a level estimate.
+    ///
+    /// A response written while no provider was reachable is stored before its
+    /// confidence is known; when the score arrives and the confidence is below
+    /// the floor of the spec, the scorer turns the flag off here. Turning it on
+    /// is refused for work that is not authored, like at insert.
+    pub async fn set_counts_toward_estimate(&self, id: i64, counts: bool) -> Result<()> {
+        if counts {
+            let origin: Option<String> =
+                sqlx::query_scalar("SELECT origin FROM assessment_attempts WHERE id = ?1")
+                    .bind(id)
+                    .fetch_optional(self.db.writer())
+                    .await?;
+            match origin.as_deref() {
+                None => return Err(StorageError::NotFound { what: "attempt" }),
+                Some("authored") => {}
+                Some(_) => {
+                    return Err(StorageError::Rule(
+                        "only authored work can count toward an estimate",
+                    ));
+                }
+            }
+        }
+        let result =
+            sqlx::query("UPDATE assessment_attempts SET counts_toward_estimate = ?2 WHERE id = ?1")
+                .bind(id)
+                .bind(counts)
+                .execute(self.db.writer())
+                .await?;
+        expect_changed(&result, "attempt")
+    }
 }
 
 /// Something that backs a score: the response text, a verbatim quote, a metric
@@ -462,6 +494,24 @@ impl PendingScoringRepo<'_> {
             .bind(i64::from(limit))
             .fetch_all(self.db.reader())
             .await?;
+        rows.iter().map(PendingScoring::from_row).collect()
+    }
+
+    /// The oldest waiting entries whose payload names this `kind`.
+    ///
+    /// Several services queue work here and each one drains only its own kind.
+    /// Reading the oldest entries of every kind and skipping the foreign ones
+    /// would let a long run of another service's entries hide this service's
+    /// work behind the batch limit.
+    pub async fn oldest_of_kind(&self, kind: &str, limit: u32) -> Result<Vec<PendingScoring>> {
+        let rows = sqlx::query(
+            "SELECT * FROM pending_scoring WHERE json_extract(payload_json, '$.kind') = ?1 \
+             ORDER BY created_at, id LIMIT ?2",
+        )
+        .bind(kind)
+        .bind(i64::from(limit))
+        .fetch_all(self.db.reader())
+        .await?;
         rows.iter().map(PendingScoring::from_row).collect()
     }
 
