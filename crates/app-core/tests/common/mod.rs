@@ -2,8 +2,10 @@
 // Each test binary uses a different subset of these helpers.
 #![allow(dead_code)]
 
+pub mod capture;
 pub mod fake_provider;
 pub mod seed;
+pub mod voice;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

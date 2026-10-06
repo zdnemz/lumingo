@@ -1,0 +1,59 @@
+# 50 learner turns for the classmate roleplay of the example unit a1-u01
+# (curriculum/examples/a1-u01.example.json). Plain A1 sentences, a few with the
+# mistakes an Indonesian learner makes. The tutor's replies decide where the
+# conversation goes, so a line may not answer the tutor's last question: that is
+# normal for a test of speed and not a test of the tutor.
+#
+# To measure the whole voice chain, read these lines aloud, save each as a WAV
+# file and replace every line with `wav: clips/001.wav` and so on. Keep the
+# recordings out of git (benchmarks/fixtures/private/).
+Hello.
+Hi, Sam.
+Good morning.
+My name is Dewi.
+I am Dewi.
+Nice to meet you.
+What is your name?
+I am from Bandung.
+I from Jakarta.
+Where are you from?
+I am from Indonesia.
+I am a student.
+I am fine, thank you.
+How are you?
+Yes, I am new here.
+No, this is my first day.
+This is my first class.
+My teacher is Mr. Hadi.
+I like English.
+English is difficult for me.
+Please speak slowly.
+Can you say that again?
+I do not understand.
+Sorry, I do not know.
+Thank you very much.
+You are welcome.
+Good afternoon.
+Good evening.
+My friend is Arif.
+He is from Surabaya.
+She is from Medan.
+We are classmates.
+I live in Bandung.
+I am twenty years old.
+I have two brothers.
+My brother is a teacher.
+I like coffee.
+I do not like tea.
+It is nice here.
+The class is at nine o'clock.
+Is the class big?
+Do you like the class?
+What is your city?
+I am happy to meet you.
+I have to go now.
+See you tomorrow.
+See you in class.
+Goodbye, Sam.
+Goodbye.
+Have a nice day.
