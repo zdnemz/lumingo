@@ -1,6 +1,8 @@
-//! The real audio devices, through cpal. UNVERIFIED: compile-checked for the
-//! Windows target through `audio-io`, which owns the cpal code, and never run
-//! against a device.
+//! The real audio devices, through cpal. UNVERIFIED: this is the same code as
+//! `tools/tutor-cli/src/cpal_devices.rs`, whose cpal part (in `audio-io`) was
+//! compile-checked for Windows earlier. This copy was not compiled with the
+//! feature on in the build container (no ALSA headers, no Windows linker tools),
+//! and nothing has run against a device.
 
 use std::path::Path;
 use std::sync::Arc;
