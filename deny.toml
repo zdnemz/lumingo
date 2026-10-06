@@ -26,6 +26,8 @@ allow = [
 # the Mozilla CA certificate list that reqwest's TLS stack uses. See docs/LICENSE_REGISTER.md.
 exceptions = [
   { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
+  # MIT-0 is MIT without the attribution requirement. Pulled in by jsonschema's URI parser.
+  { allow = ["MIT-0"], crate = "borrow-or-share" },
 ]
 
 [bans]

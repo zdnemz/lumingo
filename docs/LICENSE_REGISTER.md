@@ -33,6 +33,9 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | Crate | Use | License | Status |
 |---|---|---|---|
 | axum | HTTP API and WebSocket in `apps/server` | MIT | ok |
+| toml 1.1.6 | Read and write `providers.toml` | MIT OR Apache-2.0, read from crate metadata 2026-10-07 | ok |
+| jsonschema 0.58.6, default features off | Local validation of structured LLM output and units | MIT, read from crate metadata 2026-10-07. Default features are off so it cannot fetch a remote `$ref` over HTTP. | ok |
+| borrow-or-share 0.2.4 (through jsonschema) | URI parsing helper | MIT-0, permissive and attribution-free. Allowed by a per-crate exception in `deny.toml`. | ok |
 | reqwest 0.13.5 | HTTP client for `llm-client` (rustls with aws-lc-rs) | MIT OR Apache-2.0, read from crate metadata 2026-10-07 | ok |
 | webpki-root-certs 1.0.9 (through reqwest) | Mozilla CA certificate list | CDLA-Permissive-2.0, permissive data license (attribution, no copyleft). Allowed by a per-crate exception in `deny.toml`. Attribution line in `NOTICE`. | ok |
 | aws-lc-sys 0.45.0 (through reqwest) | Native crypto for rustls | ISC, MIT, MIT-0, BSD-3-Clause and Apache-2.0 terms; passes `cargo deny`. Building it needs cmake and a C compiler, so the Windows build machine needs both (note for `docs/ENVIRONMENT.md`). | ok |
@@ -93,8 +96,7 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
 | SQLx, SQLite | Storage | MIT OR Apache-2.0, public domain | verify |
-| jsonschema | Local validation of structured output and units | MIT | verify |
-| harper-core | Rule-based grammar findings | Apache-2.0 | verify |
+| harper-core | Rule-based grammar findings | Crate: Apache-2.0 (2.11.0, read 2026-10-07). Its tree is 254 crates (about 240 more than today's build), including the `burn` ML framework through its tagger, `ammonia`, and three MPL-2.0 crates (`colored`, `cssparser`, `dtoa-short`). | review: not added. MPL-2.0 is usable unmodified in an Apache-2.0 program, but the weight against the 8 GB floor and the extra supply-chain surface need an owner decision (S5-02). |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |
 | Supertonic 3 | TTS candidate | Model: OpenRAIL-M. Code: MIT. | review: read the use restrictions in full and show them before download |
 | Kokoro, Kitten TTS | TTS candidates | Apache-2.0 | verify |
