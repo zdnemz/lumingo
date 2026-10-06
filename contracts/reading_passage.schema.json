@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:contract:reading_passage:1.0",
+  "title": "reading_passage",
+  "description": "A generated graded reading text with a glossary and comprehension questions, for the free reading mode. Portable subset only. Length, vocabulary level, and question validity are checked locally after parsing. Results from this content never count toward level estimates.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "passage",
+    "glossary",
+    "questions"
+  ],
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "passage": {
+      "type": "string"
+    },
+    "glossary": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "word",
+          "gloss_l1",
+          "example"
+        ],
+        "properties": {
+          "word": {
+            "type": "string"
+          },
+          "gloss_l1": {
+            "type": "string"
+          },
+          "example": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stem",
+          "options",
+          "answer_index",
+          "explanation_en",
+          "explanation_l1"
+        ],
+        "properties": {
+          "stem": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "answer_index": {
+            "type": "integer"
+          },
+          "explanation_en": {
+            "type": "string"
+          },
+          "explanation_l1": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

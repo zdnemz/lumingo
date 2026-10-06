@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:contract:rubric_score:1.0",
+  "title": "rubric_score",
+  "description": "Rubric-based score for one productive response. Bands are strings so the same schema works on every provider. The level estimate is never part of this output. It is computed locally.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dimension_scores", "content_points", "on_task", "feedback_en", "feedback_l1"],
+  "properties": {
+    "dimension_scores": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension", "band", "evidence_quotes", "reason"],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "enum": ["task_achievement", "range", "accuracy", "coherence", "interaction"]
+          },
+          "band": { "type": "string", "enum": ["0", "1", "2", "3", "4"] },
+          "evidence_quotes": { "type": "array", "items": { "type": "string" } },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "content_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["point", "covered", "quote"],
+        "properties": {
+          "point": { "type": "string" },
+          "covered": { "type": "boolean" },
+          "quote": { "type": "string" }
+        }
+      }
+    },
+    "on_task": { "type": "boolean" },
+    "feedback_en": { "type": "string" },
+    "feedback_l1": { "type": "string" }
+  }
+}
