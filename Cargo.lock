@@ -1124,6 +1124,7 @@ version = "0.0.0"
 dependencies = [
  "jsonschema",
  "reqwest",
+ "serde",
  "serde_json",
  "thiserror",
  "tokio",

@@ -73,11 +73,7 @@ pub fn provider_from_vars(
     else {
         return Err(EnvError::Missing(missing));
     };
-    let protocol = match protocol.as_str() {
-        "openai_chat" => Protocol::OpenaiChat,
-        "anthropic_messages" => Protocol::AnthropicMessages,
-        _ => return Err(EnvError::UnknownProtocol),
-    };
+    let protocol = Protocol::from_name(&protocol).ok_or(EnvError::UnknownProtocol)?;
     policy::parse_base_url(&base_url)?;
     Ok(Some(ProviderConfig {
         protocol,

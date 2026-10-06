@@ -12,6 +12,10 @@ impl ApiKey {
         &self.0
     }
 
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Last four characters, for the settings screen (`has_key` and a hint).
     pub fn last_four(&self) -> String {
         let chars: Vec<char> = self.0.chars().collect();

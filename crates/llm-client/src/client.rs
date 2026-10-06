@@ -21,6 +21,22 @@ pub enum Protocol {
     AnthropicMessages,
 }
 
+impl Protocol {
+    /// The name used in `.env`, `providers.toml` and the settings screen.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::OpenaiChat => "openai_chat",
+            Self::AnthropicMessages => "anthropic_messages",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        [Self::OpenaiChat, Self::AnthropicMessages]
+            .into_iter()
+            .find(|p| p.name() == name)
+    }
+}
+
 #[derive(Debug)]
 pub struct ProviderConfig {
     pub protocol: Protocol,
