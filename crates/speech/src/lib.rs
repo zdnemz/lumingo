@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod cancel;
+mod chunker;
 mod endpoint;
 mod error;
 mod info;
@@ -16,6 +17,7 @@ mod unavailable;
 mod vad;
 
 pub use cancel::CancelFlag;
+pub use chunker::SentenceChunker;
 pub use endpoint::{EndpointConfig, EndpointEvent, Endpointer};
 pub use error::{SttError, TtsError, VadError};
 pub use info::EngineInfo;
