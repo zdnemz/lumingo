@@ -28,6 +28,11 @@ exceptions = [
   { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
   # MIT-0 is MIT without the attribution requirement. Pulled in by jsonschema's URI parser.
   { allow = ["MIT-0"], crate = "borrow-or-share" },
+  # MPL-2.0 (file-level copyleft) is accepted only for these unmodified crates, which
+  # harper-core pulls in. See the harper-core row in docs/LICENSE_REGISTER.md.
+  { allow = ["MPL-2.0"], crate = "colored" },
+  { allow = ["MPL-2.0"], crate = "cssparser" },
+  { allow = ["MPL-2.0"], crate = "dtoa-short" },
 ]
 
 [bans]
