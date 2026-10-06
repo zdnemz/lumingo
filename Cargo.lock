@@ -134,6 +134,8 @@ name = "assessment-engine"
 version = "0.0.0"
 dependencies = [
  "harper-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -8,6 +8,8 @@ rust-version.workspace = true
 description = "Level estimation from stored attempts for Lumingo (est/1)"
 
 [dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
 harper-core = { version = "2.11.0", default-features = false }
 
 [lints]
