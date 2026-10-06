@@ -11,6 +11,7 @@ mod practice;
 mod prompt;
 mod reading;
 mod review;
+mod rubric;
 mod session;
 mod support;
 mod topics;
@@ -31,6 +32,12 @@ pub use prompt::{
 };
 pub use reading::*;
 pub use review::{Grade, ReviewState, due_order, update_mastery};
+pub use rubric::{
+    Alarm, CrossCheck, Dimension, DimensionResult, DimensionStatus, MAX_FEEDBACK_WORDS,
+    PointResult, RUBRIC_SCORE_VERSION, RawDimension, RawPoint, RawRubric, RubricDimension,
+    RubricResult, WorkshopRubric, WorkshopTask, cross_check, merge_rerun,
+    system_prompt as rubric_system_prompt, user_message as rubric_user_message,
+};
 pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,
 };

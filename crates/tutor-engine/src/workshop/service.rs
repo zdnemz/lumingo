@@ -34,7 +34,7 @@ use crate::drafts::{DraftComparison, DraftError, compare_drafts};
 use crate::error::{EngineError, Result};
 use crate::support::{CallLog, Clock, storage_level};
 
-use super::rubric::{
+use crate::rubric::{
     CrossCheck, DimensionResult, DimensionStatus, RUBRIC_SCORE_VERSION, RawRubric, RubricResult,
     WorkshopRubric, WorkshopTask, cross_check, merge_rerun, system_prompt, user_message,
 };

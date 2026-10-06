@@ -94,7 +94,7 @@ fn band(result: &RubricResult, dimension: Dimension) -> Option<u8> {
 
 #[test]
 fn the_golden_prompt_matches_the_stored_file() {
-    let golden = include_str!("../../../tests/golden/rubric_score_1.txt");
+    let golden = include_str!("../../tests/golden/rubric_score_1.txt");
     assert_eq!(system_prompt("Indonesian"), golden.trim_end_matches('\n'));
 }
 
@@ -114,7 +114,7 @@ fn the_golden_user_message_matches_the_stored_file() {
         min_words: None,
     };
     let message = user_message(Level::A2, &task, &rubric, "Come at 5. \"Bring\" food.");
-    let golden = include_str!("../../../tests/golden/rubric_score_1_user.json");
+    let golden = include_str!("../../tests/golden/rubric_score_1_user.json");
     assert_eq!(message, golden.trim_end_matches('\n'));
 }
 
