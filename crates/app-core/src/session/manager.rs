@@ -561,6 +561,13 @@ impl SessionService for SessionManager {
             SpeakRequest::Activity { session_id, .. } => Some(self.current(*session_id)?),
             SpeakRequest::Turn { .. } | SpeakRequest::Reading { .. } => None,
         };
+        // A stored turn or text is read now, so a reference to nothing is a 404
+        // whatever the speech output is doing. Only the audio of an activity waits,
+        // because reading it counts a play.
+        let stored = match &request {
+            SpeakRequest::Activity { .. } => None,
+            other => Some(super::speak::stored_text(&core, other).await?),
+        };
         let route = match self.active_run() {
             Some(run) if run.emitter().view().kind == SessionKind::Conversation => {
                 match run.speaker() {
@@ -571,11 +578,12 @@ impl SessionService for SessionManager {
             _ => super::speak::SpeakRoute::Standalone,
         };
         let fetch = async {
-            match (&request, activity_run) {
-                (SpeakRequest::Activity { activity_id, .. }, Some(run)) => {
+            match (&request, activity_run, stored) {
+                (SpeakRequest::Activity { activity_id, .. }, Some(run), _) => {
                     run.activity_audio(activity_id).await
                 }
-                _ => super::speak::stored_text(&core, &request).await,
+                (_, _, Some(text)) => Ok(text),
+                _ => Err(CoreError::NotFound { what: "activity" }),
             }
         };
         super::speak::speak(&self.shared, &self.speaker, route, fetch).await
