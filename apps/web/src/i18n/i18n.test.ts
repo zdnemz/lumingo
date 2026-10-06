@@ -83,6 +83,9 @@ const SAME_ON_PURPOSE: readonly string[] = [
   "diag.latency.p50",
   "hardware.minimum",
   "hardware.gb",
+  "progress.drill.status",
+  "progress.kind.bonus",
+  "progress.evidence.engine",
 ];
 
 describe("untranslated strings", () => {
