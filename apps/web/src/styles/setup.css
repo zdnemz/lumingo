@@ -1,0 +1,220 @@
+/* Setup, settings, privacy and diagnostics screens.
+ *
+ * Everything here is built from the tokens and from the pixel components, and
+ * nothing has a fixed height or width in text units, so the screens still fit
+ * at 150 percent zoom and on a narrow window. Long values (folders, URLs) wrap
+ * instead of pushing the page sideways.
+ */
+
+.shell__banners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+}
+.shell__banners:empty {
+  display: none;
+}
+
+/* ---- Banner ------------------------------------------------------------ */
+
+.banner__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: none;
+}
+
+.unavailable {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-bg-deep);
+  box-shadow: 0 0 0 var(--px) var(--color-border);
+  margin: var(--px);
+}
+.unavailable__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ---- Facts: a list of label and value pairs ---------------------------- */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+.facts dt {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.facts__wrap,
+.guide__value {
+  font-size: var(--text-sm);
+}
+
+.guide__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  max-width: var(--measure);
+}
+
+.problems {
+  margin: 0;
+  padding-left: var(--space-5);
+  overflow-wrap: anywhere;
+}
+
+/* ---- Lists of cards and rows ------------------------------------------ */
+
+.cards,
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rows {
+  gap: var(--space-3);
+}
+.rows__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-bg-deep);
+}
+.rows__text {
+  overflow-wrap: anywhere;
+}
+
+/* ---- Settings sub-navigation ------------------------------------------- */
+
+.subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.subnav__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-h);
+  padding: 0 var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.subnav__link:hover {
+  background: var(--color-surface-raised);
+}
+.subnav__link[aria-current="page"] {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+/* ---- Statements (what leaves the computer) ------------------------------ */
+
+.statements {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.statements li {
+  max-width: var(--measure);
+  padding-left: var(--space-4);
+  border-left: var(--px) solid var(--color-border);
+}
+
+/* ---- Wizard -------------------------------------------------------------- */
+
+.wizard__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.wizard__step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.wizard__step::before {
+  counter-increment: step;
+  content: counter(step);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+}
+.wizard__step[aria-current="step"] {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.wizard__step[data-done="true"] {
+  color: var(--color-text);
+}
+.wizard__nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.wizard__title:focus {
+  outline: none;
+}
+
+/* ---- Typed confirmation ---------------------------------------------------- */
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ---- Table (diagnostics latency) ----------------------------------------- */
+
+.table-wrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: var(--px) solid var(--color-surface-raised);
+  overflow-wrap: anywhere;
+}
+.table th {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}

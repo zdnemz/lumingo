@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ServerEvent } from "@/generated/ServerEvent";
 import type { StateSnapshot } from "@/generated/StateSnapshot";
 import { useApi } from "./ApiProvider";
@@ -14,7 +14,11 @@ export interface EventStreamState {
   snapshot: StateSnapshot | null;
   /** Newest first, capped. */
   events: ServerEvent[];
+  /** Tries to connect again now, for the "try again" button of the lost-connection banner. */
+  retry: () => void;
 }
+
+type StreamData = Omit<EventStreamState, "retry">;
 
 const KEEP_EVENTS = 8;
 const RETRY_MS = [1000, 2000, 4000, 8000] as const;
@@ -25,12 +29,19 @@ const RETRY_MS = [1000, 2000, 4000, 8000] as const;
  */
 export function useEventStream(): EventStreamState {
   const api = useApi();
-  const [state, setState] = useState<EventStreamState>({
+  const [state, setState] = useState<StreamData>({
     status: "connecting",
     snapshot: null,
     events: [],
   });
   const attempt = useRef(0);
+  // Bumping this runs the connect effect again from a clean start.
+  const [round, setRound] = useState(0);
+  const retry = useCallback(() => {
+    attempt.current = 0;
+    setState((previous) => ({ ...previous, status: "connecting" }));
+    setRound((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -47,7 +58,7 @@ export function useEventStream(): EventStreamState {
         onEvent: (event) => {
           setState((previous) => ({
             status: "live",
-            snapshot: event.type === "Snapshot" ? event.state : previous.snapshot,
+            snapshot: applyEvent(previous.snapshot, event),
             events: [event, ...(event.type === "Snapshot" ? [] : previous.events)].slice(0, KEEP_EVENTS),
           }));
         },
@@ -84,7 +95,14 @@ export function useEventStream(): EventStreamState {
       if (retryTimer !== undefined) clearTimeout(retryTimer);
       handle?.close();
     };
-  }, [api]);
+  }, [api, round]);
 
-  return state;
+  return { ...state, retry };
+}
+
+/** A snapshot replaces everything. A provider change updates only the provider of what is shown. */
+function applyEvent(snapshot: StateSnapshot | null, event: ServerEvent): StateSnapshot | null {
+  if (event.type === "Snapshot") return event.state;
+  if (event.type === "ProviderStatus" && snapshot !== null) return { ...snapshot, provider: event.provider };
+  return snapshot;
 }
