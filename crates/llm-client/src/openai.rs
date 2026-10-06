@@ -13,7 +13,7 @@ pub enum TokenParam {
 }
 
 impl TokenParam {
-    fn key(self) -> &'static str {
+    pub(crate) fn key(self) -> &'static str {
         match self {
             Self::MaxTokens => "max_tokens",
             Self::MaxCompletionTokens => "max_completion_tokens",
