@@ -1,0 +1,1308 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:schema:unit:1.0",
+  "title": "Curriculum unit",
+  "description": "One authored unit (about 60 learning minutes) covering listening, speaking, reading, and writing. Cross-reference rules that JSON Schema cannot express are listed in docs/CURRICULUM_SPEC.md section 6 and enforced by content-cli.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "level",
+    "sequence",
+    "title",
+    "theme",
+    "estimated_minutes",
+    "prerequisites",
+    "objectives",
+    "targets",
+    "presentation",
+    "dialogues",
+    "activities",
+    "checkpoint",
+    "generation_policy",
+    "review_items",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "$ref": "#/$defs/unit_id"
+    },
+    "level": {
+      "$ref": "#/$defs/level"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30
+    },
+    "title": {
+      "$ref": "#/$defs/localized"
+    },
+    "theme": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "estimated_minutes": {
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 120
+    },
+    "prerequisites": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unit_id"
+      },
+      "uniqueItems": true
+    },
+    "objectives": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/objective"
+      }
+    },
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vocabulary",
+        "grammar",
+        "functions",
+        "pronunciation"
+      ],
+      "properties": {
+        "vocabulary": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/$defs/vocab_item"
+          }
+        },
+        "grammar": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/grammar_point"
+          }
+        },
+        "functions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "uniqueItems": true
+        },
+        "pronunciation": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/pron_focus"
+          }
+        }
+      }
+    },
+    "presentation": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/presentation_block"
+      }
+    },
+    "dialogues": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/dialogue"
+      }
+    },
+    "activities": {
+      "type": "array",
+      "minItems": 12,
+      "items": {
+        "$ref": "#/$defs/activity"
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pass_score",
+        "activity_ids"
+      ],
+      "properties": {
+        "pass_score": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 1
+        },
+        "activity_ids": {
+          "type": "array",
+          "minItems": 6,
+          "items": {
+            "$ref": "#/$defs/local_id"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "generation_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_types",
+        "max_items_per_session",
+        "max_level",
+        "allowed_grammar_ids"
+      ],
+      "properties": {
+        "allowed_types": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "mcq",
+              "gap_fill",
+              "reorder"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "max_items_per_session": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "max_level": {
+          "$ref": "#/$defs/level"
+        },
+        "allowed_grammar_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/local_id"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "review_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "ref"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "vocab",
+              "grammar",
+              "pron"
+            ]
+          },
+          "ref": {
+            "$ref": "#/$defs/local_id"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authored_by",
+        "authoring_model",
+        "review_status",
+        "content_version",
+        "sources",
+        "updated"
+      ],
+      "properties": {
+        "authored_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authoring_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_status": {
+          "enum": [
+            "unreviewed",
+            "critic_passed",
+            "human_sampled",
+            "human_full"
+          ]
+        },
+        "content_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "updated": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "unit_id": {
+      "type": "string",
+      "pattern": "^(a1|a2|b1|b2|c1|c2)-u(0[1-9]|[12][0-9]|30)$"
+    },
+    "local_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "maxLength": 64
+    },
+    "level": {
+      "enum": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2"
+      ]
+    },
+    "skill": {
+      "enum": [
+        "listening",
+        "reading",
+        "speaking_production",
+        "speaking_interaction",
+        "writing",
+        "mediation",
+        "grammar",
+        "vocabulary",
+        "pronunciation"
+      ]
+    },
+    "localized": {
+      "description": "English text plus optional Indonesian. content-cli requires 'id' for levels A1 to B1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "skill",
+        "can_do",
+        "cefr_scale_ref"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "skill": {
+          "$ref": "#/$defs/skill"
+        },
+        "can_do": {
+          "$ref": "#/$defs/localized"
+        },
+        "cefr_scale_ref": {
+          "description": "Name of the CEFR scale this objective relates to. A reference only. Never paste descriptor text here.",
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 80
+        }
+      }
+    },
+    "vocab_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "lemma",
+        "pos",
+        "level_tag",
+        "gloss",
+        "example"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "lemma": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pos": {
+          "enum": [
+            "noun",
+            "verb",
+            "adjective",
+            "adverb",
+            "pronoun",
+            "preposition",
+            "determiner",
+            "conjunction",
+            "interjection",
+            "phrase"
+          ]
+        },
+        "level_tag": {
+          "enum": [
+            "A1",
+            "A2",
+            "B1",
+            "B2",
+            "C1",
+            "C2",
+            "unlisted"
+          ]
+        },
+        "gloss": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "example": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "grammar_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "pattern",
+        "note"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "$ref": "#/$defs/localized"
+        }
+      }
+    },
+    "pron_focus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "focus",
+        "phonemes",
+        "examples"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "focus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "phonemes": {
+          "description": "ARPAbet symbols without stress digits, for example TH, DH, IY.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{1,2}$"
+          }
+        },
+        "examples": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "presentation_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "kind": {
+          "enum": [
+            "explanation",
+            "tip",
+            "culture_note"
+          ]
+        },
+        "text": {
+          "$ref": "#/$defs/localized"
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/localized"
+          }
+        }
+      }
+    },
+    "dialogue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "context",
+        "turns"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context": {
+          "$ref": "#/$defs/localized"
+        },
+        "turns": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "speaker",
+              "text"
+            ],
+            "properties": {
+              "speaker": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "activity_common": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "skill",
+        "objective_ids",
+        "instructions",
+        "scoring"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "type": {
+          "type": "string"
+        },
+        "skill": {
+          "$ref": "#/$defs/skill"
+        },
+        "objective_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/local_id"
+          },
+          "uniqueItems": true
+        },
+        "instructions": {
+          "$ref": "#/$defs/localized"
+        },
+        "scoring": {
+          "enum": [
+            "deterministic",
+            "rubric",
+            "pron",
+            "none"
+          ]
+        }
+      }
+    },
+    "model_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "band",
+        "text"
+      ],
+      "properties": {
+        "band": {
+          "enum": [
+            "below",
+            "at",
+            "above"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "activity": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/act_mcq"
+        },
+        {
+          "$ref": "#/$defs/act_gap_fill"
+        },
+        {
+          "$ref": "#/$defs/act_reorder"
+        },
+        {
+          "$ref": "#/$defs/act_match"
+        },
+        {
+          "$ref": "#/$defs/act_dictation"
+        },
+        {
+          "$ref": "#/$defs/act_read_aloud"
+        },
+        {
+          "$ref": "#/$defs/act_minimal_pairs"
+        },
+        {
+          "$ref": "#/$defs/act_shadowing"
+        },
+        {
+          "$ref": "#/$defs/act_guided_production"
+        },
+        {
+          "$ref": "#/$defs/act_roleplay"
+        },
+        {
+          "$ref": "#/$defs/act_mediation"
+        },
+        {
+          "$ref": "#/$defs/act_reading_set"
+        },
+        {
+          "$ref": "#/$defs/act_listening_set"
+        },
+        {
+          "$ref": "#/$defs/act_error_correction"
+        }
+      ]
+    },
+    "act_mcq": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "stem",
+        "options",
+        "answer_index",
+        "explanation"
+      ],
+      "properties": {
+        "type": {
+          "const": "mcq"
+        },
+        "scoring": {
+          "const": "deterministic"
+        },
+        "passage": {
+          "description": "Reading text shown above the stem.",
+          "type": "string",
+          "minLength": 1
+        },
+        "audio_text": {
+          "description": "Text spoken by TTS and not shown. Makes this a listening item.",
+          "type": "string",
+          "minLength": 1
+        },
+        "stem": {
+          "type": "string",
+          "minLength": 1
+        },
+        "options": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "answer_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "explanation": {
+          "$ref": "#/$defs/localized"
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_gap_fill": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "text",
+        "answers",
+        "explanation"
+      ],
+      "properties": {
+        "type": {
+          "const": "gap_fill"
+        },
+        "scoring": {
+          "const": "deterministic"
+        },
+        "text": {
+          "description": "Each gap is written as three underscores.",
+          "type": "string",
+          "pattern": "___"
+        },
+        "answers": {
+          "description": "One inner array of accepted answers per gap, in order.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "explanation": {
+          "$ref": "#/$defs/localized"
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_reorder": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "tokens",
+        "answer"
+      ],
+      "properties": {
+        "type": {
+          "const": "reorder"
+        },
+        "scoring": {
+          "const": "deterministic"
+        },
+        "tokens": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "explanation": {
+          "$ref": "#/$defs/localized"
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_match": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "pairs"
+      ],
+      "properties": {
+        "type": {
+          "const": "match"
+        },
+        "scoring": {
+          "const": "deterministic"
+        },
+        "pairs": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "left",
+              "right"
+            ],
+            "properties": {
+              "left": {
+                "type": "string",
+                "minLength": 1
+              },
+              "right": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_dictation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "audio_text",
+        "accepted_answers"
+      ],
+      "properties": {
+        "type": {
+          "const": "dictation"
+        },
+        "scoring": {
+          "const": "deterministic"
+        },
+        "audio_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted_answers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_read_aloud": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "text",
+        "focus_phonemes"
+      ],
+      "properties": {
+        "type": {
+          "const": "read_aloud"
+        },
+        "scoring": {
+          "const": "pron"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "focus_phonemes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{1,2}$"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_minimal_pairs": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "pairs",
+        "mode"
+      ],
+      "properties": {
+        "type": {
+          "const": "minimal_pairs"
+        },
+        "scoring": {
+          "enum": [
+            "deterministic",
+            "pron"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "listen_choose",
+            "say_both"
+          ]
+        },
+        "pairs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "a",
+              "b",
+              "focus"
+            ],
+            "properties": {
+              "a": {
+                "type": "string",
+                "minLength": 1
+              },
+              "b": {
+                "type": "string",
+                "minLength": 1
+              },
+              "focus": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_shadowing": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "dialogue_id"
+      ],
+      "properties": {
+        "type": {
+          "const": "shadowing"
+        },
+        "scoring": {
+          "enum": [
+            "pron",
+            "none"
+          ]
+        },
+        "dialogue_id": {
+          "$ref": "#/$defs/local_id"
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_guided_production": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "prompt",
+        "content_points",
+        "rubric_id",
+        "model_answers",
+        "min_words",
+        "max_words"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "guided_speaking",
+            "guided_writing"
+          ]
+        },
+        "scoring": {
+          "const": "rubric"
+        },
+        "prompt": {
+          "$ref": "#/$defs/localized"
+        },
+        "content_points": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "rubric_id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "model_answers": {
+          "description": "Exactly one answer per band. These double as calibration anchors for the rubric scorer.",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/model_answer"
+          }
+        },
+        "min_words": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_words": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_roleplay": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "scenario",
+        "tutor_role",
+        "learner_role",
+        "goals",
+        "target_grammar_ids",
+        "target_vocab_ids",
+        "max_turns",
+        "mode"
+      ],
+      "properties": {
+        "type": {
+          "const": "roleplay"
+        },
+        "scoring": {
+          "enum": [
+            "rubric",
+            "none"
+          ]
+        },
+        "scenario": {
+          "$ref": "#/$defs/localized"
+        },
+        "tutor_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "learner_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "goals": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "target_grammar_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/local_id"
+          }
+        },
+        "target_vocab_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/local_id"
+          }
+        },
+        "max_turns": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 30
+        },
+        "mode": {
+          "enum": [
+            "fluency",
+            "accuracy"
+          ]
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_mediation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "source_text",
+        "task",
+        "rubric_id",
+        "model_answers"
+      ],
+      "properties": {
+        "type": {
+          "const": "mediation"
+        },
+        "scoring": {
+          "const": "rubric"
+        },
+        "source_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task": {
+          "$ref": "#/$defs/localized"
+        },
+        "rubric_id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "model_answers": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/model_answer"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stem",
+        "options",
+        "answer_index",
+        "explanation"
+      ],
+      "properties": {
+        "stem": {
+          "type": "string",
+          "minLength": 1
+        },
+        "options": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "answer_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "explanation": {
+          "$ref": "#/$defs/localized"
+        }
+      }
+    },
+    "act_reading_set": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "passage",
+        "questions"
+      ],
+      "properties": {
+        "type": {
+          "const": "reading_set"
+        },
+        "scoring": {
+          "const": "deterministic"
+        },
+        "passage": {
+          "description": "The text the learner reads. Length limits per level are in docs/CURRICULUM_SPEC.md and enforced by content-cli.",
+          "type": "string",
+          "minLength": 1
+        },
+        "questions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/question"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_listening_set": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "questions",
+        "replays_allowed"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "audio_text"
+          ]
+        },
+        {
+          "required": [
+            "dialogue_id"
+          ]
+        }
+      ],
+      "properties": {
+        "type": {
+          "const": "listening_set"
+        },
+        "scoring": {
+          "const": "deterministic"
+        },
+        "audio_text": {
+          "description": "Spoken by TTS and never shown before the questions are answered.",
+          "type": "string",
+          "minLength": 1
+        },
+        "dialogue_id": {
+          "$ref": "#/$defs/local_id"
+        },
+        "replays_allowed": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "questions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/question"
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "act_error_correction": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/activity_common"
+        }
+      ],
+      "required": [
+        "sentence",
+        "accepted_answers",
+        "error_category",
+        "explanation"
+      ],
+      "properties": {
+        "type": {
+          "const": "error_correction"
+        },
+        "scoring": {
+          "const": "deterministic"
+        },
+        "sentence": {
+          "description": "A sentence with exactly one mistake.",
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted_answers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "error_category": {
+          "description": "One of the categories in contracts/turn_analysis.schema.json. Checked by content-cli.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "explanation": {
+          "$ref": "#/$defs/localized"
+        }
+      },
+      "unevaluatedProperties": false
+    }
+  }
+}

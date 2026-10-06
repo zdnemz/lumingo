@@ -1527,6 +1527,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "curriculum"
+version = "0.0.0"
+dependencies = [
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
