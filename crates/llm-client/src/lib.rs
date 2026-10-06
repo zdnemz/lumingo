@@ -5,6 +5,7 @@
 
 pub mod anthropic;
 mod client;
+mod env;
 mod error;
 mod event;
 mod key;
@@ -14,6 +15,7 @@ mod request;
 mod sse;
 
 pub use client::{LlmClient, Protocol, ProviderConfig, Timeouts};
+pub use env::{EnvError, load_env_profile, parse_dotenv, provider_from_vars};
 pub use error::{LlmError, ParseError};
 pub use event::{FinishReason, StreamEvent, Usage};
 pub use key::ApiKey;

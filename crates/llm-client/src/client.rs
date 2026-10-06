@@ -18,6 +18,7 @@ pub enum Protocol {
     AnthropicMessages,
 }
 
+#[derive(Debug)]
 pub struct ProviderConfig {
     pub protocol: Protocol,
     pub base_url: String,
