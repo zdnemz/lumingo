@@ -1,8 +1,18 @@
 import { act, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ServerStateProvider } from "@/api/ServerState";
 import { ApiError } from "@/api/client";
-import { SNAPSHOT, fakeApi, renderApp, resetBrowserState, setSystem } from "@/test/utils";
+import { SNAPSHOT, fakeApi, renderApp, resetBrowserState, setSystem, type FakeApi } from "@/test/utils";
 import { LinkStatus } from "./LinkStatus";
+
+function renderLink(api: FakeApi) {
+  return renderApp(
+    <ServerStateProvider>
+      <LinkStatus />
+    </ServerStateProvider>,
+    api,
+  );
+}
 
 beforeEach(() => {
   resetBrowserState();
@@ -15,7 +25,7 @@ afterEach(() => {
 describe("LinkStatus", () => {
   it("shows connecting, then live with the snapshot and the events in order", async () => {
     const api = fakeApi();
-    renderApp(<LinkStatus />, api);
+    renderLink(api);
     expect(await screen.findByText("Connecting")).toBeInTheDocument();
 
     await vi.waitFor(() => expect(api.opened()).toBe(1));
@@ -35,14 +45,14 @@ describe("LinkStatus", () => {
 
   it("says plainly when the server refuses the page", async () => {
     const api = fakeApi(() => Promise.reject(new ApiError(403, "origin_not_allowed")));
-    renderApp(<LinkStatus />, api);
+    renderLink(api);
     expect(await screen.findByText(/refused this page/)).toBeInTheDocument();
     expect(api.opened()).toBe(0);
   });
 
   it("shows the lost state and reconnects with a fresh snapshot", async () => {
     const api = fakeApi();
-    renderApp(<LinkStatus />, api);
+    renderLink(api);
     await vi.waitFor(() => expect(api.opened()).toBe(1));
     act(() => {
       api.open();
@@ -73,7 +83,7 @@ describe("LinkStatus", () => {
       return calls === 1 ? Promise.reject(new TypeError("network")) : Promise.resolve(SNAPSHOT);
     });
     vi.useFakeTimers();
-    renderApp(<LinkStatus />, api);
+    renderLink(api);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10);
     });

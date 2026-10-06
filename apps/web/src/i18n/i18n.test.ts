@@ -63,6 +63,41 @@ describe("dictionaries", () => {
   });
 });
 
+/**
+ * Strings that are the same in both languages on purpose: a product or
+ * language name, a loan word, or a unit. Any other equal pair is a string that
+ * was copied and never translated.
+ */
+const SAME_ON_PURPOSE: readonly string[] = [
+  "app.name",
+  "link.mode",
+  "settings.language.id",
+  "settings.language.en",
+  "settings.state.off",
+  "quest.unit",
+  "chat.tutor",
+  "provider.protocol.anthropic_messages",
+  "data.session.unit",
+  "diag.program.title",
+  "diag.program.mode",
+  "diag.latency.p50",
+  "hardware.minimum",
+  "hardware.gb",
+];
+
+describe("untranslated strings", () => {
+  const keys = Object.keys(dictionaries.en) as (keyof typeof dictionaries.en)[];
+  const equal = keys.filter((key) => dictionaries.en[key] === dictionaries.id[key] && /\p{L}{3}/u.test(dictionaries.en[key]));
+
+  it("are only the ones listed as the same on purpose", () => {
+    expect(equal.filter((key) => !SAME_ON_PURPOSE.includes(key))).toEqual([]);
+  });
+
+  it("have no stale entries in that list", () => {
+    expect(SAME_ON_PURPOSE.filter((key) => !equal.includes(key as (typeof keys)[number]))).toEqual([]);
+  });
+});
+
 describe("translate", () => {
   it("fills slots", () => {
     expect(translate("en", "link.seconds", { count: 5 })).toBe("5 s");
