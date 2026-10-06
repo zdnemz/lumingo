@@ -3,6 +3,8 @@
 //! here: a level only ever comes from stored, locally scored attempts.
 #![forbid(unsafe_code)]
 
+pub mod deterministic;
+
 use std::collections::{BTreeMap, HashSet};
 
 pub const ALGORITHM_VERSION: &str = "est/1";
