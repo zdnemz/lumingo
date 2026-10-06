@@ -79,7 +79,7 @@ async fn fixture_with(rubric: Option<WorkshopRubric>) -> Fixture {
         clock: test_clock(),
         model: "test-model".into(),
         provider_profile_id: None,
-        grammar: Arc::new(FakeGrammar),
+        grammar: Some(Arc::new(FakeGrammar)),
         word_levels: None,
         provider_qualified: true,
     };
@@ -149,6 +149,7 @@ async fn rule_findings_come_at_once_with_no_provider_call_and_the_draft_is_store
     let f = fixture().await;
     let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
     assert_eq!(f.llm.structured_calls(), 0);
+    assert!(submission.rule_checked);
     assert_eq!(submission.rule_findings.len(), 2);
     assert!(
         submission.rule_findings[0].contains("teh") || submission.rule_findings[1].contains("teh")
@@ -647,4 +648,38 @@ async fn deleting_the_session_removes_drafts_analysis_and_the_queue() {
         .unwrap();
     assert!(f.db.pending_scoring().oldest(10).await.unwrap().is_empty());
     assert!(f.db.turns().get(s.turn_id).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn without_a_checker_the_first_layer_says_it_did_not_check_and_x5_is_not_evaluated() {
+    let f = fixture().await;
+    let mut env = f.env.clone();
+    env.grammar = None;
+    let workshop = Workshop::start(
+        env,
+        WorkshopConfig {
+            profile_id: 1,
+            level: Level::A2,
+            first_language: "Indonesian".into(),
+            app_version: "0.0.0-test".into(),
+            prompt_id: None,
+            rubric: Some(rubric()),
+            task: task(),
+        },
+    )
+    .await
+    .unwrap();
+    let submission = workshop.submit_draft(DRAFT).await.unwrap();
+    assert!(!submission.rule_checked, "nothing was checked");
+    assert!(submission.rule_findings.is_empty());
+    f.llm.queue_structured(Ok(t2(submission.turn_seq, vec![])));
+    let mut reply = t3("Saturday at the lake");
+    reply["dimension_scores"][2]["band"] = json!("4");
+    f.llm.queue_structured(Ok(reply));
+    let feedback = workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    let rubric = feedback.rubric.expect("layer three");
+    assert!(rubric.alarms.is_empty(), "no checker, no X5 alarm");
 }

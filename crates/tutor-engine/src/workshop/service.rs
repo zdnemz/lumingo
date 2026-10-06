@@ -42,7 +42,7 @@ pub struct WorkshopEnv {
     pub provider_profile_id: Option<i64>,
     /// The rule-based checker. Harper is wired in a later task; any
     /// implementation of the trait works.
-    pub grammar: Arc<dyn GrammarCheck + Send + Sync>,
+    pub grammar: Option<Arc<dyn GrammarCheck + Send + Sync>>,
     /// Word levels for the range cross-check (X4). Optional.
     pub word_levels: Option<Arc<WordLevels>>,
     /// Whether the provider passed scorer qualification. It sets the starting
@@ -72,6 +72,9 @@ pub struct DraftSubmission {
     pub text: String,
     pub words: usize,
     /// Layer one: findings of the rule-based checker.
+    /// False when no rule-based checker is linked: the list is then empty
+    /// because nothing was checked, not because the text is clean.
+    pub rule_checked: bool,
     pub rule_findings: Vec<String>,
     /// The draft is shorter than the task's minimum.
     pub below_minimum: bool,
@@ -155,14 +158,14 @@ fn analyzer_for(
 }
 
 /// Runs the checker off the async worker threads: a grammar engine is CPU work.
-async fn rule_findings(env: &WorkshopEnv, text: &str) -> Vec<String> {
-    let grammar = env.grammar.clone();
+async fn rule_findings(env: &WorkshopEnv, text: &str) -> Option<Vec<String>> {
+    let grammar = env.grammar.clone()?;
     let owned = text.to_owned();
     match tokio::task::spawn_blocking(move || grammar.findings(&owned)).await {
-        Ok(findings) => findings,
+        Ok(findings) => Some(findings),
         Err(error) => {
             tracing::warn!(%error, "the rule-based checker failed");
-            Vec::new()
+            None
         }
     }
 }
@@ -231,7 +234,9 @@ impl Workshop {
                 created_at: (self.env.clock)(),
             })
             .await?;
-        let mut findings = rule_findings(&self.env, text).await;
+        let checked = rule_findings(&self.env, text).await;
+        let rule_checked = checked.is_some();
+        let mut findings = checked.unwrap_or_default();
         findings.dedup();
         let below_minimum = self
             .config
@@ -243,6 +248,7 @@ impl Workshop {
             turn_seq: turn.seq,
             text: text.to_owned(),
             words,
+            rule_checked,
             rule_findings: findings,
             below_minimum,
         })
@@ -421,7 +427,7 @@ fn scorer_env(env: &WorkshopEnv) -> ScorerEnv {
         clock: env.clock.clone(),
         model: env.model.clone(),
         provider_profile_id: env.provider_profile_id,
-        grammar: Some(env.grammar.clone()),
+        grammar: env.grammar.clone(),
         word_levels: env.word_levels.clone(),
         provider_qualified: env.provider_qualified,
     }
