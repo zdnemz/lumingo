@@ -3,6 +3,7 @@
 //! (section 8). None of these sets a score or a level on its own.
 
 use crate::Level;
+#[cfg(feature = "grammar")]
 use harper_core::{
     Dialect, Document,
     linting::{LintGroup, Linter},
@@ -139,54 +140,61 @@ pub fn vocabulary_profile(text: &str, list: &WordList) -> VocabularyProfile {
     }
 }
 
-/// One rule-based finding. Offsets count characters, not bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Finding {
-    pub start: usize,
-    pub end: usize,
-    pub kind: String,
-    pub message: String,
-    pub suggestions: Vec<String>,
-}
+#[cfg(feature = "grammar")]
+mod grammar {
+    use super::*;
 
-/// Rule-based grammar and spelling checker (`harper-core`, no network). Building
-/// it loads a dictionary, so create one and reuse it. It is not `Send`: keep it
-/// on the thread that created it.
-pub struct GrammarChecker {
-    linter: LintGroup,
-}
-
-impl Default for GrammarChecker {
-    fn default() -> Self {
-        Self::new()
+    /// One rule-based finding. Offsets count characters, not bytes.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Finding {
+        pub start: usize,
+        pub end: usize,
+        pub kind: String,
+        pub message: String,
+        pub suggestions: Vec<String>,
     }
-}
 
-impl GrammarChecker {
-    pub fn new() -> Self {
-        Self {
-            linter: LintGroup::new_curated(FstDictionary::curated(), Dialect::American),
+    /// Rule-based grammar and spelling checker (`harper-core`, no network). Building
+    /// it loads a dictionary, so create one and reuse it. It is not `Send`: keep it
+    /// on the thread that created it.
+    pub struct GrammarChecker {
+        linter: LintGroup,
+    }
+
+    impl Default for GrammarChecker {
+        fn default() -> Self {
+            Self::new()
         }
     }
 
-    /// `include_spelling` is false for text that came from speech, where spelling
-    /// belongs to the transcriber and not to the learner.
-    pub fn findings(&mut self, text: &str, include_spelling: bool) -> Vec<Finding> {
-        let document = Document::new_curated(text, &PlainEnglish);
-        self.linter
-            .lint(&document)
-            .into_iter()
-            .filter(|l| include_spelling || format!("{:?}", l.lint_kind) != "Spelling")
-            .map(|l| Finding {
-                start: l.span.start,
-                end: l.span.end,
-                kind: format!("{:?}", l.lint_kind),
-                message: l.message,
-                suggestions: l.suggestions.iter().map(ToString::to_string).collect(),
-            })
-            .collect()
+    impl GrammarChecker {
+        pub fn new() -> Self {
+            Self {
+                linter: LintGroup::new_curated(FstDictionary::curated(), Dialect::American),
+            }
+        }
+
+        /// `include_spelling` is false for text that came from speech, where spelling
+        /// belongs to the transcriber and not to the learner.
+        pub fn findings(&mut self, text: &str, include_spelling: bool) -> Vec<Finding> {
+            let document = Document::new_curated(text, &PlainEnglish);
+            self.linter
+                .lint(&document)
+                .into_iter()
+                .filter(|l| include_spelling || format!("{:?}", l.lint_kind) != "Spelling")
+                .map(|l| Finding {
+                    start: l.span.start,
+                    end: l.span.end,
+                    kind: format!("{:?}", l.lint_kind),
+                    message: l.message,
+                    suggestions: l.suggestions.iter().map(ToString::to_string).collect(),
+                })
+                .collect()
+        }
     }
 }
+#[cfg(feature = "grammar")]
+pub use grammar::{Finding, GrammarChecker};
 
 /// Findings per 100 running words. Zero words gives zero.
 pub fn findings_per_100_words(findings: usize, words: usize) -> f64 {
@@ -310,6 +318,7 @@ mod tests {
         assert!(advanced.share_above(Level::A2) > simple.share_above(Level::A2));
     }
 
+    #[cfg(feature = "grammar")]
     #[test]
     fn the_checker_flags_a_wrong_article_and_leaves_a_clean_sentence_alone() {
         let mut c = GrammarChecker::new();
@@ -323,6 +332,7 @@ mod tests {
         assert!(c.findings("She goes to school every day.", true).is_empty());
     }
 
+    #[cfg(feature = "grammar")]
     #[test]
     fn spelling_findings_can_be_left_out_for_transcribed_speech() {
         let mut c = GrammarChecker::new();
