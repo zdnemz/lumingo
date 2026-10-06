@@ -7,6 +7,8 @@
 
 mod load;
 mod model;
+mod validate;
 
 pub use load::{LoadError, LoadedFile, SchemaIssue, UnitLoader, load_dir};
 pub use model::*;
+pub use validate::{Diagnostic, SetOptions, Severity, validate_set, validate_unit};

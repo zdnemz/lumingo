@@ -1530,6 +1530,7 @@ dependencies = [
 name = "curriculum"
 version = "0.0.0"
 dependencies = [
+ "assessment-engine",
  "jsonschema",
  "serde",
  "serde_json",
