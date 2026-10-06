@@ -5,6 +5,7 @@
 
 pub mod deterministic;
 pub mod review;
+pub mod text_metrics;
 
 use std::collections::{BTreeMap, HashSet};
 
