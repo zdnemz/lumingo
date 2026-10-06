@@ -20,6 +20,7 @@ pub fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::Conflict
         | ErrorCode::ReadOnly
         | ErrorCode::Busy
+        | ErrorCode::LicenceNotAccepted
         | ErrorCode::ProviderNotConfigured => StatusCode::CONFLICT,
         ErrorCode::NotAvailable => StatusCode::NOT_IMPLEMENTED,
         ErrorCode::ShuttingDown => StatusCode::SERVICE_UNAVAILABLE,
@@ -47,6 +48,7 @@ impl ApiError {
             body: ApiErrorBody {
                 error,
                 message: message.to_owned(),
+                feature: None,
             },
             status: None,
         }
@@ -99,6 +101,7 @@ mod tests {
             ErrorCode::ReadOnly,
             ErrorCode::Busy,
             ErrorCode::NotAvailable,
+            ErrorCode::LicenceNotAccepted,
             ErrorCode::ProviderNotConfigured,
             ErrorCode::ShuttingDown,
             ErrorCode::Storage,
@@ -117,10 +120,22 @@ mod tests {
     }
 
     #[test]
-    fn a_not_available_feature_is_a_typed_501() {
+    fn a_not_available_feature_is_a_typed_501_that_names_the_feature() {
         let error = ApiError::from(CoreError::NotAvailable(app_core::api::Feature::Speech));
         assert_eq!(error.body().error, ErrorCode::NotAvailable);
+        assert_eq!(error.body().feature, Some(app_core::api::Feature::Speech));
         let response = error.into_response();
         assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+    }
+
+    #[test]
+    fn a_missing_part_with_a_reason_is_a_501_with_the_reason_and_a_licence_refusal_a_409() {
+        let missing = ApiError::from(CoreError::unavailable(None, "the placement bank is missing"));
+        assert_eq!(missing.body().error, ErrorCode::NotAvailable);
+        assert_eq!(missing.body().message, "the placement bank is missing");
+        assert_eq!(missing.into_response().status(), StatusCode::NOT_IMPLEMENTED);
+        let licence = ApiError::from(CoreError::LicenceNotAccepted("accept it first".to_owned()));
+        assert_eq!(licence.body().error, ErrorCode::LicenceNotAccepted);
+        assert_eq!(licence.into_response().status(), StatusCode::CONFLICT);
     }
 }
