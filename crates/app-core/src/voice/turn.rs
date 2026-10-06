@@ -61,6 +61,10 @@ pub(crate) enum Plan {
     Model(TextRequest),
     /// Speak this line without asking the model.
     Canned(String),
+    /// Speak a text that is already stored, cut into sentences. It is not a reply:
+    /// it makes no sentence events and no latency report, and the loop does not
+    /// keep it in the conversation.
+    Say(String),
 }
 
 /// Speech output: the worker that synthesises and the queue that plays.
@@ -154,6 +158,8 @@ struct Turn<'a> {
     /// The stream (or the canned line) is over; no more sentences will come.
     ended: bool,
     was_cancelled: bool,
+    /// The turn speaks a stored text ([`Plan::Say`]).
+    saying: bool,
 }
 
 pub(crate) async fn run(env: TurnEnv, input: TurnRun) -> TurnReport {
@@ -176,6 +182,11 @@ pub(crate) async fn run(env: TurnEnv, input: TurnRun) -> TurnReport {
             t.reply.clone_from(&line);
             t.on_sentence(line);
             t.ended = true;
+        }
+        Plan::Say(text) => {
+            t.saying = true;
+            t.on_delta(&text);
+            t.on_end();
         }
         Plan::Model(request) => match t.open(&request, &token).await {
             Opened::Ready(opened, event) => {
@@ -285,6 +296,7 @@ impl<'a> Turn<'a> {
             started_reply: false,
             ended: false,
             was_cancelled: false,
+            saying: false,
         }
     }
 
@@ -353,11 +365,13 @@ impl<'a> Turn<'a> {
         if index == 0 {
             self.stamps.first_sentence = Some(self.now());
         }
-        self.env.events.publish(VoiceEvent::TutorSentence {
-            turn: self.turn,
-            index,
-            text: text.clone(),
-        });
+        if !self.saying {
+            self.env.events.publish(VoiceEvent::TutorSentence {
+                turn: self.turn,
+                index,
+                text: text.clone(),
+            });
+        }
         if self.env.speech.is_some() {
             self.backlog.push_back(text);
             self.flush_backlog();
@@ -461,6 +475,9 @@ impl<'a> Turn<'a> {
     }
 
     fn publish_latency(&mut self) {
+        if self.saying {
+            return;
+        }
         let latency = TurnLatency {
             turn: self.turn,
             parts: LatencyParts::from_stamps(&self.stamps),
@@ -517,7 +534,13 @@ impl<'a> Turn<'a> {
             epoch: self.epoch,
             turn: self.turn,
             outcome,
-            reply: self.reply.trim().to_owned(),
+            // A stored text that was spoken is not a reply: the loop must not
+            // mistake it for one, even when the learner stops it half way.
+            reply: if self.saying {
+                String::new()
+            } else {
+                self.reply.trim().to_owned()
+            },
             latency: self.latency,
             message: None,
             fault: None,

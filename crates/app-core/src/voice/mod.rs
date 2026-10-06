@@ -103,6 +103,7 @@ pub use latency::{
     LatencyParts, LatencyRecord, LatencySummary, Quantiles, Stamps, TurnLatency, duration_ms,
     percentile,
 };
+pub use msg::EditEffect;
 pub use port::PlaybackPort;
 pub use record::{RecordSummary, Recording};
 

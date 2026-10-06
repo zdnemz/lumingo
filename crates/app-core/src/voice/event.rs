@@ -11,7 +11,7 @@
 //! them to a log.
 
 use tokio::sync::broadcast;
-use tutor_engine::{EngineFault, Phase};
+use tutor_engine::{EngineFault, Phase, RunReport};
 
 use super::latency::TurnLatency;
 
@@ -51,10 +51,11 @@ pub enum VoiceEvent {
     SpeechStarted,
     /// The tutor was stopped before it finished.
     Stopped(StopCause),
-    /// The recogniser's transcript, or the typed message.
+    /// The recogniser's transcript, or the typed message. `voice` says which.
     Heard {
         turn: u64,
         text: String,
+        voice: bool,
     },
     /// A sentence of the tutor's reply, as it is handed to speech output.
     TutorSentence {
@@ -69,6 +70,15 @@ pub enum VoiceEvent {
         turn: u64,
         outcome: TurnOutcome,
     },
+    /// The learner's line of `turn` is stored. Sent by the recorder, after the
+    /// reply, so the screen can offer to correct it by its stored position.
+    Recorded {
+        turn: u64,
+        learner_seq: i64,
+        text: String,
+    },
+    /// The background analysis of one or more learner turns finished and was stored.
+    Analysed(Box<RunReport>),
     /// The provider could not be reached or kept failing. `message` is for the learner.
     ProviderUnavailable {
         message: String,

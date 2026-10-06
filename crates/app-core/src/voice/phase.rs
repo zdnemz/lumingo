@@ -54,6 +54,11 @@ impl PhaseCell {
         self.lock().session.turns_completed()
     }
 
+    /// The number of the turn that began last, 0 before the first.
+    pub(crate) fn turns_started(&self) -> u64 {
+        self.lock().turns_started
+    }
+
     /// Starts a turn: a new epoch and the next display number.
     pub(crate) fn begin_turn(&self) -> (u64, u64) {
         let mut inner = self.lock();

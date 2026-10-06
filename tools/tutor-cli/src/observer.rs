@@ -134,8 +134,12 @@ impl Observer {
     fn on_event(&self, event: &VoiceEvent, show_states: bool) {
         match event {
             VoiceEvent::State(phase) if show_states => println!("[{}]", phase_name(*phase)),
-            VoiceEvent::State(_) | VoiceEvent::SpeechStarted | VoiceEvent::Closed => {}
-            VoiceEvent::Heard { turn, text } => {
+            VoiceEvent::State(_)
+            | VoiceEvent::SpeechStarted
+            | VoiceEvent::Closed
+            | VoiceEvent::Recorded { .. }
+            | VoiceEvent::Analysed(_) => {}
+            VoiceEvent::Heard { turn, text, .. } => {
                 let mut state = self.lock();
                 let kind = state.next_input;
                 state.kinds.insert(*turn, kind);
