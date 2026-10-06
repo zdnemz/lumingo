@@ -2,6 +2,7 @@
 //! Only the `dummy` suite exists so far: it proves the result format, the
 //! percentile rule, memory sampling and the `floor` guard end to end.
 
+mod fixtures;
 mod machine;
 mod memory;
 mod result;
@@ -16,12 +17,22 @@ use std::{
     time::{Instant, SystemTime},
 };
 
-const USAGE: &str = "usage: bench dummy --profile <dev|floor> [--state <cold|warm>] [--out <dir>]";
+const USAGE: &str = "usage: bench fixtures <gen-f1|list> [dir] | bench dummy --profile <dev|floor> [--state <cold|warm>] [--out <dir>]";
 
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
         Some("dummy") => dummy(args.collect()),
+        Some("fixtures") => {
+            let (cmd, dir) = (args.next(), args.next().map(PathBuf::from));
+            let root = dir.unwrap_or_else(|| PathBuf::from("benchmarks/fixtures"));
+            match cmd.as_deref() {
+                Some("gen-f1") => fixtures::generate_f1(&root.join("f1"))?,
+                Some("list") => fixtures::list(&root)?.iter().for_each(|l| println!("{l}")),
+                _ => bail!(USAGE),
+            }
+            Ok(())
+        }
         _ => bail!(USAGE),
     }
 }
