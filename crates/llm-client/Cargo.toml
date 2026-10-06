@@ -5,11 +5,17 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "LLM protocol adapters for Lumingo: request bodies and stream parsing, no transport"
+description = "LLM client for Lumingo: protocol adapters, streaming transport, retries and the host rules"
 
 [dependencies]
+reqwest = { version = "0.13.5", features = ["json"] }
 serde_json = "1"
 thiserror = "2.0.21"
+tokio = { version = "1", features = ["rt", "time", "sync", "macros"] }
+tokio-util = "0.7"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["net", "io-util"] }
 
 [lints]
 workspace = true
