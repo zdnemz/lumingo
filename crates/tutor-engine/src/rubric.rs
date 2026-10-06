@@ -6,12 +6,14 @@
 //! field for one, and feedback prose that names a level or a percentage is
 //! discarded.
 
-use assessment_engine::{Level, normalize};
+use assessment_engine::{
+    Level, WordList, normalize, text_counts, vocabulary_profile, words as split_words,
+};
 use curriculum::validate::WordLevels;
 use llm_client::LadderLevel;
 use serde::{Deserialize, Serialize};
 
-use crate::support::{curriculum_level, names_a_level, states_a_percentage, truncate_words};
+use crate::support::{names_a_level, states_a_percentage, truncate_words};
 
 pub const RUBRIC_SCORE_VERSION: &str = "rubric_score/1";
 
@@ -218,19 +220,72 @@ pub struct RubricResult {
 }
 
 /// What the cross-checks need besides the reply.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct CrossCheck<'a> {
     pub response: &'a str,
     pub level: Level,
     pub task: &'a WorkshopTask,
     pub rubric: &'a WorkshopRubric,
-    /// Findings of the rule-based checker for the response.
-    pub grammar_findings: usize,
-    pub word_levels: Option<&'a WordLevels>,
+    /// Findings of the rule-based checker for the response, or `None` when no
+    /// checker is linked, in which case X5 is not evaluated.
+    pub grammar_findings: Option<usize>,
+    /// The word list for X4, or `None` when the caller has none.
+    pub word_levels: Option<&'a dyn WordList>,
     /// Whether the provider passed scorer qualification (section 6).
     pub provider_qualified: bool,
     pub repaired: bool,
     pub ladder_level: LadderLevel,
+}
+
+/// The curriculum crate's word list as the metrics crate's [`WordList`]. A
+/// wrapper, because neither trait nor type is local to this crate.
+#[derive(Debug, Clone, Copy)]
+pub struct CurriculumWords<'a>(pub &'a WordLevels);
+
+impl WordList for CurriculumWords<'_> {
+    fn level_of(&self, word: &str) -> Option<Level> {
+        self.0.level_of(word).map(|level| match level {
+            curriculum::Level::A1 => Level::A1,
+            curriculum::Level::A2 => Level::A2,
+            curriculum::Level::B1 => Level::B1,
+            curriculum::Level::B2 => Level::B2,
+            curriculum::Level::C1 => Level::C1,
+            curriculum::Level::C2 => Level::C2,
+        })
+    }
+}
+
+/// What the confidence of a rubric attempt depends on (assessment spec 5.4).
+#[derive(Debug, Clone, Copy)]
+pub struct ConfidenceInputs {
+    /// The provider passed scorer qualification: the start is 0.8, else 0.5.
+    pub provider_qualified: bool,
+    /// X4 or X5 raised an alarm: minus 0.2.
+    pub alarm: bool,
+    /// The output needed a repair or came from ladder level 4: minus 0.2, once.
+    pub repaired: bool,
+    /// Two runs agreed exactly on every dimension: plus 0.1.
+    pub runs_agreed: bool,
+    /// A productive task at C1 or C2 is capped at 0.6.
+    pub level: Level,
+}
+
+/// The confidence table of section 5.4, bounds 0.1 to 0.9.
+pub fn rubric_confidence(inputs: &ConfidenceInputs) -> f64 {
+    let mut confidence: f64 = if inputs.provider_qualified { 0.8 } else { 0.5 };
+    if inputs.alarm {
+        confidence -= 0.2;
+    }
+    if inputs.repaired {
+        confidence -= 0.2;
+    }
+    if inputs.runs_agreed {
+        confidence += 0.1;
+    }
+    if matches!(inputs.level, Level::C1 | Level::C2) {
+        confidence = confidence.min(0.6);
+    }
+    confidence.clamp(0.1, 0.9)
 }
 
 /// Distinct words a range band of 4 should show. A starting value.
@@ -239,16 +294,6 @@ const RANGE_MIN_DISTINCT_WORDS: usize = 30;
 const ACCURACY_MAX_RATE: f64 = 5.0;
 /// Shortest response, in words, for which the finding rate means anything.
 const ACCURACY_MIN_WORDS: usize = 10;
-
-fn words_of(text: &str) -> Vec<String> {
-    text.split_whitespace()
-        .map(|w| {
-            w.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'')
-                .to_lowercase()
-        })
-        .filter(|w| !w.is_empty())
-        .collect()
-}
 
 fn valid_quote(response_norm: &str, quote: &str) -> bool {
     let quote = normalize(quote);
@@ -285,7 +330,7 @@ fn clean_feedback(text: &str) -> String {
 /// only lower the confidence.
 pub fn cross_check(raw: &RawRubric, input: &CrossCheck<'_>) -> RubricResult {
     let response_norm = normalize(input.response);
-    let words = words_of(input.response);
+    let words = split_words(input.response);
 
     // X3, on the task's own list of points.
     let points: Vec<PointResult> = raw
@@ -392,41 +437,42 @@ pub fn cross_check(raw: &RawRubric, input: &CrossCheck<'_>) -> RubricResult {
     };
     let mut alarms = Vec::new();
     if raw.on_task && band_of(Dimension::Range) == Some(4) {
-        let distinct: std::collections::HashSet<&String> = words.iter().collect();
-        let above = input.word_levels.is_some_and(|levels| {
-            words.iter().any(|w| {
-                levels
-                    .level_of(w)
-                    .is_some_and(|l| l > curriculum_level(input.level))
-            })
-        });
-        let no_support =
-            distinct.len() < RANGE_MIN_DISTINCT_WORDS || (input.word_levels.is_some() && !above);
-        if no_support {
+        // A word list that knows none of the response's words says nothing, so
+        // only the number of distinct words is then held against the band.
+        let supported = match input.word_levels {
+            Some(list) => {
+                let profile = vocabulary_profile(input.response, input.level, list);
+                profile.is_uninformative() || profile.above > 0
+            }
+            None => true,
+        };
+        let distinct = text_counts(input.response).distinct_words;
+        if distinct < RANGE_MIN_DISTINCT_WORDS || !supported {
             alarms.push(Alarm::Range);
         }
     }
-    if raw.on_task && words.len() >= ACCURACY_MIN_WORDS {
-        let rate = input.grammar_findings as f64 * 100.0 / words.len() as f64;
+    // X5 needs a rule-based checker. Without one the check is skipped: a missing
+    // checker is not the same as a response with no findings.
+    if let Some(findings) = input.grammar_findings
+        && raw.on_task
+        && words.len() >= ACCURACY_MIN_WORDS
+    {
+        let rate = findings as f64 * 100.0 / words.len() as f64;
         let accuracy = band_of(Dimension::Accuracy);
         if (accuracy == Some(4) && rate > ACCURACY_MAX_RATE)
-            || (accuracy == Some(1) && input.grammar_findings == 0)
+            || (accuracy == Some(1) && findings == 0)
         {
             alarms.push(Alarm::Accuracy);
         }
     }
 
-    let mut confidence: f64 = if input.provider_qualified { 0.8 } else { 0.5 };
-    if !alarms.is_empty() {
-        confidence -= 0.2;
-    }
-    if input.repaired || input.ladder_level == LadderLevel::PromptOnly {
-        confidence -= 0.2;
-    }
-    if matches!(input.level, Level::C1 | Level::C2) {
-        confidence = confidence.min(0.6);
-    }
-    let confidence = confidence.clamp(0.1, 0.9);
+    let confidence = rubric_confidence(&ConfidenceInputs {
+        provider_qualified: input.provider_qualified,
+        alarm: !alarms.is_empty(),
+        repaired: input.repaired || input.ladder_level == LadderLevel::PromptOnly,
+        runs_agreed: false,
+        level: input.level,
+    });
 
     RubricResult {
         dimensions,

@@ -12,7 +12,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use assessment_engine::Level;
+use assessment_engine::{Level, WordList};
 use curriculum::validate::{GrammarCheck, WordLevels};
 use llm_client::{
     ChatMessage, Contract, LadderLevel, LlmClient, LlmError, StructuredOutput, StructuredRequest,
@@ -35,8 +35,9 @@ use crate::error::{EngineError, Result};
 use crate::support::{CallLog, Clock, storage_level};
 
 use crate::rubric::{
-    CrossCheck, DimensionResult, DimensionStatus, RUBRIC_SCORE_VERSION, RawRubric, RubricResult,
-    WorkshopRubric, WorkshopTask, cross_check, merge_rerun, system_prompt, user_message,
+    CrossCheck, CurriculumWords, DimensionResult, DimensionStatus, RUBRIC_SCORE_VERSION, RawRubric,
+    RubricResult, WorkshopRubric, WorkshopTask, cross_check, merge_rerun, system_prompt,
+    user_message,
 };
 
 /// What the workshop works with. Cheap to clone.
@@ -479,6 +480,7 @@ async fn run_rubric(
         return Err(EngineError::Refused("no rubric is set for this task"));
     };
     let findings = rule_findings(env, &pending.text).await.len();
+    let words = env.word_levels.as_deref().map(CurriculumWords);
     let check = |run: &RubricRun| {
         cross_check(
             &run.raw,
@@ -487,8 +489,8 @@ async fn run_rubric(
                 level: pending.level,
                 task: &pending.task,
                 rubric,
-                grammar_findings: findings,
-                word_levels: env.word_levels.as_deref(),
+                grammar_findings: Some(findings),
+                word_levels: words.as_ref().map(|list| list as &dyn WordList),
                 provider_qualified: env.provider_qualified,
                 repaired: run.repaired,
                 ladder_level: run.ladder_level,

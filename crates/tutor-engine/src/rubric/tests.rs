@@ -76,7 +76,7 @@ fn input<'a>(
         level: Level::A2,
         task,
         rubric,
-        grammar_findings: 0,
+        grammar_findings: Some(0),
         word_levels: None,
         provider_qualified: true,
         repaired: false,
@@ -265,7 +265,7 @@ fn x5_an_accuracy_band_of_four_with_many_findings_lowers_confidence_only() {
     let mut raw = good();
     raw.dimension_scores[2] = dim(Dimension::Accuracy, "4", &["Bring a bag"]);
     let mut check = input(RESPONSE, &task, &rubric);
-    check.grammar_findings = 4;
+    check.grammar_findings = Some(4);
     let result = cross_check(&raw, &check);
     assert_eq!(result.alarms, [Alarm::Accuracy]);
     assert_eq!(
@@ -375,4 +375,86 @@ fn a_rerun_replaces_only_the_rejected_dimensions() {
     let merged = merge_rerun(first, &bad);
     assert_eq!(merged.rejected, [Dimension::Range]);
     assert_eq!(band(&merged, Dimension::Range), None);
+}
+
+#[test]
+fn x5_is_skipped_when_no_checker_is_linked_and_is_not_a_finding_count_of_zero() {
+    let (rubric, task) = (rubric(), task());
+    let mut raw = good();
+    raw.dimension_scores[2] = dim(Dimension::Accuracy, "1", &["Bring a bag"]);
+    let mut check = input(RESPONSE, &task, &rubric);
+    check.grammar_findings = Some(0);
+    assert_eq!(cross_check(&raw, &check).alarms, [Alarm::Accuracy]);
+    check.grammar_findings = None;
+    let result = cross_check(&raw, &check);
+    assert!(result.alarms.is_empty(), "no checker, no alarm");
+    assert!((result.confidence - 0.8).abs() < 1e-9);
+}
+
+#[test]
+fn x4_uses_the_vocabulary_profile_of_the_response() {
+    use std::collections::HashMap;
+    let (rubric, task) = (rubric(), task());
+    let mut raw = good();
+    raw.dimension_scores[1] = dim(Dimension::Range, "4", &["cook rice and chicken"]);
+    // A response with enough distinct words for the count test, so only the profile decides.
+    let wide = "Hi Sari, come to my house on Saturday at five. We will cook rice and chicken together, \
+        then eat, talk, play music, watch a film and drink tea. Bring a bag, a book, a jacket and some fruit \
+        because the evening may be cold and long.";
+    let mut check = input(wide, &task, &rubric);
+    assert!(
+        cross_check(&raw, &check).alarms.is_empty(),
+        "without a list only the distinct words count"
+    );
+    let mut list: HashMap<String, Level> = HashMap::new();
+    for word in [
+        "hi", "come", "house", "cook", "rice", "chicken", "eat", "talk", "play",
+    ] {
+        list.insert(word.to_owned(), Level::A1);
+    }
+    check.word_levels = Some(&list);
+    assert_eq!(
+        cross_check(&raw, &check).alarms,
+        [Alarm::Range],
+        "a list that knows the words and finds none above the level does not support a 4"
+    );
+    let mut richer = list.clone();
+    richer.insert("jacket".to_owned(), Level::B1);
+    check.word_levels = Some(&richer);
+    assert!(cross_check(&raw, &check).alarms.is_empty());
+    // A list that knows nothing of the response says nothing.
+    let unrelated: HashMap<String, Level> = HashMap::from([("zebra".to_owned(), Level::A1)]);
+    check.word_levels = Some(&unrelated);
+    assert!(cross_check(&raw, &check).alarms.is_empty());
+}
+
+#[test]
+fn the_confidence_table_adds_a_tenth_when_two_runs_agree_and_keeps_its_bounds() {
+    let base = ConfidenceInputs {
+        provider_qualified: true,
+        alarm: false,
+        repaired: false,
+        runs_agreed: false,
+        level: Level::A2,
+    };
+    assert!((rubric_confidence(&base) - 0.8).abs() < 1e-9);
+    let agreed = ConfidenceInputs {
+        runs_agreed: true,
+        ..base
+    };
+    assert!((rubric_confidence(&agreed) - 0.9).abs() < 1e-9);
+    // Productive at C1 or C2: capped at 0.6 even when two runs agree.
+    for level in [Level::C1, Level::C2] {
+        let capped = rubric_confidence(&ConfidenceInputs { level, ..agreed });
+        assert!((capped - 0.6).abs() < 1e-9, "{level:?}");
+    }
+    // Everything wrong: not qualified, alarm, repaired: 0.5 - 0.2 - 0.2 = 0.1.
+    let worst = ConfidenceInputs {
+        provider_qualified: false,
+        alarm: true,
+        repaired: true,
+        runs_agreed: false,
+        level: Level::A2,
+    };
+    assert!((rubric_confidence(&worst) - 0.1).abs() < 1e-9);
 }
