@@ -31,6 +31,12 @@ pub enum VoiceError {
     Storage(#[from] storage::StorageError),
     #[error("a background task did not finish")]
     TaskFailed,
+    #[error("there is no such turn to correct")]
+    NoSuchTurn,
+    #[error("only a spoken turn has a transcript to correct")]
+    NotSpoken,
+    #[error("this session does not store its turns, so a transcript cannot be corrected")]
+    NotRecording,
     #[error("the voice loop has stopped")]
     Stopped,
 }

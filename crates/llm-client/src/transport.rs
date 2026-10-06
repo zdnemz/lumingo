@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::adapter::{Limits, RetryPolicy};
 use crate::error::{LlmError, TimeoutKind};
 use crate::http::{GuardedClient, map_reqwest_error};
+use crate::inspector::{Capture, PayloadLog, PayloadOutcome};
 use crate::key::ApiKey;
 use crate::redact::sanitize_message;
 use crate::types::RateLimit;
@@ -50,6 +51,21 @@ impl CallBudget {
     }
 }
 
+/// A successful response and the open inspector entry of its request, if the
+/// transport has a log. The caller finishes the entry when it has read the body.
+#[derive(Debug)]
+pub(crate) struct Posted {
+    pub response: Response,
+    pub capture: Option<Capture>,
+}
+
+/// Ends an optional entry without a response body.
+fn end(capture: Option<Capture>, outcome: PayloadOutcome) {
+    if let Some(capture) = capture {
+        capture.finish(outcome);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Transport {
     http: GuardedClient,
@@ -57,6 +73,7 @@ pub(crate) struct Transport {
     headers: HeaderMap,
     key: Option<ApiKey>,
     retry: RetryPolicy,
+    log: Option<PayloadLog>,
 }
 
 impl Transport {
@@ -73,7 +90,15 @@ impl Transport {
             headers,
             key,
             retry,
+            log: None,
         }
+    }
+
+    /// Records every request this transport sends in `log`.
+    #[must_use]
+    pub(crate) fn with_log(mut self, log: PayloadLog) -> Self {
+        self.log = Some(log);
+        self
     }
 
     fn key_text(&self) -> Option<&str> {
@@ -98,7 +123,7 @@ impl Transport {
         stream: bool,
         budget: &CallBudget,
         cancel: &CancellationToken,
-    ) -> Result<Response, LlmError> {
+    ) -> Result<Posted, LlmError> {
         let mut transport_retries = 0;
         let mut rate_limit_retries = 0;
         loop {
@@ -156,16 +181,30 @@ impl Transport {
         stream: bool,
         budget: &CallBudget,
         cancel: &CancellationToken,
-    ) -> Result<Response, LlmError> {
+    ) -> Result<Posted, LlmError> {
         let bytes = serde_json::to_vec(body).map_err(|_| {
             LlmError::InvalidRequest("the request body could not be serialised".to_owned())
         })?;
-        let mut builder = self
-            .http
-            .post(&self.url)?
-            .headers(self.headers.clone())
-            .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
-            .body(bytes);
+        // The body is recorded as it is sent. Headers, which carry the key, are
+        // never recorded.
+        let mut capture = self.log.as_ref().map(|log| {
+            log.begin(
+                &self.url,
+                &String::from_utf8_lossy(&bytes),
+                stream,
+                self.key.as_ref(),
+            )
+        });
+        let mut builder = match self.http.post(&self.url) {
+            Ok(builder) => builder
+                .headers(self.headers.clone())
+                .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+                .body(bytes),
+            Err(error) => {
+                end(capture, PayloadOutcome::Failed);
+                return Err(error);
+            }
+        };
         if stream {
             builder = builder.header(ACCEPT, HeaderValue::from_static("text/event-stream"));
         }
@@ -173,18 +212,32 @@ impl Transport {
         let (header_deadline, header_kind) = budget.header_deadline();
         let sent = tokio::select! {
             biased;
-            () = cancel.cancelled() => return Err(LlmError::Cancelled),
+            () = cancel.cancelled() => {
+                end(capture, PayloadOutcome::Failed);
+                return Err(LlmError::Cancelled);
+            }
             result = tokio::time::timeout_at(header_deadline, builder.send()) => result,
         };
         let response = match sent {
-            Err(_elapsed) => return Err(LlmError::Timeout(header_kind)),
-            Ok(Err(error)) => return Err(map_reqwest_error(&error)),
+            Err(_elapsed) => {
+                end(capture, PayloadOutcome::Failed);
+                return Err(LlmError::Timeout(header_kind));
+            }
+            Ok(Err(error)) => {
+                end(capture, PayloadOutcome::Failed);
+                return Err(map_reqwest_error(&error));
+            }
             Ok(Ok(response)) => response,
         };
-        if response.status().is_success() {
-            return Ok(response);
+        if let Some(open) = capture.as_mut() {
+            open.set_status(response.status().as_u16());
         }
-        Err(self.error_from_response(response, budget, cancel).await)
+        if response.status().is_success() {
+            return Ok(Posted { response, capture });
+        }
+        Err(self
+            .error_from_response(response, budget, cancel, capture)
+            .await)
     }
 
     async fn error_from_response(
@@ -192,6 +245,7 @@ impl Transport {
         response: Response,
         budget: &CallBudget,
         cancel: &CancellationToken,
+        capture: Option<Capture>,
     ) -> LlmError {
         let status = response.status();
         let retry_after = parse_retry_after(response.headers());
@@ -202,9 +256,15 @@ impl Transport {
         );
         let body = tokio::select! {
             biased;
-            () = cancel.cancelled() => return LlmError::Cancelled,
+            () = cancel.cancelled() => {
+                end(capture, PayloadOutcome::Failed);
+                return LlmError::Cancelled;
+            }
             read = tokio::time::timeout(wait, read_limited(response, MAX_ERROR_BODY)) => read.ok().and_then(Result::ok).unwrap_or_default(),
         };
+        if let Some(capture) = capture {
+            capture.finish_with(PayloadOutcome::HttpError, &body);
+        }
         classify_status(status, retry_after, &body, self.key_text())
     }
 }

@@ -7,6 +7,7 @@ use std::time::Duration;
 use speech::{EngineInfo, SttEvent, TtsError};
 use tokio::sync::{mpsc, oneshot};
 
+use super::error::VoiceError;
 use super::turn::TurnReport;
 
 /// One finished utterance with the two instants the latency starts from.
@@ -39,11 +40,37 @@ pub(crate) enum Command {
     Stop,
     Pause,
     Resume,
+    /// Speak a text that is already stored, without asking the model. `accepted`
+    /// is told whether the loop could take it: it speaks only while it listens.
+    Say {
+        text: String,
+        accepted: oneshot::Sender<bool>,
+    },
+    /// The learner corrected the transcript of a turn.
+    Edit {
+        turn: u64,
+        text: String,
+        reply: oneshot::Sender<Result<EditEffect, VoiceError>>,
+    },
     /// End the session. The sender is told when the orchestrator is done.
     Finish {
         cancelled: bool,
         done: oneshot::Sender<()>,
     },
+}
+
+/// What a correction of a transcript changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditEffect {
+    /// The turn was not stored yet: the record and its analysis use the edit, and
+    /// so do the next turns. A reply that was already on its way was written from
+    /// the original words.
+    BeforeRecording,
+    /// The turn was stored and its analysis had not started: it uses the edit.
+    AnalysedFromEdit,
+    /// The analysis had started or was done. The corrected text is stored with
+    /// the original kept next to it; the analysis is of the original words.
+    StoredOnly,
 }
 
 #[derive(Debug)]

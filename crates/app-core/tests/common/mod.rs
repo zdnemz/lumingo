@@ -4,7 +4,9 @@
 
 pub mod capture;
 pub mod fake_provider;
+pub mod llm;
 pub mod seed;
+pub mod sessions;
 pub mod voice;
 
 use std::collections::HashMap;

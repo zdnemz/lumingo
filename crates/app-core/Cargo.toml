@@ -17,6 +17,8 @@ curriculum = { version = "0.0.0", path = "../curriculum", features = ["ts"] }
 futures-util = "0.3.34"
 game = { version = "0.0.0", path = "../game" }
 llm-client = { version = "0.0.0", path = "../llm-client" }
+model-manager = { version = "0.0.0", path = "../model-manager" }
+pron-engine = { version = "0.0.0", path = "../pron-engine" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 speech = { version = "0.0.0", path = "../speech" }
@@ -24,6 +26,8 @@ storage = { version = "0.0.0", path = "../storage" }
 # Only the memory reading of sysinfo is used; the other components are off.
 sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
 thiserror = "2.0.21"
+# Reads the engines file (which model files the speech engines load).
+toml = "1.1.6"
 tokio = { version = "1.53.2", features = ["rt", "sync", "time", "fs", "macros"] }
 tokio-util = "0.7.19"
 tracing = "0.1.44"
@@ -35,6 +39,12 @@ tutor-engine = { version = "0.0.0", path = "../tutor-engine" }
 # speech engines and a fake audio backend). They are for tests of this crate and
 # of tools/tutor-cli. No release build enables this feature.
 test-support = ["audio-io/test-support"]
+# Real microphone and speakers through cpal. Compile-checked only, UNVERIFIED on
+# hardware. See the README.
+cpal-backend = ["audio-io/cpal-backend"]
+# Real VAD, speech recognition and speech synthesis through sherpa-onnx.
+# UNVERIFIED: the build container cannot download the native library.
+sherpa = ["speech/sherpa"]
 
 [lints]
 workspace = true
@@ -43,5 +53,6 @@ workspace = true
 # Lets the integration tests in tests/ use the voice fakes.
 app-core = { path = ".", features = ["test-support"] }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+sha2 = "0.10.9"
 tempfile = "3.27.0"
 tokio = { version = "1.53.2", features = ["macros", "net", "rt-multi-thread", "time"] }

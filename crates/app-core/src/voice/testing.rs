@@ -459,16 +459,19 @@ pub struct FakeTts {
 impl FakeTts {
     pub fn new(clock: Option<Arc<ManualClock>>, latency: Duration) -> (Self, Arc<TtsLog>) {
         let log = Arc::new(TtsLog::default());
-        (
-            Self {
-                clock,
-                latency,
-                log: Arc::clone(&log),
-                fail_on: None,
-                real_delay: Duration::ZERO,
-            },
+        (Self::with_log(clock, latency, Arc::clone(&log)), log)
+    }
+
+    /// Like [`FakeTts::new`], writing to a log the caller already holds, so
+    /// several synthesisers (one per session) can share it.
+    pub fn with_log(clock: Option<Arc<ManualClock>>, latency: Duration, log: Arc<TtsLog>) -> Self {
+        Self {
+            clock,
+            latency,
             log,
-        )
+            fail_on: None,
+            real_delay: Duration::ZERO,
+        }
     }
 
     #[must_use]

@@ -34,6 +34,7 @@ fn listener(clock: &Arc<ManualClock>) -> ListenState {
         UtteranceSegmenter::new(config).expect("config"),
         clock.clone(),
         Arc::new(Counters::default()),
+        super::listen::LevelMeter::default(),
     )
 }
 
@@ -357,4 +358,22 @@ fn the_opening_instruction_comes_first_and_the_greeting_is_not_lost() {
     let messages = build_messages(&history, user("Hi, I am Dewi."));
     assert_eq!(messages.len(), 3);
     assert_eq!(messages[1].content, "Hello! I am Sam.");
+}
+
+#[test]
+fn the_level_meter_keeps_the_loudest_sample_of_a_window_and_starts_a_new_one_when_read() {
+    let meter = super::listen::LevelMeter::default();
+    assert!(meter.take() < f32::EPSILON, "silent before any frame");
+    meter.record(&[0.1, -0.6, 0.3]);
+    meter.record(&[0.2, 0.05]);
+    assert!(
+        (meter.take() - 0.6).abs() < 1e-6,
+        "the peak is by magnitude"
+    );
+    assert!(meter.take() < f32::EPSILON, "reading starts a new window");
+    meter.record(&[3.0, -4.0]);
+    assert!(
+        (meter.take() - 1.0).abs() < f32::EPSILON,
+        "a sample past full scale reads as 1"
+    );
 }

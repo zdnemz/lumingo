@@ -31,6 +31,17 @@ pub enum CoreError {
     /// executable yet.
     #[error("{} is not available in this build", .0.label())]
     NotAvailable(Feature),
+    /// Like `NotAvailable`, naming what exactly is missing: a session kind whose
+    /// engine does not exist, a speech engine that is not configured. `what` is a
+    /// sentence fragment without learner text or a path.
+    #[error("{what}")]
+    Unavailable {
+        feature: Option<Feature>,
+        what: String,
+    },
+    /// A download was asked for without the licence that was shown being accepted.
+    #[error("{0}")]
+    LicenceNotAccepted(String),
     /// A feature needs the active provider and there is none.
     #[error("no provider is configured")]
     ProviderNotConfigured,
@@ -58,7 +69,8 @@ impl CoreError {
             Self::Conflict(_) => ErrorCode::Conflict,
             Self::ReadOnly(_) => ErrorCode::ReadOnly,
             Self::Busy => ErrorCode::Busy,
-            Self::NotAvailable(_) => ErrorCode::NotAvailable,
+            Self::NotAvailable(_) | Self::Unavailable { .. } => ErrorCode::NotAvailable,
+            Self::LicenceNotAccepted(_) => ErrorCode::LicenceNotAccepted,
             Self::ProviderNotConfigured => ErrorCode::ProviderNotConfigured,
             Self::ShuttingDown => ErrorCode::ShuttingDown,
             Self::Storage(error) => match error {
@@ -91,9 +103,24 @@ impl CoreError {
             }
             other => other.to_string(),
         };
+        let feature = match self {
+            Self::NotAvailable(feature) => Some(*feature),
+            Self::Unavailable { feature, .. } => *feature,
+            _ => None,
+        };
         ApiErrorBody {
             error: self.code(),
             message,
+            feature,
+        }
+    }
+
+    /// `Unavailable` for `feature` (when one part of the program is missing as a
+    /// whole), naming `what`.
+    pub fn unavailable(feature: Option<Feature>, what: impl Into<String>) -> Self {
+        Self::Unavailable {
+            feature,
+            what: what.into(),
         }
     }
 

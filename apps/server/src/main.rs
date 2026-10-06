@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use app_core::{AppCore, CoreConfig, default_curriculum_dir, default_data_dir};
+use app_core::engines::{EngineOptions, Engines};
+use app_core::{AppCore, CoreConfig, SessionManager, default_curriculum_dir, default_data_dir};
 use clap::Parser;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
@@ -37,6 +38,15 @@ struct Args {
     /// otherwise in the working directory.
     #[arg(long)]
     curriculum_dir: Option<PathBuf>,
+    /// The engines file that names the speech model files. Default:
+    /// `engines.toml` in the data folder. Relative paths in it are read from the
+    /// `models` folder of the data folder.
+    #[arg(long)]
+    engines_file: Option<PathBuf>,
+    /// The model manifest. Default: `models/manifest.toml` next to the
+    /// executable, otherwise in the working directory.
+    #[arg(long)]
+    models_manifest: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -57,14 +67,30 @@ async fn main() -> Result<()> {
         None => default_data_dir().context("no per-user data folder was found; pass --data-dir")?,
     };
     let mut config = CoreConfig::new(
-        data_dir,
+        data_dir.clone(),
         args.curriculum_dir.unwrap_or_else(default_curriculum_dir),
     );
+    if let Some(manifest) = args.models_manifest {
+        config.models_manifest = manifest;
+    }
     config.dev_mode = args.dev;
     config.server_address = Some(address.clone());
     let core = AppCore::open(config)
         .await
         .context("the application core could not start")?;
+    // What the cargo features and the files on disk allow. A build with every
+    // feature off finds no audio and no speech and says why; text chat, lessons,
+    // writing and reading work without them.
+    let options = EngineOptions {
+        data_dir,
+        engines_file: args.engines_file,
+    };
+    let engines = tokio::task::spawn_blocking(move || Engines::detect(&options))
+        .await
+        .context("looking for the audio and speech engines did not finish")?;
+    SessionManager::attach(&core, engines)
+        .await
+        .context("the session manager could not start")?;
     let state = Arc::new(AppState::new(Arc::clone(&core), guard));
 
     println!("Lumingo is running at {address}");

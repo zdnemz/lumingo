@@ -32,8 +32,10 @@ use super::config::{Scenario, VoiceConfig};
 use super::error::{VoiceError, VoiceResult};
 use super::event::{EventSink, StopCause, TurnOutcome, VoiceEvent};
 use super::latency::{LatencySummary, Stamps, TurnLatency};
-use super::listen::{FrameMsg, ListenState, frame_sink, spawn_listener};
-use super::msg::{Command, Counters, Inbound, Inbox, ListenEvent, TtsLifecycle, UtteranceMsg};
+use super::listen::{FrameMsg, LevelMeter, ListenState, frame_sink, spawn_listener};
+use super::msg::{
+    Command, Counters, EditEffect, Inbound, Inbox, ListenEvent, TtsLifecycle, UtteranceMsg,
+};
 use super::phase::PhaseCell;
 use super::port::PlaybackPort;
 use super::record::{RecordMsg, RecordSummary, Recorder, Recording, close_session};
@@ -144,6 +146,9 @@ struct Shared {
     playback: Option<Arc<dyn PlaybackPort>>,
     engines: Mutex<EngineInfos>,
     resources: Mutex<Option<Resources>>,
+    /// The id of the stored session, when the loop stores one.
+    session_id: Option<i64>,
+    level: LevelMeter,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -186,6 +191,57 @@ impl VoiceHandle {
 
     pub fn turns_completed(&self) -> u32 {
         self.shared.cell.turns_completed()
+    }
+
+    /// The number of the turn that began last, 0 before the first. It is the
+    /// number the `turn` of [`VoiceEvent`] carries.
+    pub fn current_turn(&self) -> u64 {
+        self.shared.cell.turns_started()
+    }
+
+    /// The id of the stored session, when the loop stores one.
+    pub fn session_id(&self) -> Option<i64> {
+        self.shared.session_id
+    }
+
+    /// The loudest microphone sample since the last call, 0 to 1. Reading it
+    /// starts a new window, so the caller sets the rate of its level meter. 0 when
+    /// there is no microphone, and while the tutor speaks (the gate drops frames).
+    pub fn mic_level(&self) -> f32 {
+        self.shared.level.take()
+    }
+
+    /// Speaks a text that is already stored, without asking the model. The loop
+    /// speaks only while it listens and has speech output: `Ok(false)` says it
+    /// could not take the text now.
+    pub async fn say(&self, text: impl Into<String>) -> VoiceResult<bool> {
+        let (accepted, answer) = oneshot::channel();
+        self.command(Command::Say {
+            text: text.into(),
+            accepted,
+        })
+        .await?;
+        answer.await.map_err(|_| VoiceError::Stopped)
+    }
+
+    /// The learner corrected the transcript of `turn` (the number its events
+    /// carry). See [`EditEffect`] for what the correction reaches.
+    pub async fn edit_transcript(
+        &self,
+        turn: u64,
+        text: impl Into<String>,
+    ) -> VoiceResult<EditEffect> {
+        let (reply, answer) = oneshot::channel();
+        self.command(Command::Edit {
+            turn,
+            text: text.into(),
+            reply,
+        })
+        .await?;
+        match tokio::time::timeout(Duration::from_secs(10), answer).await {
+            Ok(Ok(outcome)) => outcome,
+            Ok(Err(_)) | Err(_) => Err(VoiceError::TaskFailed),
+        }
     }
 
     /// The engines that have loaded so far.
@@ -332,6 +388,7 @@ impl VoiceLoop {
         let inbox = Inbox::new(inbox_tx, Arc::clone(&counters));
         let session_token = CancellationToken::new();
         let listener_cancel = CancelFlag::new();
+        let level = LevelMeter::default();
 
         let mut resources = Resources {
             session: None,
@@ -353,6 +410,7 @@ impl VoiceLoop {
                 segmenter,
                 Arc::clone(&clock),
                 Arc::clone(&counters),
+                level.clone(),
             );
             resources.listener = Some(
                 spawn_listener(state, rx, inbox.clone(), listener_cancel.clone()).map_err(
@@ -450,6 +508,7 @@ impl VoiceLoop {
                     Arc::clone(&llm),
                     config.recorder_queue,
                     Arc::clone(&counters),
+                    events.clone(),
                 )
                 .await?,
             ),
@@ -474,6 +533,8 @@ impl VoiceLoop {
             playback: playback.clone(),
             engines: Mutex::new(EngineInfos::default()),
             resources: Mutex::new(Some(resources)),
+            session_id: recorder.as_ref().map(Recorder::session_id),
+            level,
         });
         let orchestrator = Orchestrator {
             inbox_rx,
@@ -627,13 +688,19 @@ struct PendingStt {
 
 struct Active {
     epoch: u64,
+    /// The number the events of the turn carry.
+    turn: u64,
     token: CancellationToken,
     task: TaskHandle<()>,
     learner_text: String,
+    /// The recogniser's words, once the learner has corrected them.
+    original: Option<String>,
     voice: bool,
     speech_ms: Option<i64>,
     opening: bool,
     canned: bool,
+    /// The turn speaks a stored text and is not part of the conversation.
+    say: bool,
 }
 
 enum Queued {
@@ -971,12 +1038,15 @@ impl Orchestrator {
     fn on_transcript(&mut self, pending: PendingStt, text: String) {
         let mut stamps = pending.stamps;
         stamps.transcript_ready = Some(self.env.clock.now());
-        let _ = self.cell().apply(Event::TranscriptReady);
         let text = text.trim().to_owned();
+        // The words come before the move to thinking, so a screen shows what was
+        // heard when it learns the tutor is working on it.
         self.events().publish(VoiceEvent::Heard {
             turn: pending.turn,
             text: text.clone(),
+            voice: true,
         });
+        let _ = self.cell().apply(Event::TranscriptReady);
         self.start_turn(
             pending.epoch,
             pending.turn,
@@ -1015,6 +1085,20 @@ impl Orchestrator {
                     self.begin_opening();
                 }
             }
+            Command::Say { text, accepted } => {
+                let listening = matches!(
+                    self.cell().phase(),
+                    Phase::Active {
+                        turn: TurnState::Listening
+                    }
+                );
+                let take = listening && self.env.speech.is_some() && !text.trim().is_empty();
+                if take {
+                    self.begin_say(text);
+                }
+                let _ = accepted.send(take);
+            }
+            Command::Edit { turn, text, reply } => self.on_edit(turn, text, reply),
             Command::Stop => self.abort_turn(Some(StopCause::Command)),
             Command::Pause => {
                 self.abort_turn(None);
@@ -1040,7 +1124,6 @@ impl Orchestrator {
 
     fn begin_text_turn(&mut self, text: String) {
         let (epoch, turn) = self.cell().begin_turn();
-        let _ = self.cell().apply(Event::TextSent);
         let stamps = Stamps {
             transcript_ready: Some(self.env.clock.now()),
             ..Stamps::default()
@@ -1048,8 +1131,87 @@ impl Orchestrator {
         self.events().publish(VoiceEvent::Heard {
             turn,
             text: text.clone(),
+            voice: false,
         });
+        let _ = self.cell().apply(Event::TextSent);
         self.start_turn(epoch, turn, stamps, text, false, None, false);
+    }
+
+    /// Speaks a stored text. It is a turn of the loop, so stopping the tutor
+    /// stops it too, but it leaves no mark on the conversation.
+    fn begin_say(&mut self, text: String) {
+        let (epoch, turn) = self.cell().begin_turn();
+        let _ = self.cell().apply(Event::TextSent);
+        let token = self.shared.session_token.child_token();
+        let notes = match &self.speaker {
+            Some(speaker) => speaker.begin_turn(epoch),
+            None => mpsc::channel(1).1,
+        };
+        let run = TurnRun {
+            epoch,
+            turn,
+            plan: Plan::Say(text),
+            stamps: Stamps::default(),
+            allow_fallback: false,
+            token: token.clone(),
+            notes,
+        };
+        let env = self.env.clone();
+        let inbox = self.inbox.clone();
+        let task = tokio::spawn(async move {
+            let report = run_turn(env, run).await;
+            inbox.send(Inbound::Turn(report)).await;
+        });
+        self.active = Some(Active {
+            epoch,
+            turn,
+            token,
+            task,
+            learner_text: String::new(),
+            original: None,
+            voice: false,
+            speech_ms: None,
+            opening: false,
+            canned: false,
+            say: true,
+        });
+    }
+
+    /// A correction of a transcript. A turn that is still running has not been
+    /// stored: the correction replaces its text, so the record, the analysis and
+    /// the next turns use it. Any other turn is the recorder's, which finds it by
+    /// its number.
+    fn on_edit(
+        &mut self,
+        turn: u64,
+        text: String,
+        reply: oneshot::Sender<Result<EditEffect, VoiceError>>,
+    ) {
+        let Some(recorder) = &self.recorder else {
+            let _ = reply.send(Err(VoiceError::NotRecording));
+            return;
+        };
+        if let Some(active) = self
+            .active
+            .as_mut()
+            .filter(|a| a.turn == turn && !a.say && !a.opening)
+        {
+            if !active.voice {
+                let _ = reply.send(Err(VoiceError::NotSpoken));
+                return;
+            }
+            if active.original.is_none() {
+                active.original = Some(active.learner_text.clone());
+            }
+            active.learner_text.clone_from(&text);
+            // The message of this turn is the newest learner message of the history.
+            if let Some(message) = self.history.iter_mut().rev().find(|m| m.role == Role::User) {
+                message.content = user_message(&text, &[], &[]);
+            }
+            let _ = reply.send(Ok(EditEffect::BeforeRecording));
+            return;
+        }
+        recorder.push(RecordMsg::Edit { turn, text, reply });
     }
 
     fn begin_opening(&mut self) {
@@ -1125,13 +1287,16 @@ impl Orchestrator {
         });
         self.active = Some(Active {
             epoch,
+            turn,
             token,
             task,
             learner_text,
+            original: None,
             voice,
             speech_ms,
             opening,
             canned,
+            say: false,
         });
     }
 
@@ -1158,6 +1323,22 @@ impl Orchestrator {
             return;
         };
         let _ = (&mut active.task).await;
+        if active.say {
+            // A stored text was spoken. It is not a reply: nothing of it goes into
+            // the history or the record, and a failure only ends the turn.
+            if report.outcome == TurnOutcome::EngineError {
+                let fault = report.fault.unwrap_or(EngineFault::Playback);
+                let message = report.message.clone().unwrap_or_default();
+                self.abort_audio();
+                self.engine_error(fault, message, true);
+            }
+            self.events().publish(VoiceEvent::TurnEnded {
+                turn: report.turn,
+                outcome: report.outcome,
+            });
+            self.drain_queue();
+            return;
+        }
         if let Some(latency) = report.latency {
             self.latencies.push(latency);
         }
@@ -1206,7 +1387,9 @@ impl Orchestrator {
             });
         } else if !active.canned {
             recorder.push(RecordMsg::Turn {
+                turn: active.turn,
                 learner_text: active.learner_text.clone(),
+                original: active.original.clone(),
                 input: if active.voice {
                     AnalysisInput::Voice
                 } else {

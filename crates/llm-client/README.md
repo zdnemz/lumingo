@@ -20,6 +20,16 @@ let analysis = client.structured(structured_request, cancel).await?;      // val
 - A key is an `ApiKey`: no `Display`, no `Serialize`, a redacting `Debug`. Errors carry fixed categories or sanitised provider text. The UI type is `ProfileInfo` (`has_key`, `key_last4`).
 - `providers.toml` holds keys in plain text. It is written with mode 0600 on Unix. On Windows it inherits the permissions of the per-user data directory it is written into; no ACL call is made.
 
+## Payload log (the inspector)
+
+`PayloadLog` (`inspector.rs`) is a bounded ring of the last provider requests and responses, for `GET /api/inspector`. Give one to `ProviderClient::connect_logged` or to an adapter with `with_payload_log`; a client without one records nothing.
+
+- Capacity: 50 entries by default (`PAYLOAD_LOG_CAPACITY`). When full, the oldest entry is dropped and counted in `PayloadSnapshot::dropped`; nothing waits. Entry numbers are not reused, so a gap shows what was dropped.
+- Bodies: at most 16 KiB each (`PAYLOAD_MAX_BODY_BYTES`), cut on a character boundary, with a `*_truncated` flag. A streamed reply is kept as its raw event-stream text.
+- One entry per HTTP request, so a retry shows as its own entry.
+- Never recorded: headers, the query string, the key. Bodies are scrubbed (`redact::scrub`) when captured, before they reach the ring: the exact key and key-shaped tokens become `[redacted]`.
+- Memory only; it is gone when the program stops. It holds learner text, so it is not part of any export.
+
 ## Tests
 
 `cargo test -p llm-client` replays hand-written fixtures (`tests/fixtures/`) through a scripted server on 127.0.0.1. No test contacts a provider.

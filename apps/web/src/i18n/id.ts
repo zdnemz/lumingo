@@ -209,6 +209,7 @@ export const id = {
   "error.code.read_only": "Item itu hanya bisa dibaca. Profil dari berkas .env diubah di berkas itu.",
   "error.code.busy": "Permintaan sejenis masih berjalan. Tunggu sebentar lalu coba lagi.",
   "error.code.not_available": "Bagian ini belum tersedia di versi ini.",
+  "error.code.licence_not_accepted": "Lisensi model ini harus diterima sebelum diunduh.",
   "error.code.provider_not_configured": "Penyedia AI belum diatur. Tambahkan dulu.",
   "error.code.shutting_down": "Program sedang berhenti.",
   "error.code.storage": "Program tidak bisa membaca atau menulis datanya. Folder data tercantum di halaman diagnostik.",

@@ -36,6 +36,23 @@ pub struct RoleplayRun {
 }
 
 impl RoleplayRun {
+    /// Lets `observer` hear about stored messages and finished analyses.
+    #[must_use]
+    pub fn with_observer(mut self, observer: std::sync::Arc<dyn crate::ChatObserver>) -> Self {
+        self.chat = self.chat.with_observer(observer);
+        self
+    }
+
+    /// Pauses the roleplay while it waits for the learner.
+    pub fn pause(&mut self) -> Result<Phase> {
+        self.chat.pause()
+    }
+
+    /// Resumes after a pause, or after the provider is back.
+    pub fn resume(&mut self) -> Result<Phase> {
+        self.chat.resume()
+    }
+
     /// The tutor speaks first.
     pub async fn open(
         &mut self,

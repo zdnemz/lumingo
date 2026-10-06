@@ -3,4 +3,4 @@
 /**
  * Why a request failed, as a closed list.
  */
-export type ErrorCode = "not_found" | "invalid_input" | "conflict" | "read_only" | "busy" | "not_available" | "provider_not_configured" | "shutting_down" | "storage" | "internal";
+export type ErrorCode = "not_found" | "invalid_input" | "conflict" | "read_only" | "busy" | "not_available" | "licence_not_accepted" | "provider_not_configured" | "shutting_down" | "storage" | "internal";

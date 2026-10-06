@@ -82,6 +82,53 @@ pub fn sanitize_message(raw: &str, key: Option<&str>) -> String {
     }
 }
 
+/// Replaces the key and key-shaped tokens in `raw` and keeps everything else as
+/// it is, line breaks and spacing included. The payload inspector uses it on
+/// request and response bodies, which must stay readable, so unlike
+/// [`sanitize_message`] it does not collapse whitespace, does not shorten the
+/// text and does not treat a long mixed token as a secret.
+///
+/// What is replaced: the exact key (also when the text is a JSON string that
+/// holds it), a token that starts with a known key prefix and is at least eight
+/// characters long, a token with a `**` mask, and the token after `Bearer`.
+pub fn scrub(raw: &str, key: Option<&str>) -> String {
+    let mut text = raw.to_owned();
+    if let Some(key) = key.filter(|k| k.len() >= 4) {
+        text = text.replace(key, REDACTED);
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut token = String::new();
+    let mut after_bearer = false;
+    let flush = |token: &mut String, out: &mut String, after_bearer: &mut bool| {
+        if token.is_empty() {
+            return;
+        }
+        let secret = *after_bearer
+            || token.contains("**")
+            || (token.len() >= 8 && KEY_PREFIXES.iter().any(|p| token.starts_with(p)));
+        if secret {
+            out.push_str(REDACTED);
+        } else {
+            out.push_str(token);
+        }
+        *after_bearer = token.eq_ignore_ascii_case("bearer");
+        token.clear();
+    };
+    for c in text.chars() {
+        if is_token_char(c) {
+            token.push(c);
+        } else {
+            flush(&mut token, &mut out, &mut after_bearer);
+            out.push(c);
+            if !c.is_whitespace() {
+                after_bearer = false;
+            }
+        }
+    }
+    flush(&mut token, &mut out, &mut after_bearer);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,5 +173,25 @@ mod tests {
         assert_eq!(out, "line one line two");
         let long = "word ".repeat(200);
         assert!(sanitize_message(&long, None).chars().count() <= MAX_MESSAGE_CHARS + 3);
+    }
+
+    #[test]
+    fn scrub_keeps_layout_and_removes_only_secrets() {
+        let raw = "{\n  \"content\": \"hello   world\",\n  \"auth\": \"Bearer abc.def\", \"k\": \"sk-proj-0123456789\"\n}";
+        let out = scrub(raw, None);
+        assert!(out.contains("hello   world"), "{out}");
+        assert!(out.contains("\n  \"content\""), "{out}");
+        assert!(!out.contains("abc.def"), "{out}");
+        assert!(!out.contains("0123456789"), "{out}");
+    }
+
+    #[test]
+    fn scrub_replaces_the_exact_key_and_leaves_long_ordinary_tokens() {
+        let out = scrub(
+            "a Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MA b zzzz-secret-key-9999 c",
+            Some("zzzz-secret-key-9999"),
+        );
+        assert!(!out.contains("zzzz-secret"), "{out}");
+        assert!(out.contains("Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MA"), "{out}");
     }
 }

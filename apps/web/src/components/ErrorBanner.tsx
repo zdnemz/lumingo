@@ -14,6 +14,7 @@ const CODE_TEXT: Record<ErrorCode | "unknown", MessageKey> = {
   read_only: "error.code.read_only",
   busy: "error.code.busy",
   not_available: "error.code.not_available",
+  licence_not_accepted: "error.code.licence_not_accepted",
   provider_not_configured: "error.code.provider_not_configured",
   shutting_down: "error.code.shutting_down",
   storage: "error.code.storage",

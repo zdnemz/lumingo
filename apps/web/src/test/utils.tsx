@@ -59,6 +59,8 @@ export const SNAPSHOT: StateSnapshot = {
     minimum_logical_cores: 4,
     meets_minimum: true,
   },
+  active_session: null,
+  engines: [],
   unavailable: [],
 };
 

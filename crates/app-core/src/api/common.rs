@@ -14,6 +14,11 @@ use super::mirror::api_enum;
 pub struct ApiErrorBody {
     pub error: ErrorCode,
     pub message: String,
+    /// For `not_available`: the part of the program that is missing, so the UI
+    /// can show the matching note. The message names what exactly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub feature: Option<Feature>,
 }
 
 /// Why a request failed, as a closed list.
@@ -27,6 +32,9 @@ pub enum ErrorCode {
     ReadOnly,
     Busy,
     NotAvailable,
+    /// A model download was asked for without the licence being accepted, or with
+    /// a licence other than the one that was shown.
+    LicenceNotAccepted,
     ProviderNotConfigured,
     ShuttingDown,
     Storage,

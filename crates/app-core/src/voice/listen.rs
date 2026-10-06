@@ -19,6 +19,7 @@
 //!   minimum speech length is ignored.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -34,6 +35,30 @@ const MAX_PTT_SAMPLES: usize = 30 * SPEECH_SAMPLE_RATE as usize;
 
 /// How often the thread looks at the cancel flag while the queue is empty.
 const IDLE_WAIT: Duration = Duration::from_millis(50);
+
+/// The loudest sample heard since the level was last read. The listener thread
+/// writes it for every frame it handles; whoever shows a level meter reads it a
+/// few times a second. Both sides are one atomic: nothing waits, and a read that
+/// comes between two frames still sees the peak of the earlier one.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LevelMeter(Arc<AtomicU32>);
+
+impl LevelMeter {
+    /// Folds the peak of `frame` in. The bit pattern of a non-negative `f32` sorts
+    /// like the number, so `fetch_max` on the bits keeps the larger value.
+    pub(crate) fn record(&self, frame: &[f32]) {
+        let peak = frame
+            .iter()
+            .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
+            .min(1.0);
+        self.0.fetch_max(peak.to_bits(), Ordering::Relaxed);
+    }
+
+    /// The peak since the last call, 0 to 1, and starts a new window.
+    pub(crate) fn take(&self) -> f32 {
+        f32::from_bits(self.0.swap(0, Ordering::Relaxed))
+    }
+}
 
 pub(crate) struct FrameMsg {
     /// Empty for the marker that says the gate closed.
@@ -83,6 +108,7 @@ pub(crate) struct ListenState {
     vad_live: bool,
     ptt: Option<PttCapture>,
     counters: Arc<Counters>,
+    level: LevelMeter,
 }
 
 struct PttCapture {
@@ -96,6 +122,7 @@ impl ListenState {
         segmenter: UtteranceSegmenter,
         clock: Arc<dyn LoopClock>,
         counters: Arc<Counters>,
+        level: LevelMeter,
     ) -> Self {
         let config = segmenter.config();
         let speech_threshold = config.speech_threshold;
@@ -113,12 +140,16 @@ impl ListenState {
             vad_live: false,
             ptt: None,
             counters,
+            level,
         }
     }
 
     /// Handles one message from the queue and returns what the orchestrator should hear.
     pub(crate) fn on_frame(&mut self, message: FrameMsg) -> Vec<ListenEvent> {
         let mut out = Vec::new();
+        if !message.frame.is_empty() {
+            self.level.record(&message.frame);
+        }
         match message.route {
             Route::Dropped => {
                 self.finish_ptt(&mut out);
