@@ -60,11 +60,39 @@ export interface FakeApi extends ApiClient {
   opened: () => number;
 }
 
-/** A typed client whose stream the test drives by hand. */
-export function fakeApi(getState: () => Promise<StateSnapshot> = () => Promise.resolve(SNAPSHOT)): FakeApi {
+/** A route a test did not stub fails loudly, so a screen cannot quietly depend on it. */
+function notStubbed(route: string): () => Promise<never> {
+  return () => Promise.reject(new Error(`route not stubbed in this test: ${route}`));
+}
+
+/**
+ * A typed client whose stream the test drives by hand. Routes other than
+ * `getState` fail unless the test stubs them through `overrides`.
+ */
+export function fakeApi(
+  getState: () => Promise<StateSnapshot> = () => Promise.resolve(SNAPSHOT),
+  overrides: Partial<ApiClient> = {},
+): FakeApi {
   let handlers: EventStreamHandlers | null = null;
   let opened = 0;
+  const routes: Omit<ApiClient, "getState" | "openEvents"> = {
+    listProviders: notStubbed("listProviders"),
+    saveProvider: notStubbed("saveProvider"),
+    deleteProvider: notStubbed("deleteProvider"),
+    testProvider: notStubbed("testProvider"),
+    activateProvider: notStubbed("activateProvider"),
+    getSettings: notStubbed("getSettings"),
+    updateSettings: notStubbed("updateSettings"),
+    getDiagnostics: notStubbed("getDiagnostics"),
+    getProgress: notStubbed("getProgress"),
+    listUnits: notStubbed("listUnits"),
+    deleteSession: notStubbed("deleteSession"),
+    deleteAllData: notStubbed("deleteAllData"),
+    exportData: notStubbed("exportData"),
+  };
   return {
+    ...routes,
+    ...overrides,
     getState: vi.fn(getState),
     openEvents: vi.fn((next: EventStreamHandlers) => {
       handlers = next;

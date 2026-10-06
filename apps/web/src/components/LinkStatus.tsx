@@ -1,6 +1,7 @@
 "use client";
 
-import { useEventStream, type StreamStatus } from "@/api/useEventStream";
+import { useServerState } from "@/api/ServerState";
+import type { StreamStatus } from "@/api/useEventStream";
 import type { ServerEvent } from "@/generated/ServerEvent";
 import type { MessageKey } from "@/i18n";
 import { Sprite } from "@/sprites/Sprite";
@@ -22,13 +23,13 @@ const STATUS_ICON = {
 } as const;
 
 function describe(event: ServerEvent): string {
-  return event.type === "Snapshot" ? `#${event.seq} Snapshot` : `#${event.seq} Heartbeat`;
+  return `#${event.seq} ${event.type}`;
 }
 
 /** Shows the live event stream from the local server. This is what S0-08 proves works end to end. */
 export function LinkStatus() {
   const t = useT();
-  const { status, snapshot, events } = useEventStream();
+  const { status, snapshot, events } = useServerState();
   const latestUptime = events.find((event) => event.type === "Heartbeat");
   const uptimeMs = latestUptime?.type === "Heartbeat" ? latestUptime.uptime_ms : snapshot?.uptime_ms;
   const tone = status === "live" ? "success" : status === "connecting" ? "primary" : "danger";
