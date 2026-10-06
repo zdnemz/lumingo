@@ -3,5 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod resample;
+mod ring;
 
 pub use resample::Resampler;
+pub use ring::{Consumer, Producer, ring};
