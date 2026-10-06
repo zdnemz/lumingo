@@ -320,6 +320,7 @@ export const id = {
   "probe.fail.configuration.body": "Periksa URL dasarnya. Harus diawali https://, kecuali untuk server di komputer ini.",
   "probe.fail.cancelled.title": "Pengujian dibatalkan",
   "probe.fail.cancelled.body": "Jalankan lagi kalau kamu sudah siap.",
+  "probe.fail.env_hint": "Profil ini berasal dari berkas .env kamu. Ubah di berkas itu lalu jalankan ulang program.",
   "probe.action.retest": "Uji lagi",
   "probe.action.edit_key": "Masukkan kunci lagi",
   "probe.action.edit": "Ubah profil",
@@ -490,7 +491,6 @@ export const id = {
 
   "onb.guide.title": "Dapatkan kunci",
   "onb.guide.body": "Tutor membutuhkan penyedia AI dan kunci dari penyedia itu. Kalau kamu sudah punya kunci, kamu bisa lanjut.",
-  "onb.guide.skip": "Aku sudah punya kunci",
 
   "onb.provider.title": "Tambah penyedia AI",
   "onb.provider.body": "Satu profil berisi protokol, URL dasar, nama model, dan untuk kebanyakan penyedia, sebuah kunci.",

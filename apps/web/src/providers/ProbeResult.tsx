@@ -95,6 +95,8 @@ export interface ProbeResultProps {
   /** Takes the learner to the profile's form. Not offered for the read-only `env` profile. */
   onEdit?: () => void;
   busy?: boolean;
+  /** The profile comes from `.env`: nothing here can change it, so the failure points to that file. */
+  readOnly?: boolean;
 }
 
 /**
@@ -102,7 +104,7 @@ export interface ProbeResultProps {
  * what failed and offers the way out: a wrong key leads back to the key field,
  * an unreachable provider offers another try and the address.
  */
-export function ProbeResult({ report, onRetest, onEnterKey, onEdit, busy }: ProbeResultProps) {
+export function ProbeResult({ report, onRetest, onEnterKey, onEdit, busy, readOnly }: ProbeResultProps) {
   const t = useT();
   if (report.ok && report.capabilities !== null) {
     const caps = report.capabilities;
@@ -147,6 +149,9 @@ export function ProbeResult({ report, onRetest, onEnterKey, onEdit, busy }: Prob
       }
     >
       <p>{t(text.body)}</p>
+      {readOnly && kind !== "network" && kind !== "timeout" && kind !== "rate_limited" && kind !== "provider_error" ? (
+        <p>{t("probe.fail.env_hint")}</p>
+      ) : null}
       {report.failure?.message ? <p className="px-hint">{t("state.details", { text: report.failure.message })}</p> : null}
     </StatusBanner>
   );

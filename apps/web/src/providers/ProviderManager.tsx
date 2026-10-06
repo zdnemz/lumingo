@@ -147,6 +147,7 @@ export function ProviderManager() {
                       <ProbeResult
                         report={report}
                         busy={busy}
+                        readOnly={isEnv}
                         onRetest={() => void test(provider)}
                         onEnterKey={isEnv ? undefined : () => edit(provider, true)}
                         onEdit={isEnv ? undefined : () => edit(provider, false)}

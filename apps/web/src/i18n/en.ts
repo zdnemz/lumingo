@@ -320,6 +320,7 @@ export const en = {
   "probe.fail.configuration.body": "Check the base URL. It must start with https://, except for a server on this computer.",
   "probe.fail.cancelled.title": "The test was cancelled",
   "probe.fail.cancelled.body": "Run it again when you are ready.",
+  "probe.fail.env_hint": "This profile comes from your .env file. Change it there and restart the program.",
   "probe.action.retest": "Test again",
   "probe.action.edit_key": "Enter the key again",
   "probe.action.edit": "Edit the profile",
@@ -490,7 +491,6 @@ export const en = {
 
   "onb.guide.title": "Get a key",
   "onb.guide.body": "The tutor needs an AI provider and a key from that provider. If you have a key already, you can skip ahead.",
-  "onb.guide.skip": "I already have a key",
 
   "onb.provider.title": "Add an AI provider",
   "onb.provider.body": "A profile has a protocol, a base URL, a model name and, for most providers, a key.",

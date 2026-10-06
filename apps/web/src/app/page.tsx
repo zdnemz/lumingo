@@ -2,6 +2,7 @@
 
 import { AppShell } from "@/components/AppShell";
 import { LinkStatus } from "@/components/LinkStatus";
+import { FirstRunGate } from "@/onboarding/FirstRunGate";
 import { Mascot } from "@/sprites/Mascot";
 import { useT } from "@/state/PreferencesProvider";
 
@@ -9,6 +10,7 @@ export default function HomePage() {
   const t = useT();
   return (
     <AppShell>
+      <FirstRunGate />
       <div className="px-stack" style={{ "--gap": "var(--space-6)" } as React.CSSProperties}>
         <section className="hero" aria-labelledby="hero-title">
           <Mascot mood="happy" scale={8} />
