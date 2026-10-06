@@ -46,6 +46,8 @@ const ROUTES: readonly { method: string; pattern: RegExp }[] = [
   { method: "POST", pattern: /^\/api\/providers\/\d+\/test$/ },
   { method: "POST", pattern: /^\/api\/providers\/\d+\/activate$/ },
   { method: "GET", pattern: /^\/api\/progress$/ },
+  { method: "GET", pattern: /^\/api\/game$/ },
+  { method: "GET", pattern: /^\/api\/attempts\/\d+\/evidence$/ },
   { method: "GET", pattern: /^\/api\/settings$/ },
   { method: "PUT", pattern: /^\/api\/settings$/ },
   { method: "DELETE", pattern: /^\/api\/sessions\/\d+$/ },

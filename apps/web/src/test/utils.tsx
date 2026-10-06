@@ -182,6 +182,8 @@ export function fakeApi(
     getDiagnostics: notStubbed("getDiagnostics"),
     getProgress: notStubbed("getProgress"),
     listUnits: notStubbed("listUnits"),
+    getGame: notStubbed("getGame"),
+    getAttemptEvidence: notStubbed("getAttemptEvidence"),
     deleteSession: notStubbed("deleteSession"),
     deleteAllData: notStubbed("deleteAllData"),
     exportData: notStubbed("exportData"),
