@@ -1,0 +1,15 @@
+[package]
+name = "content-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Validates Lumingo curriculum units and prints a report"
+
+[dependencies]
+anyhow = "1"
+curriculum = { path = "../../crates/curriculum" }
+
+[lints]
+workspace = true
