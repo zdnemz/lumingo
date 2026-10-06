@@ -224,8 +224,8 @@ export const en = {
   "banner.noprovider.action": "Set up a provider",
 
   "unavailable.title": "Not available in this build",
-  "unavailable.body": "{feature} is not part of this version of the program yet, so there is no control for it here.",
-  "unavailable.noui": "This build includes {feature}, but this screen has no control for it yet.",
+  "unavailable.body": "{feature}: not part of this version of the program yet, so there is no control for it here.",
+  "unavailable.noui": "{feature}: this build includes it, but this screen has no control for it yet.",
   "unavailable.inspector": "The payload inspector is not available in this build. The program has no route for it yet.",
   "feature.sessions": "Learning sessions",
   "feature.activities": "Practice activities",

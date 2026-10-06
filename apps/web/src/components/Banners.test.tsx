@@ -49,7 +49,7 @@ describe("UnavailableNote", () => {
     await connect(api, { ...SNAPSHOT, unavailable: ["speech"] });
     const note = await screen.findByRole("note");
     expect(note).toHaveTextContent("Not available in this build");
-    expect(note).toHaveTextContent("Speech: microphone, speakers and voices is not part of this version");
+    expect(note).toHaveTextContent("Speech: microphone, speakers and voices: not part of this version");
     expect(screen.queryByRole("button")).toBeNull();
   });
 

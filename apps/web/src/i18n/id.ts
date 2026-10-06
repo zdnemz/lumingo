@@ -224,8 +224,8 @@ export const id = {
   "banner.noprovider.action": "Atur penyedia",
 
   "unavailable.title": "Belum tersedia di versi ini",
-  "unavailable.body": "{feature} belum menjadi bagian dari versi program ini, jadi belum ada kontrolnya di sini.",
-  "unavailable.noui": "Versi ini sudah memuat {feature}, tetapi layar ini belum punya kontrol untuk itu.",
+  "unavailable.body": "{feature}: belum menjadi bagian dari versi program ini, jadi belum ada kontrolnya di sini.",
+  "unavailable.noui": "{feature}: versi ini sudah memuatnya, tetapi layar ini belum punya kontrol untuk itu.",
   "unavailable.inspector": "Pemeriksa muatan belum tersedia di versi ini. Program belum punya jalurnya.",
   "feature.sessions": "Sesi belajar",
   "feature.activities": "Aktivitas latihan",
