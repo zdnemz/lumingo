@@ -465,7 +465,12 @@ impl AppCore {
         let cancel = self.shutdown.child_token();
         let _stop_on_drop = cancel.clone().drop_guard();
         let started = Instant::now();
-        let outcome = match ProviderClient::connect(&profile, ClientOptions::default(), None) {
+        let outcome = match ProviderClient::connect_logged(
+            &profile,
+            ClientOptions::default(),
+            None,
+            self.payload_log.clone(),
+        ) {
             Ok(client) => client.probe(&cancel).await,
             Err(error) => Err(error),
         };
@@ -541,8 +546,13 @@ impl AppCore {
             .as_ref()
             .and_then(stored_capabilities);
         let client = Arc::new(
-            ProviderClient::connect(&profile, ClientOptions::default(), stored)
-                .map_err(|error| CoreError::Conflict(error.to_string()))?,
+            ProviderClient::connect_logged(
+                &profile,
+                ClientOptions::default(),
+                stored,
+                self.payload_log.clone(),
+            )
+            .map_err(|error| CoreError::Conflict(error.to_string()))?,
         );
         self.providers.write_state().client = Some(Arc::clone(&client));
         Ok(client)

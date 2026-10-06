@@ -69,7 +69,7 @@ impl EventBus {
         let guard = self.seq.lock().unwrap_or_else(PoisonError::into_inner);
         ServerEvent::Snapshot {
             seq: *guard,
-            state: state(),
+            state: Box::new(state()),
         }
     }
 }

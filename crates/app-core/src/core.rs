@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, OnceLock, PoisonError, RwLock};
 use std::time::Instant;
 
+use llm_client::PayloadLog;
 use storage::{Database, L1HelpMode, NewProfile, Profile, Timestamp, UiLanguage};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -15,6 +16,7 @@ use crate::clock::Clock;
 use crate::config::CoreConfig;
 use crate::error::{CoreError, CoreResult};
 use crate::events::EventBus;
+use crate::models::ModelHub;
 use crate::providers::ProviderHub;
 use crate::session::SessionService;
 use crate::units::UnitHub;
@@ -27,7 +29,7 @@ const DEFAULT_DISPLAY_NAME: &str = "Learner";
 pub struct AppCore {
     pub(crate) config: CoreConfig,
     pub(crate) db: Database,
-    pub(crate) bus: EventBus,
+    pub(crate) bus: Arc<EventBus>,
     pub(crate) started: Instant,
     /// Id of the one learner profile. It changes when "delete all data"
     /// recreates the profile.
@@ -41,6 +43,11 @@ pub struct AppCore {
     pub(crate) hardware: HardwareProfile,
     pub(crate) shutdown: CancellationToken,
     pub(crate) sessions: OnceLock<Arc<dyn SessionService>>,
+    /// Model downloads, or `None` with the reason in `models_problem`.
+    pub(crate) models: Option<ModelHub>,
+    pub(crate) models_problem: Option<String>,
+    /// The last provider requests and responses, for the payload inspector.
+    pub(crate) payload_log: PayloadLog,
 }
 
 impl std::fmt::Debug for AppCore {
@@ -69,10 +76,24 @@ impl AppCore {
         };
         let providers = ProviderHub::load(&config, &db, &config.clock.now()).await?;
         let units = UnitHub::load(&config.curriculum_dir, &db, &config.clock.now()).await?;
+        let manifest = config.models_manifest.clone();
+        let models_dir = config.models_dir();
+        let (models, models_problem) =
+            match tokio::task::spawn_blocking(move || ModelHub::load(&manifest, &models_dir))
+                .await
+                .map_err(|_| {
+                    CoreError::Internal("reading the model manifest did not finish".to_owned())
+                })? {
+                Ok(hub) => (Some(hub), None),
+                Err(problem) => {
+                    tracing::info!("model downloads are not available: {problem}");
+                    (None, Some(problem))
+                }
+            };
         let core = Arc::new(Self {
             config,
             db,
-            bus: EventBus::new(),
+            bus: Arc::new(EventBus::new()),
             started: Instant::now(),
             profile_id: AtomicI64::new(profile.id),
             settings: RwLock::new(loaded),
@@ -82,6 +103,9 @@ impl AppCore {
             hardware,
             shutdown: CancellationToken::new(),
             sessions: OnceLock::new(),
+            models,
+            models_problem,
+            payload_log: PayloadLog::default(),
         });
         core.sync_unlocks().await?;
         Ok(core)
@@ -152,7 +176,7 @@ impl AppCore {
             .read()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
-        let attached = self.sessions.get().is_some();
+        let service = self.sessions.get();
         StateSnapshot {
             server_version: env!("CARGO_PKG_VERSION").to_owned(),
             dev_mode: self.config.dev_mode,
@@ -160,10 +184,22 @@ impl AppCore {
             settings,
             provider: self.providers.active(),
             hardware: self.hardware.clone(),
+            active_session: service.and_then(|s| s.active_view()),
+            engines: service.map(|s| s.engines()).unwrap_or_default(),
             unavailable: Feature::ALL
                 .into_iter()
-                .filter(|feature| !(attached && *feature == Feature::Sessions))
+                .filter(|feature| !self.feature_available(*feature))
                 .collect(),
+        }
+    }
+
+    /// Whether a part of the program is available, from what actually loaded:
+    /// the session service says for the parts that depend on engines and units,
+    /// and the model manifest says for downloads.
+    fn feature_available(&self, feature: Feature) -> bool {
+        match feature {
+            Feature::Models => self.models.is_some(),
+            other => self.sessions.get().is_some_and(|s| s.provides(other)),
         }
     }
 
@@ -182,7 +218,7 @@ impl AppCore {
     pub fn publish_snapshot(&self) {
         self.bus.publish(|seq| ServerEvent::Snapshot {
             seq,
-            state: self.snapshot(),
+            state: Box::new(self.snapshot()),
         });
     }
 

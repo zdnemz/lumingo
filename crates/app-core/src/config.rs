@@ -27,6 +27,16 @@ pub struct CoreConfig {
     pub data_dir: PathBuf,
     /// The folder of unit files that ship with the program.
     pub curriculum_dir: PathBuf,
+    /// The folder of catalogs that ship with the program: `rubrics/` and
+    /// `topics.json`. Without them, productive activities are stored unscored and
+    /// topic-bank picks are refused; typed topics still work.
+    pub catalogs_dir: PathBuf,
+    /// `models/manifest.toml`, the only source of model download locations. When
+    /// it cannot be read, model downloads are not available.
+    pub models_manifest: PathBuf,
+    /// A word list that gives each word a level, for the vocabulary checks of
+    /// generated texts. Optional: without it those checks are skipped and say so.
+    pub word_list: Option<PathBuf>,
     /// Development mode of the server, reported in the snapshot.
     pub dev_mode: bool,
     /// The address the server listens on, for the diagnostics page. The core
@@ -47,7 +57,12 @@ impl CoreConfig {
     pub fn new(data_dir: PathBuf, curriculum_dir: PathBuf) -> Self {
         Self {
             data_dir,
+            catalogs_dir: curriculum_dir
+                .parent()
+                .map_or_else(|| PathBuf::from("catalogs"), |dir| dir.join("catalogs")),
             curriculum_dir,
+            models_manifest: default_models_manifest(),
+            word_list: None,
             dev_mode: false,
             server_address: None,
             env_profiles: EnvProfileLoader::with_default_paths(),
@@ -66,6 +81,11 @@ impl CoreConfig {
     pub fn providers_path(&self) -> PathBuf {
         self.data_dir.join(PROVIDERS_FILE)
     }
+
+    /// The folder models are installed under, one subfolder per model.
+    pub fn models_dir(&self) -> PathBuf {
+        self.data_dir.join("models")
+    }
 }
 
 impl fmt::Debug for CoreConfig {
@@ -73,6 +93,8 @@ impl fmt::Debug for CoreConfig {
         f.debug_struct("CoreConfig")
             .field("data_dir", &self.data_dir)
             .field("curriculum_dir", &self.curriculum_dir)
+            .field("catalogs_dir", &self.catalogs_dir)
+            .field("models_manifest", &self.models_manifest)
             .field("dev_mode", &self.dev_mode)
             .field("server_address", &self.server_address)
             .finish_non_exhaustive()
@@ -131,6 +153,20 @@ pub fn default_curriculum_dir() -> PathBuf {
     match next_to_exe {
         Some(dir) if Path::new(&dir).is_dir() => dir,
         _ => PathBuf::from("curriculum").join("units"),
+    }
+}
+
+/// The model manifest that ships with the program: `models/manifest.toml` next
+/// to the executable when it exists, otherwise the one in the working directory
+/// (a source checkout).
+pub fn default_models_manifest() -> PathBuf {
+    let next_to_exe = std::env::current_exe().ok().and_then(|exe| {
+        exe.parent()
+            .map(|dir| dir.join("models").join("manifest.toml"))
+    });
+    match next_to_exe {
+        Some(file) if file.is_file() => file,
+        _ => PathBuf::from("models").join("manifest.toml"),
     }
 }
 

@@ -1038,13 +1038,15 @@ impl Orchestrator {
     fn on_transcript(&mut self, pending: PendingStt, text: String) {
         let mut stamps = pending.stamps;
         stamps.transcript_ready = Some(self.env.clock.now());
-        let _ = self.cell().apply(Event::TranscriptReady);
         let text = text.trim().to_owned();
+        // The words come before the move to thinking, so a screen shows what was
+        // heard when it learns the tutor is working on it.
         self.events().publish(VoiceEvent::Heard {
             turn: pending.turn,
             text: text.clone(),
             voice: true,
         });
+        let _ = self.cell().apply(Event::TranscriptReady);
         self.start_turn(
             pending.epoch,
             pending.turn,
@@ -1122,7 +1124,6 @@ impl Orchestrator {
 
     fn begin_text_turn(&mut self, text: String) {
         let (epoch, turn) = self.cell().begin_turn();
-        let _ = self.cell().apply(Event::TextSent);
         let stamps = Stamps {
             transcript_ready: Some(self.env.clock.now()),
             ..Stamps::default()
@@ -1132,6 +1133,7 @@ impl Orchestrator {
             text: text.clone(),
             voice: false,
         });
+        let _ = self.cell().apply(Event::TextSent);
         self.start_turn(epoch, turn, stamps, text, false, None, false);
     }
 
