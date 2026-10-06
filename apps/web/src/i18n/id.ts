@@ -190,6 +190,7 @@ export const id = {
   "common.close": "Tutup",
   "common.back": "Kembali",
   "common.estimate": "Perkiraan",
+  "common.delete": "Hapus",
 
   "state.loading": "Memuat...",
   "state.retry": "Coba lagi",
@@ -533,4 +534,9 @@ export const id = {
   "onb.ready.missing": "Belum tersedia di versi ini",
   "onb.ready.missing.none": "Tidak ada yang kurang.",
   "onb.ready.missing.body": "Bagian ini belum menjadi bagian dari versi program ini. Layarnya mengatakan hal itu, tidak berpura-pura.",
+
+  "diag.uptime.hm": "{hours} j {minutes} mnt",
+  "diag.uptime.ms": "{minutes} mnt {seconds} dtk",
+  "diag.uptime.s": "{seconds} dtk",
+  "data.confirm.hint": "Huruf besar dan spasi berlebih tidak berpengaruh.",
 } as const satisfies Record<MessageKey, string>;

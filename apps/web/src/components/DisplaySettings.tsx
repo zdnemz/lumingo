@@ -1,6 +1,6 @@
 "use client";
 
-import { LANGUAGES, MOTION_SETTINGS, THEME_SETTINGS, type Theme, type ThemeSetting } from "@/state/preferences";
+import { LANGUAGES, MOTION_SETTINGS, THEME_SETTINGS, type Language, type Theme, type ThemeSetting } from "@/state/preferences";
 import { usePreferences, useT } from "@/state/PreferencesProvider";
 import { Panel } from "@/ui/Panel";
 import { Segmented } from "@/ui/Segmented";
@@ -9,7 +9,16 @@ import { Switch } from "@/ui/Switch";
 /** Night and Day are always available. The other themes are rewards the learner has unlocked. */
 const ALWAYS_AVAILABLE: readonly Theme[] = ["night", "day"];
 
-export function DisplaySettings({ unlockedThemes = [] }: { unlockedThemes?: readonly Theme[] }) {
+export interface DisplaySettingsProps {
+  unlockedThemes?: readonly Theme[];
+  /**
+   * Replaces the plain browser-only language change, for a screen that also
+   * saves the choice with the program. It must apply the language itself.
+   */
+  onLanguageChange?: (language: Language) => void;
+}
+
+export function DisplaySettings({ unlockedThemes = [], onLanguageChange }: DisplaySettingsProps) {
   const t = useT();
   const { prefs, setPrefs } = usePreferences();
   return (
@@ -34,7 +43,7 @@ export function DisplaySettings({ unlockedThemes = [] }: { unlockedThemes?: read
         <Segmented
           legend={t("settings.language")}
           value={prefs.language}
-          onChange={(language) => setPrefs({ language })}
+          onChange={(language) => (onLanguageChange ? onLanguageChange(language) : setPrefs({ language }))}
           options={LANGUAGES.map((value) => ({ value, label: t(`settings.language.${value}`) }))}
         />
         <Switch

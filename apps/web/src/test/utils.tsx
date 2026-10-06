@@ -4,6 +4,9 @@ import { expect, vi } from "vitest";
 import { ServerStateProvider } from "@/api/ServerState";
 import type { ApiClient, EventStreamHandlers } from "@/api/client";
 import { Providers } from "@/components/Providers";
+import type { DiagnosticsReport } from "@/generated/DiagnosticsReport";
+import type { ProgressOverview } from "@/generated/ProgressOverview";
+import type { SessionSummary } from "@/generated/SessionSummary";
 import type { ProbeFailureKind } from "@/generated/ProbeFailureKind";
 import type { ProbeReport } from "@/generated/ProbeReport";
 import type { ProviderCapabilities } from "@/generated/ProviderCapabilities";
@@ -103,6 +106,47 @@ export const PROBE_OK: ProbeReport = { provider_id: 2, ok: true, capabilities: C
 
 export function probeFailure(kind: ProbeFailureKind): ProbeReport {
   return { provider_id: 2, ok: false, capabilities: null, failure: { kind, message: `test failure: ${kind}` }, duration_ms: 900 };
+}
+
+export const DIAGNOSTICS: DiagnosticsReport = {
+  server_version: "9.9.9",
+  dev_mode: false,
+  uptime_ms: 3_725_000,
+  server_address: "127.0.0.1:8765",
+  data_dir: "C:/Users/Sari/AppData/Roaming/Lumingo",
+  log_folder: null,
+  curriculum_dir: "C:/Lumingo/curriculum/units",
+  schema_version: 1,
+  hardware: SNAPSHOT.hardware,
+  provider: { ...FILE_PROVIDER, capabilities: CAPS, probed_at: "2026-10-06T10:00:00Z" },
+  curriculum: { unit_count: 12, issue_count: 1, content_version: "abc123" },
+  latency: [
+    { metric: "stt_ms", stats: { count: 4, p50_ms: 410, p95_ms: 690 } },
+    { metric: "e2e_ms", stats: { count: 0, p50_ms: null, p95_ms: null } },
+  ],
+  llm: {
+    calls: 6,
+    failures: 1,
+    ttft: { count: 5, p50_ms: 500, p95_ms: 900 },
+    total: { count: 5, p50_ms: 2100, p95_ms: 3000 },
+  },
+};
+
+export const SESSIONS: SessionSummary[] = [
+  { id: 7, kind: "conversation", unit_id: "a1-u01", status: "completed", started_at: "2026-10-05T09:00:00Z", ended_at: "2026-10-05T09:20:00Z" },
+  { id: 8, kind: "writing", unit_id: null, status: "aborted", started_at: "2026-10-06T08:00:00Z", ended_at: null },
+];
+
+export function progressWith(sessions: SessionSummary[]): ProgressOverview {
+  return {
+    units: [],
+    objectives: [],
+    errors: [],
+    reviews_due: [],
+    reviews_due_truncated: false,
+    estimates: [],
+    recent_sessions: sessions,
+  };
 }
 
 export interface FakeApi extends ApiClient {

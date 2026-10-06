@@ -190,6 +190,7 @@ export const en = {
   "common.close": "Close",
   "common.back": "Back",
   "common.estimate": "Estimate",
+  "common.delete": "Delete",
 
   "state.loading": "Loading...",
   "state.retry": "Try again",
@@ -533,6 +534,11 @@ export const en = {
   "onb.ready.missing": "Not available in this build yet",
   "onb.ready.missing.none": "Nothing is missing.",
   "onb.ready.missing.body": "These parts are not built into this version of the program. Their screens say so instead of pretending.",
+
+  "diag.uptime.hm": "{hours} h {minutes} min",
+  "diag.uptime.ms": "{minutes} min {seconds} s",
+  "diag.uptime.s": "{seconds} s",
+  "data.confirm.hint": "Capital letters and extra spaces do not matter.",
 } as const;
 
 export type MessageKey = keyof typeof en;
