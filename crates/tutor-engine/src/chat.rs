@@ -676,6 +676,12 @@ impl TextChat {
         Ok(Some(turn.id))
     }
 
+    /// Pauses a session that is waiting for the learner. A reply that is being
+    /// written is stopped by cancelling it, which pauses the session as well.
+    pub fn pause(&mut self) -> Result<Phase> {
+        Ok(self.session.apply(Event::Pause)?)
+    }
+
     /// Resumes after a pause, or after the provider is back.
     pub fn resume(&mut self) -> Result<Phase> {
         let event = match self.session.phase() {

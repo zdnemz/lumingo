@@ -290,6 +290,9 @@ impl Workshop {
                 feedback.comparison = comparison;
             }
             Err(EngineError::Llm(LlmError::Cancelled)) => {
+                // The draft is stored. Queue it so its feedback is finished later
+                // instead of being lost with the call.
+                enqueue_pending(&self.env, &pending).await?;
                 return Err(EngineError::Llm(LlmError::Cancelled));
             }
             Err(EngineError::Llm(_) | EngineError::Output(_)) => {

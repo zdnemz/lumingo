@@ -238,13 +238,24 @@ impl UnitPlayer {
     /// progress unless it is already passed. The unit must be in the curriculum
     /// index (see [`ensure_indexed`]).
     pub async fn start(env: UnitEnv, config: UnitConfig, unit: Unit) -> Result<Self> {
+        Self::start_as(env, config, unit, storage::SessionKind::Lesson).await
+    }
+
+    /// Like [`UnitPlayer::start`], storing the run as a session of `kind`: a
+    /// lesson, a checkpoint run or a drill run all play activities of a unit.
+    pub async fn start_as(
+        env: UnitEnv,
+        config: UnitConfig,
+        unit: Unit,
+        kind: storage::SessionKind,
+    ) -> Result<Self> {
         let now = (env.clock)();
         let session = env
             .db
             .sessions()
             .create(&NewSession {
                 profile_id: config.profile_id,
-                kind: storage::SessionKind::Lesson,
+                kind,
                 unit_id: Some(unit.id.clone()),
                 activity_id: None,
                 mode: None,
@@ -551,6 +562,23 @@ impl UnitPlayer {
             )
             .await?;
         Ok(summary)
+    }
+
+    /// Ends a practice run (a drill run) as completed. The checkpoint is not
+    /// consulted and the unit's progress does not change: a run that only
+    /// practised some activities has nothing to settle.
+    pub async fn finish_practice(&mut self) -> Result<()> {
+        self.env
+            .db
+            .sessions()
+            .finish(
+                self.session_id,
+                SessionStatus::Completed,
+                &(self.env.clock)(),
+                Some(&json!({ "answered": self.results.len() })),
+            )
+            .await?;
+        Ok(())
     }
 
     /// Ends the run early. Nothing about the unit's progress changes.

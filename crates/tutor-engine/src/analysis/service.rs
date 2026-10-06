@@ -293,19 +293,30 @@ impl TurnAnalyzer {
         turn: TurnToAnalyse,
         cancel: &CancellationToken,
     ) -> Result<RunReport> {
-        {
-            let mut state = lock(&self.inner.state);
-            state.queue.push_back(Queued {
-                turn,
-                flagged: false,
-                hard_failures: 0,
-            });
-            while state.queue.len() > MAX_QUEUE {
-                if let Some(oldest) = state.queue.pop_front() {
-                    state.abandoned.push(oldest.turn.turn_id);
-                }
+        self.enqueue(turn);
+        self.run_due(cancel).await
+    }
+
+    /// Queues a finished turn and does nothing else. It returns at once, so the
+    /// caller can queue the turn on its own task and run the analysis on another:
+    /// from this call on, [`TurnAnalyzer::amend_waiting`] finds the turn.
+    pub fn enqueue(&self, turn: TurnToAnalyse) {
+        let mut state = lock(&self.inner.state);
+        state.queue.push_back(Queued {
+            turn,
+            flagged: false,
+            hard_failures: 0,
+        });
+        while state.queue.len() > MAX_QUEUE {
+            if let Some(oldest) = state.queue.pop_front() {
+                state.abandoned.push(oldest.turn.turn_id);
             }
         }
+    }
+
+    /// Analyses what is waiting, as far as the cadence says. Spawn it; do not
+    /// await it on the speech path.
+    pub async fn run_due(&self, cancel: &CancellationToken) -> Result<RunReport> {
         self.run(false, cancel).await
     }
 
