@@ -16,6 +16,7 @@ pub mod error;
 #[cfg(test)]
 mod fake;
 pub mod http;
+pub mod inspector;
 pub mod key;
 mod ladder;
 pub mod openai;
@@ -38,6 +39,10 @@ pub use caps::CapsHandle;
 pub use client::LlmClient;
 pub use error::{InvalidOutput, InvalidReason, LlmError, TimeoutKind, TransportKind};
 pub use http::{GuardedClient, HttpClientFactory, SetupHosts, is_loopback_url};
+pub use inspector::{
+    DEFAULT_CAPACITY as PAYLOAD_LOG_CAPACITY, MAX_BODY_BYTES as PAYLOAD_MAX_BODY_BYTES,
+    PayloadEntry, PayloadLog, PayloadOutcome, PayloadSnapshot,
+};
 pub use key::{ApiKey, KeyError};
 pub use ladder::{ProviderClient, REPROBE_BELOW, VALIDITY_WINDOW};
 pub use openai::OpenAiChat;

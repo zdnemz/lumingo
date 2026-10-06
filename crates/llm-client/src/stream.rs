@@ -15,6 +15,7 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{LlmError, TimeoutKind};
+use crate::inspector::{Capture, PayloadOutcome};
 use crate::key::ApiKey;
 use crate::redact::sanitize_message;
 use crate::sse::{SseEvent, SseParser};
@@ -46,6 +47,10 @@ pub(crate) struct StreamGuards {
     pub budget: CallBudget,
     /// Used only to remove the key from error text the provider sends in the stream.
     pub key: Option<ApiKey>,
+    /// The inspector entry of the request. The stream appends the bytes it
+    /// receives and ends the entry when the stream completes or fails. Dropping
+    /// the stream early leaves it marked abandoned.
+    pub capture: Option<Capture>,
 }
 
 struct State<B, D> {
@@ -135,16 +140,25 @@ where
             Wake::Deadline => self.fail(LlmError::Timeout(kind)),
             Wake::Bytes(None) => self.on_connection_closed(),
             Wake::Bytes(Some(Err(error))) => self.fail(error),
-            Wake::Bytes(Some(Ok(chunk))) => match self.parser.push(chunk.as_ref()) {
-                Ok(events) => {
-                    for event in events {
-                        if !self.handle_event(&event) {
-                            break;
-                        }
+            Wake::Bytes(Some(Ok(chunk))) => {
+                if let Some(capture) = self.guards.capture.as_mut() {
+                    capture.append(chunk.as_ref());
+                }
+                self.on_bytes(chunk.as_ref());
+            }
+        }
+    }
+
+    fn on_bytes(&mut self, chunk: &[u8]) {
+        match self.parser.push(chunk) {
+            Ok(events) => {
+                for event in events {
+                    if !self.handle_event(&event) {
+                        break;
                     }
                 }
-                Err(error) => self.fail(error),
-            },
+            }
+            Err(error) => self.fail(error),
         }
     }
 
@@ -202,6 +216,9 @@ where
                 time_to_first_token: self.first_token,
             })));
         self.closed = true;
+        if let Some(capture) = self.guards.capture.take() {
+            capture.finish(PayloadOutcome::Ok);
+        }
     }
 
     fn fail(&mut self, error: LlmError) {
@@ -213,5 +230,8 @@ where
         };
         self.queue.push_back(Err(error));
         self.closed = true;
+        if let Some(capture) = self.guards.capture.take() {
+            capture.finish(PayloadOutcome::Failed);
+        }
     }
 }

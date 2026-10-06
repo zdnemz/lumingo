@@ -8,7 +8,6 @@
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use reqwest::Response;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
@@ -18,11 +17,12 @@ use crate::adapter::{
 };
 use crate::error::LlmError;
 use crate::http::map_reqwest_error;
+use crate::inspector::{PayloadLog, PayloadOutcome};
 use crate::profile::Protocol;
 use crate::redact::sanitize_message;
 use crate::sse::SseEvent;
 use crate::stream::{Decoded, EventDecoder, StreamGuards, sse_text_stream};
-use crate::transport::{CallBudget, Transport, rate_limit_from_headers, read_reply};
+use crate::transport::{CallBudget, Posted, Transport, rate_limit_from_headers, read_reply};
 use crate::types::{
     ChatMessage, FinishReason, RateLimit, Role, TextRequest, TextStream, TokenLimitParam, Usage,
 };
@@ -66,6 +66,14 @@ impl OpenAiChat {
         Ok(Self { config, transport })
     }
 
+    /// Records every request and response of this adapter in `log`, for the
+    /// payload inspector.
+    #[must_use]
+    pub fn with_payload_log(mut self, log: PayloadLog) -> Self {
+        self.transport = self.transport.with_log(log);
+        self
+    }
+
     fn quirks(&self) -> Quirks {
         let caps = self.config.caps.snapshot();
         Quirks {
@@ -84,7 +92,7 @@ impl OpenAiChat {
         stream: bool,
         budget: &CallBudget,
         cancel: &CancellationToken,
-    ) -> Result<Response, LlmError> {
+    ) -> Result<Posted, LlmError> {
         let before = self.quirks();
         let mut quirks = before;
         let mut flipped_token_param = false;
@@ -405,7 +413,7 @@ impl ProtocolAdapter for OpenAiChat {
             temperature: request.temperature,
             format: Format::Plain,
         };
-        let response = self
+        let Posted { response, capture } = self
             .send(&completion_request, true, &budget, cancel)
             .await?;
         let bytes = response
@@ -419,6 +427,7 @@ impl ProtocolAdapter for OpenAiChat {
                 cancel: cancel.clone(),
                 budget,
                 key: self.config.key.clone(),
+                capture,
             },
         ))
     }
@@ -429,9 +438,20 @@ impl ProtocolAdapter for OpenAiChat {
         cancel: &CancellationToken,
     ) -> Result<Completion, LlmError> {
         let budget = CallBudget::start(&self.config.options.background);
-        let response = self.send(request, false, &budget, cancel).await?;
+        let Posted { response, capture } = self.send(request, false, &budget, cancel).await?;
         let rate_limit = rate_limit_from_headers(response.headers());
-        let body = read_reply(response, &budget, cancel).await?;
+        let body = match read_reply(response, &budget, cancel).await {
+            Ok(body) => body,
+            Err(error) => {
+                if let Some(capture) = capture {
+                    capture.finish(PayloadOutcome::Failed);
+                }
+                return Err(error);
+            }
+        };
+        if let Some(capture) = capture {
+            capture.finish_with(PayloadOutcome::Ok, &body);
+        }
         let mut completion = parse_completion(
             &body,
             &request.format,
