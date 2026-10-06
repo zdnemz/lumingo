@@ -209,6 +209,7 @@ export const en = {
   "error.code.read_only": "That item is read-only. A profile that comes from your .env file is changed in that file.",
   "error.code.busy": "Another request of this kind is still running. Wait a moment and try again.",
   "error.code.not_available": "This part is not available in this build.",
+  "error.code.licence_not_accepted": "The licence of this model must be accepted before it is downloaded.",
   "error.code.provider_not_configured": "No AI provider is set up yet. Add one first.",
   "error.code.shutting_down": "The program is shutting down.",
   "error.code.storage": "The program could not read or write its data. The data folder is listed on the diagnostics page.",
