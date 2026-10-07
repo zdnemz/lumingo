@@ -317,6 +317,10 @@ impl LlmClient {
         caps.supports_temperature = quirks.send_temperature;
         caps.supports_usage_in_stream = caps.supports_usage_in_stream && quirks.include_usage;
 
+        // The test schema of PROMPT_CONTRACTS section 4 step 3. The enum value
+        // is a canary: a model that never receives the schema cannot guess it,
+        // so a provider that ignores the native schema fails this level instead
+        // of being cached as level 1 and failing every real contract later.
         let test = StructuredRequest {
             system: None,
             messages: vec![crate::Message {
@@ -326,8 +330,13 @@ impl LlmClient {
             schema_name: "probe_check".into(),
             schema: serde_json::json!({
                 "type": "object",
-                "properties": { "word": { "type": "string" }, "length": { "type": "integer" }, "is_noun": { "type": "boolean" } },
-                "required": ["word", "length", "is_noun"],
+                "properties": {
+                    "word": { "type": "string" },
+                    "length": { "type": "integer" },
+                    "is_noun": { "type": "boolean" },
+                    "check": { "type": "string", "enum": ["schema_received"] }
+                },
+                "required": ["word", "length", "is_noun", "check"],
                 "additionalProperties": false
             }),
             max_tokens: 100,

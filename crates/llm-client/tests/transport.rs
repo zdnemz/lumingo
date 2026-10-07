@@ -505,7 +505,8 @@ async fn the_probe_walks_down_the_ladder_and_caches_the_level_that_works() {
         "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":4}}\n\n",
         "data: [DONE]\n\n"
     ));
-    let probe_valid = "{\"word\":\"tea\",\"length\":3,\"is_noun\":true}";
+    let probe_valid =
+        "{\"word\":\"tea\",\"length\":3,\"is_noun\":true,\"check\":\"schema_received\"}";
     let (base, seen) = serve(vec![
         stream,
         status("400 Bad Request", "response_format is not supported"),
@@ -540,6 +541,33 @@ async fn the_probe_walks_down_the_ladder_and_caches_the_level_that_works() {
         .unwrap();
     assert_eq!(out.level, Level::ForcedTool);
     assert!(seen.lock().unwrap()[3].contains("\"tool_choice\""));
+}
+
+#[tokio::test]
+async fn a_provider_that_ignores_the_native_schema_fails_level_1() {
+    // The model answers from the user message alone (it never received the
+    // schema) and cannot know the `check` canary: level 1 must not be cached.
+    let stream = sse(concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"Hi there.\"}}]}\n\n",
+        "data: [DONE]\n\n"
+    ));
+    let guessed = "{\"word\":\"tea\",\"length\":3,\"is_noun\":true}";
+    let canary = "{\"word\":\"tea\",\"length\":3,\"is_noun\":true,\"check\":\"schema_received\"}";
+    let mut replies = vec![stream];
+    // Level 1: the guess, twice (repair also guesses).
+    replies.push(chat_reply(guessed));
+    replies.push(chat_reply(guessed));
+    // Level 2 (forced tool): the canary, so the walk stops there.
+    replies.push(tool_reply(canary));
+    replies.push(tool_reply(canary));
+    let (base, seen) = serve(replies).await;
+    let c = client(Protocol::OpenaiChat, &base);
+    let caps = c.probe(CancellationToken::new()).await;
+    assert_eq!(caps.structured_level, Some(2));
+    assert_eq!(c.structured_level(), Level::ForcedTool);
+    let seen = seen.lock().unwrap();
+    assert!(seen[1].contains("probe_check"), "level 1 was attempted");
+    assert!(seen[3].contains("\"tool_choice\""), "level 2 was attempted");
 }
 
 #[tokio::test]
