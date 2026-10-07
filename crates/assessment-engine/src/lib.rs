@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 pub mod deterministic;
+pub mod play;
 pub mod review;
 pub mod rubric;
 pub mod text_metrics;

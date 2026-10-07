@@ -8,6 +8,7 @@
 pub mod index;
 mod load;
 mod model;
+mod playable;
 mod validate;
 
 pub use index::{
@@ -15,4 +16,5 @@ pub use index::{
 };
 pub use load::{LoadError, LoadedFile, SchemaIssue, UnitLoader, load_dir};
 pub use model::*;
+pub use playable::NotPlayable;
 pub use validate::{Diagnostic, SetOptions, Severity, validate_set, validate_unit};
