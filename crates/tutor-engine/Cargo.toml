@@ -1,0 +1,21 @@
+[package]
+name = "tutor-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Tutoring logic for Lumingo: session states, UI events, the tutor turn and prompt assembly"
+
+[dependencies]
+curriculum = { path = "../curriculum" }
+llm-client = { path = "../llm-client" }
+thiserror = "2.0.21"
+tokio = { version = "1", features = ["sync", "macros"] }
+tokio-util = "0.7"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+
+[lints]
+workspace = true

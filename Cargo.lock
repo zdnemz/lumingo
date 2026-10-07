@@ -6029,6 +6029,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tutor-engine"
+version = "0.0.0"
+dependencies = [
+ "curriculum",
+ "llm-client",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "tutor-server"
 version = "0.0.0"
 dependencies = [

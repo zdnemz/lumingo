@@ -372,10 +372,11 @@ impl LlmClient {
     }
 
     /// Sends the request, retrying as `policy::retry_wait` allows and adapting to
-    /// `openai_chat` servers that reject a parameter we sent.
+    /// `openai_chat` servers that reject a parameter we sent. The body builder is
+    /// `Send + Sync` so the future stays spawnable by callers like `tutor-engine`.
     async fn open(
         &self,
-        make_body: &dyn Fn(Quirks) -> Value,
+        make_body: &(dyn Fn(Quirks) -> Value + Send + Sync),
         cancel: &CancellationToken,
     ) -> Result<reqwest::Response, LlmError> {
         let (mut attempt, mut adjustments) = (0u32, 0u32);
