@@ -41,6 +41,8 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | aws-lc-sys 0.45.0 (through reqwest) | Native crypto for rustls | ISC, MIT, MIT-0, BSD-3-Clause and Apache-2.0 terms; passes `cargo deny`. Building it needs cmake and a C compiler, so the Windows build machine needs both (note for `docs/ENVIRONMENT.md`). | ok |
 | tokio, tokio-util | Async runtime and cancellation | MIT | ok |
 | tower, http-body-util, tokio-tungstenite, futures-util | Server tests | MIT | ok |
+| sqlx 0.8.6, sqlx-core, sqlx-sqlite | SQLite access, connection pools and migrations in `crates/storage`. Runtime query functions only, no compile-time query macros, so no database is needed at build time. Bundled SQLite (libsqlite3-sys 0.30.1, MIT) is built from source, so the Windows build machine needs a C toolchain (same requirement as `aws-lc-sys`). Owner approved 0.8.6 on 2026-10-07 after the license check at the source: LICENSE-MIT (LaunchBadge, LLC) and LICENSE-APACHE are both in the crate files. | MIT OR Apache-2.0, read from the crate files 2026-10-07 | ok |
+| hashlink, flume, futures-intrusive, crossbeam-queue, dotenvy, atoi, crc, hex, tokio-stream and other small transitive crates of sqlx | Hashing, channels, URL parsing, CRC and hex helpers | MIT OR Apache-2.0 (Zlib for foldhash) | ok |
 | rust-embed | Embeds the exported UI in the executable | MIT | ok |
 | ts-rs | Generates TypeScript types from Rust API types | MIT | ok |
 | serde, serde_json | Serialisation | MIT OR Apache-2.0 | ok |
@@ -95,7 +97,6 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 | ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
 | CPAL | Audio capture and playback | Apache-2.0 | verify |
 | Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
-| SQLx, SQLite | Storage | MIT OR Apache-2.0, public domain | verify |
 | harper-core 2.11.0, default features off | Rule-based grammar findings in `assessment-engine` | Crate: Apache-2.0, read from crate metadata 2026-10-07. Owner approved adding it on 2026-10-07 after seeing its tree: 254 crates (about 240 more than before), including the `burn` ML framework through its tagger and `ammonia`. | ok (owner decision). Weigh its memory and build cost in stage 1 and 7 measurements. |
 | colored 3.1.1, cssparser 0.38.0, dtoa-short 0.3.5 (through harper-core) | Terminal colours, CSS parsing, number formatting | MPL-2.0: file-level copyleft. Used unmodified as crates.io dependencies, which MPL-2.0 allows inside an Apache-2.0 program. Their source stays available from crates.io. Allowed by per-crate exceptions in `deny.toml`. Attribution and source note in `NOTICE`. | review: conditions are that they stay unmodified and are never vendored or patched. |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |
