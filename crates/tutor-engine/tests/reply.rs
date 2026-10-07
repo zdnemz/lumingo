@@ -92,6 +92,21 @@ impl LlmClient for ScriptedClient {
             Ok(rx)
         })
     }
+
+    fn structured(
+        &self,
+        _request: llm_client::StructuredRequest,
+        _cancel: CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<llm_client::StructuredOutput, LlmError>> + Send + '_>>
+    {
+        // These tests drive streamed replies only; a structured call here is a
+        // test mistake, reported as a transport failure.
+        Box::pin(async {
+            Err(LlmError::Transport(
+                "structured call not scripted".to_owned(),
+            ))
+        })
+    }
 }
 
 fn request() -> TextRequest {

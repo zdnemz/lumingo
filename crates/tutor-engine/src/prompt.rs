@@ -141,20 +141,7 @@ impl TutorContext {
             });
         };
 
-        let mut target_language: Vec<String> = unit
-            .targets
-            .vocabulary
-            .iter()
-            .filter(|v| target_vocab_ids.contains(&v.id))
-            .map(|v| v.lemma.clone())
-            .collect();
-        target_language.extend(
-            unit.targets
-                .grammar
-                .iter()
-                .filter(|g| target_grammar_ids.contains(&g.id))
-                .map(|g| g.pattern.clone()),
-        );
+        let target_language = activity_target_language(unit, target_grammar_ids, target_vocab_ids);
 
         Ok(Self {
             channel,
@@ -201,6 +188,31 @@ impl TutorContext {
             pronunciation_findings: false,
         }
     }
+}
+
+/// Vocabulary lemmas and grammar patterns of an activity's targets, in unit
+/// order: vocabulary first, then grammar (T1's "Language to bring out", also
+/// reused by T2's input).
+pub fn activity_target_language(
+    unit: &Unit,
+    target_grammar_ids: &[String],
+    target_vocab_ids: &[String],
+) -> Vec<String> {
+    let mut out: Vec<String> = unit
+        .targets
+        .vocabulary
+        .iter()
+        .filter(|v| target_vocab_ids.contains(&v.id))
+        .map(|v| v.lemma.clone())
+        .collect();
+    out.extend(
+        unit.targets
+            .grammar
+            .iter()
+            .filter(|g| target_grammar_ids.contains(&g.id))
+            .map(|g| g.pattern.clone()),
+    );
+    out
 }
 
 fn level_name(level: curriculum::Level) -> &'static str {

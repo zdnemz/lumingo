@@ -55,6 +55,9 @@ pub struct StructuredRequest {
     pub schema_name: String,
     pub schema: Value,
     pub max_tokens: u32,
+    /// Sampling temperature. `Some(0.0)` for analysis calls
+    /// (`PROMPT_CONTRACTS.md` section 8). Omitted when the provider rejected it.
+    pub temperature: Option<f32>,
 }
 
 impl StructuredRequest {
@@ -120,6 +123,9 @@ pub fn openai_body(
         "stream": false,
     });
     body[token_param.key()] = json!(req.max_tokens);
+    if let Some(temperature) = req.temperature {
+        body["temperature"] = json!(temperature);
+    }
     match level {
         Level::NativeSchema => {
             body["response_format"] = json!({
@@ -147,6 +153,9 @@ pub fn anthropic_body(req: &StructuredRequest, level: Level, model: &str) -> Val
         "max_tokens": req.max_tokens,
         "messages": req.messages.iter().map(|m| json!({ "role": m.role.as_str(), "content": m.content })).collect::<Vec<_>>(),
     });
+    if let Some(temperature) = req.temperature {
+        body["temperature"] = json!(temperature);
+    }
     let system = if in_prompt {
         Some(req.system_with_schema())
     } else {
@@ -273,6 +282,7 @@ mod tests {
             schema_name: "test_schema".into(),
             schema: schema(),
             max_tokens: 100,
+            temperature: None,
         }
     }
 
@@ -339,6 +349,21 @@ mod tests {
                 .is_some_and(|s| s.contains("Return only JSON"))
         );
         assert!(b.get("output_config").is_none() && b.get("tools").is_none());
+    }
+
+    #[test]
+    fn temperature_is_sent_when_set_and_omitted_when_none() {
+        let mut req = req();
+        req.temperature = Some(0.0);
+        let b = openai_body(&req, Level::NativeSchema, TokenParam::MaxTokens, "m");
+        assert_eq!(b["temperature"], 0.0);
+        let b = anthropic_body(&req, Level::NativeSchema, "m");
+        assert_eq!(b["temperature"], 0.0);
+        req.temperature = None;
+        let b = openai_body(&req, Level::NativeSchema, TokenParam::MaxTokens, "m");
+        assert!(b.get("temperature").is_none());
+        let b = anthropic_body(&req, Level::NativeSchema, "m");
+        assert!(b.get("temperature").is_none());
     }
 
     #[test]

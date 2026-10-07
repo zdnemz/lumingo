@@ -121,6 +121,15 @@ text_enum! {
 }
 
 text_enum! {
+    /// How much an error gets in the way, from the `turn_analysis` contract.
+    Severity {
+        Minor => "minor",
+        Major => "major",
+        Blocking => "blocking",
+    }
+}
+
+text_enum! {
     /// Which of the four skills a row trains or scores.
     Skill {
         Listening => "listening",
@@ -282,6 +291,43 @@ pub struct TurnAnalysis {
     pub ladder_level: i64,
     pub model: String,
     pub created_at: String,
+}
+
+/// One error event to write for an analysed turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewErrorEvent {
+    pub turn_id: i64,
+    pub profile_id: i64,
+    pub category: String,
+    pub quote: String,
+    pub correction: String,
+    pub severity: Severity,
+    pub addressed: bool,
+    pub created_at: String,
+}
+
+/// A row read back from `error_events`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorEvent {
+    pub id: i64,
+    pub turn_id: i64,
+    pub profile_id: i64,
+    pub category: String,
+    pub quote: String,
+    pub correction: String,
+    pub severity: Severity,
+    pub addressed: bool,
+    pub created_at: String,
+}
+
+/// One row of the per-category tally in `error_stats`. The numbers survive a
+/// session delete, so the pattern outlives the text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorStat {
+    pub profile_id: i64,
+    pub category: String,
+    pub count: i64,
+    pub last_seen: Option<String>,
 }
 
 /// One scored dimension of one response.

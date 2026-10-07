@@ -232,9 +232,19 @@ impl LlmClient {
         level: Level,
         cancel: &CancellationToken,
     ) -> Result<String, LlmError> {
-        let make = |q: Quirks| match self.protocol {
-            Protocol::OpenaiChat => structured::openai_body(req, level, q.token_param, &self.model),
-            Protocol::AnthropicMessages => structured::anthropic_body(req, level, &self.model),
+        let make = |q: Quirks| {
+            // A provider that rejected `temperature` once (the 400 rule in
+            // `open`) must not be sent it again, on either call type.
+            let mut req = req.clone();
+            if !q.send_temperature {
+                req.temperature = None;
+            }
+            match self.protocol {
+                Protocol::OpenaiChat => {
+                    structured::openai_body(&req, level, q.token_param, &self.model)
+                }
+                Protocol::AnthropicMessages => structured::anthropic_body(&req, level, &self.model),
+            }
         };
         let response = self.open(&make, cancel).await?;
         let body = tokio::select! {
@@ -321,6 +331,7 @@ impl LlmClient {
                 "additionalProperties": false
             }),
             max_tokens: 100,
+            temperature: None,
         };
         let mut level = Some(Level::NativeSchema);
         while let Some(l) = level {

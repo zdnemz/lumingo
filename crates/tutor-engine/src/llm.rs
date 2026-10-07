@@ -5,7 +5,7 @@
 //! without touching the transport: a fake engine may exist only in test code
 //! (AGENTS.md), and the real implementation is one thin adapter below.
 
-use llm_client::{LlmError, StreamEvent, TextRequest};
+use llm_client::{LlmError, StreamEvent, StructuredOutput, StructuredRequest, TextRequest};
 use std::future::Future;
 use std::pin::Pin;
 use tokio::sync::mpsc;
@@ -24,6 +24,14 @@ pub trait LlmClient: Send + Sync {
         request: TextRequest,
         cancel: CancellationToken,
     ) -> Pin<Box<dyn Future<Output = Result<TextStream, LlmError>> + Send + '_>>;
+
+    /// One structured call (T2 and later), returning JSON that already passed
+    /// the schema check and, when needed, one repair attempt.
+    fn structured(
+        &self,
+        request: StructuredRequest,
+        cancel: CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<StructuredOutput, LlmError>> + Send + '_>>;
 }
 
 impl LlmClient for llm_client::LlmClient {
@@ -33,5 +41,13 @@ impl LlmClient for llm_client::LlmClient {
         cancel: CancellationToken,
     ) -> Pin<Box<dyn Future<Output = Result<TextStream, LlmError>> + Send + '_>> {
         Box::pin(async move { llm_client::LlmClient::stream_text(self, request, cancel).await })
+    }
+
+    fn structured(
+        &self,
+        request: StructuredRequest,
+        cancel: CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<StructuredOutput, LlmError>> + Send + '_>> {
+        Box::pin(async move { llm_client::LlmClient::structured(self, request, cancel).await })
     }
 }

@@ -10,7 +10,7 @@ use crate::error::StorageError;
 use crate::models::*;
 
 /// Parses a stored TEXT value into its enum, naming the table in the error.
-fn parse_enum<T>(table: &'static str, value: String) -> Result<T, StorageError>
+pub(crate) fn parse_enum<T>(table: &'static str, value: String) -> Result<T, StorageError>
 where
     T: FromStr<Err = UnknownValue>,
 {

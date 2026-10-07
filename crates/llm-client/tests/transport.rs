@@ -389,6 +389,7 @@ fn structured_request() -> StructuredRequest {
         schema_name: "test_schema".into(),
         schema: schema(),
         max_tokens: 100,
+        temperature: None,
     }
 }
 
