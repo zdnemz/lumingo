@@ -179,35 +179,46 @@ pub fn anthropic_body(req: &StructuredRequest, level: Level, model: &str) -> Val
 }
 
 /// The text that should hold the JSON, taken from a non-streaming reply.
+///
+/// Some Anthropic-compatible gateways answer a non-streaming request with the
+/// OpenAI body shape (`choices[0].message`) even though the request used the
+/// Anthropic protocol. The Anthropic shape is tried first and the OpenAI shape
+/// is the fallback, so such a gateway costs a fallback instead of the call.
 pub fn output_text(protocol: Protocol, level: Level, reply: &Value) -> Option<String> {
     match protocol {
-        Protocol::OpenaiChat => {
-            let message = reply.pointer("/choices/0/message")?;
-            if level == Level::ForcedTool {
-                message
-                    .pointer("/tool_calls/0/function/arguments")?
-                    .as_str()
-                    .map(str::to_owned)
-            } else {
-                message.get("content")?.as_str().map(str::to_owned)
-            }
-        }
+        Protocol::OpenaiChat => openai_text(reply, level),
         Protocol::AnthropicMessages => {
-            let blocks = reply.get("content")?.as_array()?;
-            if level == Level::ForcedTool {
-                blocks
-                    .iter()
-                    .find(|b| b.get("type").and_then(Value::as_str) == Some("tool_use"))
-                    .and_then(|b| b.get("input"))
-                    .map(Value::to_string)
-            } else {
-                let text: String = blocks
-                    .iter()
-                    .filter_map(|b| b.get("text").and_then(Value::as_str))
-                    .collect();
-                (!text.is_empty()).then_some(text)
-            }
+            anthropic_text(reply, level).or_else(|| openai_text(reply, level))
         }
+    }
+}
+
+fn openai_text(reply: &Value, level: Level) -> Option<String> {
+    let message = reply.pointer("/choices/0/message")?;
+    if level == Level::ForcedTool {
+        message
+            .pointer("/tool_calls/0/function/arguments")?
+            .as_str()
+            .map(str::to_owned)
+    } else {
+        message.get("content")?.as_str().map(str::to_owned)
+    }
+}
+
+fn anthropic_text(reply: &Value, level: Level) -> Option<String> {
+    let blocks = reply.get("content")?.as_array()?;
+    if level == Level::ForcedTool {
+        blocks
+            .iter()
+            .find(|b| b.get("type").and_then(Value::as_str) == Some("tool_use"))
+            .and_then(|b| b.get("input"))
+            .map(Value::to_string)
+    } else {
+        let text: String = blocks
+            .iter()
+            .filter_map(|b| b.get("text").and_then(Value::as_str))
+            .collect();
+        (!text.is_empty()).then_some(text)
     }
 }
 
@@ -364,6 +375,31 @@ mod tests {
         assert!(b.get("temperature").is_none());
         let b = anthropic_body(&req, Level::NativeSchema, "m");
         assert!(b.get("temperature").is_none());
+    }
+
+    #[test]
+    fn an_anthropic_gateway_that_answers_in_the_openai_shape_is_read_too() {
+        // Seen live on 2026-10-07 from an Anthropic-compatible gateway: the
+        // request used `anthropic_messages`, the body came back OpenAI-shaped.
+        let reply = json!({
+            "id": "cmb-1",
+            "object": "chat.completion",
+            "model": "some-model",
+            "choices": [{ "index": 0, "message": { "role": "assistant", "content": "{\"word\":\"tea\"}" } }]
+        });
+        assert_eq!(
+            output_text(Protocol::AnthropicMessages, Level::NativeSchema, &reply).as_deref(),
+            Some("{\"word\":\"tea\"}")
+        );
+        // The documented Anthropic shape still wins when both are present.
+        let both = json!({
+            "content": [{ "type": "text", "text": "{\"from\":\"anthropic\"}" }],
+            "choices": [{ "message": { "content": "{\"from\":\"openai\"}" } }]
+        });
+        assert_eq!(
+            output_text(Protocol::AnthropicMessages, Level::NativeSchema, &both).as_deref(),
+            Some("{\"from\":\"anthropic\"}")
+        );
     }
 
     #[test]
