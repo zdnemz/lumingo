@@ -1,0 +1,23 @@
+[package]
+name = "storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "SQLite storage, migrations and repositories for Lumingo"
+
+[dependencies]
+# "sqlite" builds SQLite from source (bundled), so the Windows build needs a C
+# toolchain but no system SQLite. Runtime query functions only: the compile-time
+# query macros and `sqlx::migrate!()` are deliberately not enabled, so no
+# database is needed at build time and the migration list is built by hand.
+sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "derive"] }
+thiserror = "2.0.21"
+tracing = "0.1.44"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+
+[lints]
+workspace = true
