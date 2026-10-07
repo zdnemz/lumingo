@@ -134,11 +134,19 @@ async fn drive(
     session: &mut Session,
     client: &ScriptedClient,
     cancel: &CancellationToken,
+    allow_fallback: bool,
 ) -> (tutor_engine::ReplyReport, Vec<UiEvent>) {
     let mut events = Vec::new();
-    let report = run_reply(session, client, request(), cancel, &mut |e| events.push(e))
-        .await
-        .unwrap();
+    let report = run_reply(
+        session,
+        client,
+        request(),
+        cancel,
+        allow_fallback,
+        &mut |e| events.push(e),
+    )
+    .await
+    .unwrap();
     (report, events)
 }
 
@@ -155,7 +163,7 @@ fn a_voice_reply_streams_sentences_and_returns_to_listening() {
             after: After::Close,
         });
         let mut session = voice();
-        let (report, events) = drive(&mut session, &client, &CancellationToken::new()).await;
+        let (report, events) = drive(&mut session, &client, &CancellationToken::new(), true).await;
 
         assert_eq!(report.outcome, ReplyOutcome::Normal);
         assert_eq!(report.text, "Hello there. How are you? Ok");
@@ -199,7 +207,7 @@ fn a_text_reply_walks_waiting_thinking_replying_waiting() {
             after: After::Close,
         });
         let mut session = text();
-        let (report, events) = drive(&mut session, &client, &CancellationToken::new()).await;
+        let (report, events) = drive(&mut session, &client, &CancellationToken::new(), true).await;
 
         assert_eq!(report.outcome, ReplyOutcome::Normal);
         assert_eq!(session.turn(), Some(TurnState::Waiting));
@@ -225,7 +233,7 @@ fn a_text_reply_walks_waiting_thinking_replying_waiting() {
 }
 
 #[test]
-fn an_empty_reply_completes_the_turn_with_no_text() {
+fn an_empty_reply_speaks_the_authored_line_once() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
         let client = ScriptedClient::new(Script::Steps {
@@ -233,28 +241,34 @@ fn an_empty_reply_completes_the_turn_with_no_text() {
             after: After::Close,
         });
         let mut session = voice();
-        let (report, events) = drive(&mut session, &client, &CancellationToken::new()).await;
+        let (report, events) = drive(&mut session, &client, &CancellationToken::new(), true).await;
 
-        assert_eq!(report.outcome, ReplyOutcome::Empty);
-        assert!(report.text.is_empty());
-        assert_eq!(report.sentences, 0);
+        assert_eq!(report.outcome, ReplyOutcome::Fallback);
+        assert_eq!(report.text, tutor_engine::FALLBACK_LINE);
+        assert_eq!(report.sentences, 1);
         assert_eq!(session.turn(), Some(TurnState::Listening));
         assert_eq!(session.turns_completed(), 1);
-        assert!(
-            !events
-                .iter()
-                .any(|e| matches!(e, UiEvent::TutorTextDelta { .. }))
+        assert!(events.contains(&UiEvent::TutorSentenceSpoken {
+            index: 0,
+            text: tutor_engine::FALLBACK_LINE.to_owned()
+        }));
+        assert_eq!(
+            events.last(),
+            Some(&UiEvent::turn_state(TurnState::Listening))
         );
     });
 }
 
 #[test]
-fn an_open_failure_moves_to_provider_unavailable_and_keeps_no_text() {
+fn a_second_empty_reply_without_fallback_moves_to_provider_unavailable() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let client = ScriptedClient::new(Script::FailOpen);
-        let mut session = text();
-        let (report, events) = drive(&mut session, &client, &CancellationToken::new()).await;
+        let client = ScriptedClient::new(Script::Steps {
+            steps: vec![Step::Finished],
+            after: After::Close,
+        });
+        let mut session = voice();
+        let (report, events) = drive(&mut session, &client, &CancellationToken::new(), false).await;
 
         assert_eq!(report.outcome, ReplyOutcome::ProviderUnavailable);
         assert!(report.text.is_empty());
@@ -264,16 +278,37 @@ fn an_open_failure_moves_to_provider_unavailable_and_keeps_no_text() {
 }
 
 #[test]
-fn a_stream_error_before_any_text_moves_to_provider_unavailable() {
+fn an_open_failure_moves_to_provider_unavailable_and_keeps_no_text() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let client = ScriptedClient::new(Script::FailOpen);
+        let mut session = text();
+        let (report, events) = drive(&mut session, &client, &CancellationToken::new(), true).await;
+
+        assert_eq!(report.outcome, ReplyOutcome::ProviderUnavailable);
+        assert!(report.text.is_empty());
+        assert_eq!(session.phase(), Phase::ProviderUnavailable);
+        assert_eq!(events, [UiEvent::session_state(Phase::ProviderUnavailable)]);
+    });
+}
+
+#[test]
+fn a_stream_error_before_any_text_counts_as_empty_output() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
         let client = ScriptedClient::new(Script::Steps {
             steps: vec![Step::StreamError],
             after: After::Close,
         });
+        // With the fallback still available the authored line is spoken.
         let mut session = voice();
-        let (report, events) = drive(&mut session, &client, &CancellationToken::new()).await;
+        let (report, _) = drive(&mut session, &client, &CancellationToken::new(), true).await;
+        assert_eq!(report.outcome, ReplyOutcome::Fallback);
+        assert_eq!(report.text, tutor_engine::FALLBACK_LINE);
 
+        // With none left, the provider is treated as failing.
+        let mut session = voice();
+        let (report, events) = drive(&mut session, &client, &CancellationToken::new(), false).await;
         assert_eq!(report.outcome, ReplyOutcome::ProviderUnavailable);
         assert_eq!(session.phase(), Phase::ProviderUnavailable);
         assert_eq!(events, [UiEvent::session_state(Phase::ProviderUnavailable)]);
@@ -289,7 +324,7 @@ fn a_stream_error_after_text_keeps_it_and_reports_truncated() {
             after: After::Close,
         });
         let mut session = voice();
-        let (report, events) = drive(&mut session, &client, &CancellationToken::new()).await;
+        let (report, events) = drive(&mut session, &client, &CancellationToken::new(), true).await;
 
         assert_eq!(report.outcome, ReplyOutcome::Truncated);
         assert_eq!(report.text, "One sentence. And then");
@@ -316,7 +351,7 @@ fn cancelling_before_the_first_token_pauses_the_session() {
         let mut events = Vec::new();
         let mut emit = |e| events.push(e);
         let report = tokio::join!(
-            run_reply(&mut session, &client, request(), &cancel, &mut emit),
+            run_reply(&mut session, &client, request(), &cancel, true, &mut emit),
             async {
                 tokio::time::sleep(Duration::from_millis(20)).await;
                 cancel.cancel();
@@ -346,7 +381,7 @@ fn cancelling_after_text_keeps_it_and_returns_to_idle() {
         let mut events = Vec::new();
         let mut emit = |e| events.push(e);
         let report = tokio::join!(
-            run_reply(&mut session, &client, request(), &cancel, &mut emit),
+            run_reply(&mut session, &client, request(), &cancel, true, &mut emit),
             async {
                 tokio::time::sleep(Duration::from_millis(20)).await;
                 cancel.cancel();
@@ -383,6 +418,7 @@ fn the_request_reaches_the_client_unchanged() {
             &client,
             expected.clone(),
             &CancellationToken::new(),
+            true,
             &mut |e| events.push(e),
         )
         .await

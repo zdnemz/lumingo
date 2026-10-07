@@ -6034,6 +6034,7 @@ version = "0.0.0"
 dependencies = [
  "curriculum",
  "llm-client",
+ "serde_json",
  "thiserror 2.0.21",
  "tokio",
  "tokio-util",
