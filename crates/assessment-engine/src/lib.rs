@@ -3,11 +3,14 @@
 //! here: a level only ever comes from stored, locally scored attempts.
 #![forbid(unsafe_code)]
 
+pub mod checkpoint;
 pub mod deterministic;
 pub mod play;
 pub mod review;
 pub mod rubric;
 pub mod text_metrics;
+
+pub use checkpoint::{CheckpointItem, CheckpointOutcome, DEFAULT_PASS_MARK, evaluate_checkpoint};
 
 use std::collections::{BTreeMap, HashSet};
 

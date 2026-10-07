@@ -370,6 +370,78 @@ impl Activity {
             | Self::ErrorCorrection { common, .. } => common,
         }
     }
+
+    /// The `type` text of the unit format, exactly as the schema writes it.
+    /// The attempt rows store this as `activity_type`.
+    pub const fn type_str(&self) -> &'static str {
+        match self {
+            Self::Mcq { .. } => "mcq",
+            Self::GapFill { .. } => "gap_fill",
+            Self::Reorder { .. } => "reorder",
+            Self::Match { .. } => "match",
+            Self::Dictation { .. } => "dictation",
+            Self::ReadAloud { .. } => "read_aloud",
+            Self::MinimalPairs { .. } => "minimal_pairs",
+            Self::Shadowing { .. } => "shadowing",
+            Self::GuidedSpeaking(_) => "guided_speaking",
+            Self::GuidedWriting(_) => "guided_writing",
+            Self::Roleplay { .. } => "roleplay",
+            Self::Mediation { .. } => "mediation",
+            Self::ReadingSet { .. } => "reading_set",
+            Self::ListeningSet { .. } => "listening_set",
+            Self::ErrorCorrection { .. } => "error_correction",
+        }
+    }
+
+    /// The dimension an attempt for this activity is filed under
+    /// (ASSESSMENT_SPEC section 2). An `mcq` counts by what it exercises: audio
+    /// makes it listening, a passage makes it reading, and otherwise the
+    /// authored skill decides between listening, reading, vocabulary and
+    /// grammar. `spoken` tells a `mediation` how it was answered; every other
+    /// type ignores it. Grammar, vocabulary and pronunciation are the
+    /// supporting dimensions: they are shown as mastery and never with a CEFR
+    /// label.
+    pub fn evidence_skill(&self, spoken: bool) -> &'static str {
+        match self {
+            Self::Mcq {
+                audio_text,
+                passage,
+                common,
+                ..
+            } => {
+                if audio_text.is_some() {
+                    "listening"
+                } else if passage.is_some() {
+                    "reading"
+                } else {
+                    match common.skill {
+                        Skill::Listening => "listening",
+                        Skill::Reading => "reading",
+                        Skill::Vocabulary => "vocabulary",
+                        _ => "grammar",
+                    }
+                }
+            }
+            Self::GapFill { .. } | Self::Reorder { .. } => "grammar",
+            Self::Match { .. } => "vocabulary",
+            Self::Dictation { .. } | Self::ListeningSet { .. } => "listening",
+            Self::MinimalPairs { mode, .. } => match mode {
+                MinimalPairsMode::ListenChoose => "listening",
+                MinimalPairsMode::SayBoth => "pronunciation",
+            },
+            Self::ReadingSet { .. } => "reading",
+            Self::ErrorCorrection { .. } | Self::GuidedWriting(_) => "writing",
+            Self::GuidedSpeaking(_) | Self::Roleplay { .. } => "speaking",
+            Self::Mediation { .. } => {
+                if spoken {
+                    "speaking"
+                } else {
+                    "writing"
+                }
+            }
+            Self::ReadAloud { .. } | Self::Shadowing { .. } => "pronunciation",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -449,4 +521,181 @@ pub struct Unit {
     pub generation_policy: GenerationPolicy,
     pub review_items: Vec<ReviewItemRef>,
     pub provenance: Provenance,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::UnitLoader;
+
+    const EXAMPLE: &str = include_str!("../../../curriculum/examples/a1-u01.example.json");
+
+    // Helper for the tests below; clippy.toml only exempts `#[test]` bodies.
+    #[allow(clippy::unwrap_used)]
+    fn example() -> Unit {
+        UnitLoader::new().load_str(EXAMPLE).unwrap()
+    }
+
+    #[allow(clippy::unwrap_used)]
+    fn activity(id: &str) -> Activity {
+        example()
+            .activities
+            .into_iter()
+            .find(|a| a.common().id == id)
+            .unwrap()
+    }
+
+    #[test]
+    fn every_activity_type_of_the_example_unit_names_its_schema_text() {
+        let unit = example();
+        let named: Vec<&str> = unit.activities.iter().map(Activity::type_str).collect();
+        // The fifteen schema types, as the example unit uses them.
+        assert_eq!(
+            named,
+            [
+                "mcq",
+                "mcq",
+                "gap_fill",
+                "reorder",
+                "match",
+                "dictation",
+                "read_aloud",
+                "minimal_pairs",
+                "shadowing",
+                "guided_speaking",
+                "roleplay",
+                "guided_writing",
+                "mcq",
+                "reading_set",
+                "listening_set",
+                "error_correction",
+                "error_correction",
+            ]
+        );
+        // The two wire names of guided production are distinct.
+        assert_ne!(
+            Activity::GuidedSpeaking(GuidedProduction {
+                common: Common {
+                    id: "x".to_owned(),
+                    skill: Skill::SpeakingProduction,
+                    objective_ids: Vec::new(),
+                    instructions: Localized {
+                        en: String::new(),
+                        id: None,
+                    },
+                    scoring: Some(Scoring::Rubric),
+                },
+                prompt: Localized {
+                    en: String::new(),
+                    id: None,
+                },
+                content_points: Vec::new(),
+                rubric_id: "r".to_owned(),
+                model_answers: Vec::new(),
+                min_words: 1,
+                max_words: 2,
+            })
+            .type_str(),
+            "guided_writing"
+        );
+    }
+
+    #[test]
+    fn the_evidence_dimension_follows_the_spec_table() {
+        // An mcq counts by what it exercises.
+        assert_eq!(
+            activity("a01-listen-question").evidence_skill(false),
+            "listening"
+        );
+        assert_eq!(activity("a13-read-budi").evidence_skill(false), "reading");
+        assert_eq!(
+            activity("a02-greeting-by-time").evidence_skill(false),
+            "vocabulary"
+        );
+        // The spec's table, one row each.
+        assert_eq!(activity("a03-gap-am").evidence_skill(false), "grammar");
+        assert_eq!(
+            activity("a04-reorder-name").evidence_skill(false),
+            "grammar"
+        );
+        assert_eq!(
+            activity("a05-match-phrases").evidence_skill(false),
+            "vocabulary"
+        );
+        assert_eq!(
+            activity("a06-dictation-from").evidence_skill(false),
+            "listening"
+        );
+        assert_eq!(activity("a08-pairs-th").evidence_skill(false), "listening");
+        assert_eq!(
+            activity("a14-read-set-class-chat").evidence_skill(false),
+            "reading"
+        );
+        assert_eq!(
+            activity("a15-listen-set-putu").evidence_skill(false),
+            "listening"
+        );
+        assert_eq!(
+            activity("a16-fix-missing-am").evidence_skill(false),
+            "writing"
+        );
+        assert_eq!(
+            activity("a10-speak-introduce").evidence_skill(false),
+            "speaking"
+        );
+        assert_eq!(
+            activity("a11-roleplay-classmate").evidence_skill(false),
+            "speaking"
+        );
+        assert_eq!(
+            activity("a12-write-introduce").evidence_skill(false),
+            "writing"
+        );
+        assert_eq!(
+            activity("a07-read-aloud-thanks").evidence_skill(false),
+            "pronunciation"
+        );
+        assert_eq!(
+            activity("a09-shadow-dialogue").evidence_skill(false),
+            "pronunciation"
+        );
+    }
+
+    #[test]
+    fn a_mediation_takes_the_skill_of_the_way_it_was_answered() {
+        // A mediation is built directly: the example unit has none.
+        let common = Common {
+            id: "m1".to_owned(),
+            skill: Skill::Mediation,
+            objective_ids: Vec::new(),
+            instructions: Localized {
+                en: String::new(),
+                id: None,
+            },
+            scoring: Some(Scoring::Rubric),
+        };
+        let mediation = Activity::Mediation {
+            common,
+            source_text: String::new(),
+            task: Localized {
+                en: String::new(),
+                id: None,
+            },
+            rubric_id: "r".to_owned(),
+            model_answers: Vec::new(),
+        };
+        assert_eq!(mediation.evidence_skill(true), "speaking");
+        assert_eq!(mediation.evidence_skill(false), "writing");
+    }
+
+    #[test]
+    fn a_minimal_pairs_drill_in_say_mode_is_pronunciation_evidence() {
+        let mut say = activity("a08-pairs-th");
+        if let Activity::MinimalPairs { mode, .. } = &mut say {
+            *mode = MinimalPairsMode::SayBoth;
+        } else {
+            panic!("a08 is minimal pairs");
+        }
+        assert_eq!(say.evidence_skill(false), "pronunciation");
+    }
 }

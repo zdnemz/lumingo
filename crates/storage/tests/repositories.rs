@@ -266,6 +266,14 @@ async fn attempts_group_by_response_and_keep_their_evidence() {
     let rows = db.attempts_for_response("r1").await.unwrap();
     assert_eq!(rows.len(), 2);
 
+    // The session's rows read back oldest first, both dimensions included.
+    let by_session = db.attempts_for_session(session.id).await.unwrap();
+    assert_eq!(by_session.len(), 2);
+    assert_eq!(by_session[0].id, a.id);
+    assert_eq!(by_session[1].id, b.id);
+    assert_eq!(by_session[0].dimension, "accuracy");
+    assert!(db.attempts_for_session(999).await.unwrap().is_empty());
+
     let by_skill = db
         .attempts_for_skill(profile_id, Skill::Reading)
         .await
@@ -278,6 +286,21 @@ async fn attempts_group_by_response_and_keep_their_evidence() {
             .len(),
         0
     );
+
+    // The supporting dimensions round-trip too (ASSESSMENT_SPEC section 2).
+    for skill in [Skill::Grammar, Skill::Vocabulary, Skill::Pronunciation] {
+        let mut supporting = new_attempt(profile_id, Some(session.id), "r2");
+        supporting.skill = skill;
+        let stored = db.add_attempt(supporting).await.unwrap();
+        assert_eq!(stored.skill, skill);
+        assert_eq!(
+            db.attempts_for_skill(profile_id, skill)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+    }
 
     let evidence = db
         .add_evidence(NewEvidence {

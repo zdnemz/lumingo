@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Tutoring logic for Lumingo: session states, UI events, the tutor turn and prompt assembly"
 
 [dependencies]
+assessment-engine = { path = "../assessment-engine", default-features = false }
 curriculum = { path = "../curriculum" }
 llm-client = { path = "../llm-client" }
 serde = { version = "1.0.229", features = ["derive"] }

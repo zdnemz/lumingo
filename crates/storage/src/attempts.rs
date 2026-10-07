@@ -106,6 +106,26 @@ impl Database {
         rows.into_iter().map(Attempt::try_from).collect()
     }
 
+    /// The attempts of one session, oldest first, as the checkpoint walk reads
+    /// them back. Every row of one response carries the same `response_id`.
+    pub async fn attempts_for_session(
+        &self,
+        session_id: i64,
+    ) -> Result<Vec<Attempt>, StorageError> {
+        let rows: Vec<AttemptRow> = sqlx::query_as(
+            "SELECT id, profile_id, session_id, unit_id, activity_id, activity_type, \
+                    response_id, origin, level, skill, dimension, scorer, scorer_version, \
+                    raw_score, max_score, normalized, confidence, status, \
+                    counts_toward_estimate, created_at \
+             FROM assessment_attempts WHERE session_id = ? ORDER BY id",
+        )
+        .bind(session_id)
+        .fetch_all(self.readers())
+        .await?;
+
+        rows.into_iter().map(Attempt::try_from).collect()
+    }
+
     /// Adds one evidence row.
     pub async fn add_evidence(&self, evidence: NewEvidence) -> Result<Evidence, StorageError> {
         let id: i64 = sqlx::query_scalar(

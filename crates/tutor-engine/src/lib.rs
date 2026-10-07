@@ -16,6 +16,7 @@ mod llm;
 mod prompt;
 mod session;
 mod turn;
+mod unit;
 
 pub use analysis::{
     ActivityError, AnalysisCadence, AnalysisFailure, AnalysisInput, AnalysisOutcome, AnalysisTurn,
@@ -37,3 +38,8 @@ pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,
 };
 pub use turn::{ReplyOutcome, ReplyReport, run_reply};
+pub use unit::{
+    CheckpointReport, CheckpointRow, PENDING_SCORER_VERSION, PRODUCTION_PENDING_VERSION,
+    PendingProduction, StoredAttempt, Submission, SubmissionOutcome, SubmitError,
+    checkpoint_report, submit,
+};

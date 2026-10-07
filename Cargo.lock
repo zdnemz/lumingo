@@ -6035,6 +6035,7 @@ dependencies = [
 name = "tutor-engine"
 version = "0.0.0"
 dependencies = [
+ "assessment-engine",
  "curriculum",
  "llm-client",
  "serde",

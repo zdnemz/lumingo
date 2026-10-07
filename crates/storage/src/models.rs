@@ -130,12 +130,18 @@ text_enum! {
 }
 
 text_enum! {
-    /// Which of the four skills a row trains or scores.
+    /// Which of the four skills a row trains or scores. `Grammar`, `Vocabulary`
+    /// and `Pronunciation` are the supporting dimensions of ASSESSMENT_SPEC
+    /// section 2: they are shown as mastery, never with a CEFR label, and the
+    /// estimation code reads only the four estimated skills.
     Skill {
         Listening => "listening",
         Speaking => "speaking",
         Reading => "reading",
         Writing => "writing",
+        Grammar => "grammar",
+        Vocabulary => "vocabulary",
+        Pronunciation => "pronunciation",
     }
 }
 
