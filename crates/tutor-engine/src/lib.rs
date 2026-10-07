@@ -10,11 +10,13 @@
 #![forbid(unsafe_code)]
 
 mod analysis;
+mod chat;
 mod chunker;
 mod event;
 mod llm;
 mod prompt;
 mod session;
+mod topics;
 mod turn;
 mod unit;
 
@@ -24,6 +26,10 @@ pub use analysis::{
     FilteredAnalysis, InputMode, NotesForNextTurn, ObjectiveEvidence, ObjectivePair,
     ReliabilityWindow, TURN_ANALYSIS_VERSION, TurnAnalysisEntry, analysis_request,
     analysis_system_prompt, filter_output, run_analysis,
+};
+pub use chat::{
+    CHAT_ATTEMPT_SCORER_VERSION, Chat, ChatAttempt, ChatConfig, ChatError, ChatSummary, ChatTopic,
+    ChatTurn, ErrorPattern, MAX_TOPIC_CHARS, SummarisedTurn, clean_topic, session_summary,
 };
 pub use chunker::SentenceChunker;
 pub use event::UiEvent;
@@ -37,6 +43,7 @@ pub use prompt::{
 pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,
 };
+pub use topics::{ConversationTopic, LevelBank, ReadingTopic, TopicBank, WritingPrompt};
 pub use turn::{ReplyOutcome, ReplyReport, run_reply};
 pub use unit::{
     CheckpointReport, CheckpointRow, PENDING_SCORER_VERSION, PRODUCTION_PENDING_VERSION,

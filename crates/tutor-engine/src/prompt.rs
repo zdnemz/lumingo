@@ -188,6 +188,31 @@ impl TutorContext {
             pronunciation_findings: false,
         }
     }
+
+    /// A free conversation about one topic-bank entry (CURRICULUM_SPEC
+    /// section 9): a scenario shaped like a roleplay, outside a unit. The
+    /// entry's title, scenario, roles and goals fill the T1 fields.
+    pub fn from_bank_topic(
+        topic: &crate::topics::ConversationTopic,
+        level: curriculum::Level,
+        channel: Channel,
+        mode: FeedbackMode,
+        first_language: &str,
+    ) -> Self {
+        Self {
+            channel,
+            level,
+            first_language: first_language.to_owned(),
+            focus: Focus::Topic(topic.title.en.clone()),
+            scenario: topic.scenario.en.clone(),
+            tutor_role: topic.tutor_role.clone(),
+            learner_role: topic.learner_role.clone(),
+            goals: topic.goals.clone(),
+            target_language: Vec::new(),
+            mode,
+            pronunciation_findings: false,
+        }
+    }
 }
 
 /// Vocabulary lemmas and grammar patterns of an activity's targets, in unit
