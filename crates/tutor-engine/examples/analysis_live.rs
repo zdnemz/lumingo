@@ -7,6 +7,12 @@
 //! cargo run -p tutor-engine --example analysis_live
 //! ```
 //!
+//! The capability probe runs first, as the app runs it when a profile is
+//! created: it picks the structured-output ladder level this provider can do
+//! and caches it for the T2 calls. Without it, structured calls start at level
+//! 1 (native schema), which third-party Anthropic-compatible endpoints may not
+//! implement (PROMPT_CONTRACTS section 3).
+//!
 //! The provider comes from the four `TUTOR_LLM_*` environment variables or a
 //! `.env` file in the working directory, exactly as the server reads them. The
 //! protocol and model name are printed; the key never is. This is a tool, not
@@ -76,6 +82,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("== live analysis smoke test: {protocol}, model {model} ==");
     println!("== 20 fixed turns, T1 then T2 each ==");
+
+    // The capability probe, as the app runs it for a new profile: it measures
+    // speed and finds the structured-output ladder level this provider
+    // supports, which the T2 calls then start from.
+    let caps = client.probe(cancel.clone()).await;
+    println!(
+        "probe: auth {}, stream {}, structured level {:?}, first token {:?} ms, tokens/s {:?}",
+        caps.auth_ok,
+        caps.stream_ok,
+        caps.structured_level,
+        caps.ttft_ms,
+        caps.tokens_per_second.map(|t| (t * 10.0).round() / 10.0)
+    );
+    if !caps.auth_ok {
+        eprintln!("the provider did not accept the key; stopping the smoke test");
+        return Ok(());
+    }
+    if caps.structured_level.is_none() {
+        eprintln!(
+            "warning: no structured-output ladder level worked in the probe; T2 calls will fail"
+        );
+    }
 
     // The tutor opens; its reply is the first `tutor_before` of the log.
     session.apply(Event::OpeningTurn)?;
