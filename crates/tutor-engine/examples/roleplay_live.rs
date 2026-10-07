@@ -8,8 +8,8 @@
 //!
 //! The provider comes from the four `TUTOR_LLM_*` environment variables or a
 //! `.env` file in the working directory, exactly as the server reads them. The
-//! key is never printed. This is a tool, not library code, so errors print and
-//! exit.
+//! protocol and model name are printed; the key never is. This is a tool, not
+//! library code, so errors print and exit.
 
 use std::error::Error;
 
@@ -32,10 +32,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
         return Ok(());
     };
+    let protocol = config.protocol.name();
     let model = config.model.clone();
     let client = llm_client::LlmClient::new(config, Timeouts::default())?;
     let unit = curriculum::UnitLoader::new().load_str(EXAMPLE)?;
 
+    println!("== live roleplay check: {protocol}, model {model} ==");
     for channel in [Channel::Voice, Channel::Text] {
         println!("== {channel:?} channel, roleplay a11-roleplay-classmate ==");
         run_mode(&client, &unit, &model, channel).await?;
@@ -63,6 +65,7 @@ async fn run_mode(
     let cancel = CancellationToken::new();
 
     // The tutor speaks first (T1's trigger).
+    session.apply(Event::OpeningTurn)?;
     let request = opening_request(model, &context, &[]);
     let mut emit = |event: UiEvent| {
         if let UiEvent::TutorSentenceSpoken { text, .. } = event {

@@ -151,6 +151,38 @@ async fn drive(
 }
 
 #[test]
+fn a_fresh_session_can_drive_the_opening_reply() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        // The live example's path: a brand-new session, `OpeningTurn`, then the
+        // opening reply. Regression for the S4-05 live check failure.
+        for (kind, channel) in [
+            (SessionKind::Conversation, Channel::Voice),
+            (SessionKind::TextChat, Channel::Text),
+        ] {
+            let client = ScriptedClient::new(Script::Steps {
+                steps: vec![Step::Text("Hello! Who are you? "), Step::Finished],
+                after: After::Close,
+            });
+            let mut session = Session::new(kind, channel);
+            session.apply(Event::OpeningTurn).unwrap();
+            assert_eq!(session.turn(), Some(TurnState::Thinking));
+            let (report, _) = drive(&mut session, &client, &CancellationToken::new(), true).await;
+            assert_eq!(report.outcome, ReplyOutcome::Normal);
+            assert_eq!(
+                session.turn(),
+                Some(if channel == Channel::Voice {
+                    TurnState::Listening
+                } else {
+                    TurnState::Waiting
+                })
+            );
+            assert_eq!(session.turns_completed(), 1);
+        }
+    });
+}
+
+#[test]
 fn a_voice_reply_streams_sentences_and_returns_to_listening() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {

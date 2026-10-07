@@ -44,7 +44,10 @@ pub struct ReplyReport {
     pub sentences: usize,
 }
 
-/// Drives one reply on `session`, which must be in `Thinking`.
+/// Drives one reply on `session`, which must be in `Thinking`. For a reply to a
+/// learner turn the caller applies that turn's event first (`TextSent`, or
+/// `UtteranceEnded` then `TranscriptReady`); for the tutor-first opening turn it
+/// applies `Event::OpeningTurn`.
 ///
 /// `allow_fallback` is whether the authored line may be used this time. The
 /// caller passes `false` for the second empty or refused answer in a row; the

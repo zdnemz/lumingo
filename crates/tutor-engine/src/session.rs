@@ -7,8 +7,10 @@
 //!
 //! A voice turn walks `Listening -> Transcribing -> Thinking -> Speaking` and
 //! back to `Listening`. A text turn walks `Waiting -> Thinking -> Replying` and
-//! back to `Waiting`. Both can be `Paused`, lose the provider
-//! (`ProviderUnavailable`), hit an engine fault (`EngineError`) or end.
+//! back to `Waiting`. A session that opens with the tutor's turn goes from the
+//! idle state to `Thinking` (`Event::OpeningTurn`) before the opening reply.
+//! Both can be `Paused`, lose the provider (`ProviderUnavailable`), hit an
+//! engine fault (`EngineError`) or end.
 
 /// The kind of session. The channel is chosen separately, because a lesson can
 /// mix a spoken roleplay with typed answers.
@@ -81,6 +83,10 @@ pub enum Event {
     TranscriptReady,
     /// The learner sent a typed message.
     TextSent,
+    /// The tutor starts the conversation without learner input (T1's trigger:
+    /// session start when the tutor speaks first). Valid while the session waits
+    /// for the learner, on either channel.
+    OpeningTurn,
     /// The reply began: the first words arrived, or the first sentence is playing.
     ReplyStarted,
     /// The reply is complete and, on the voice channel, has finished playing.
@@ -227,6 +233,16 @@ impl Session {
             // a lesson can mix a spoken roleplay with typed answers.
             (Phase::Active { turn: Listening }, Event::TextSent, Voice) => active(Thinking),
 
+            // The tutor speaks first (T1's trigger). Only from the idle state:
+            // once a turn is in flight the opening turn is refused.
+            (
+                Phase::Active {
+                    turn: Listening | Waiting,
+                },
+                Event::OpeningTurn,
+                _,
+            ) => active(Thinking),
+
             // A reply that ended before it ever started (an empty or refused
             // answer replaced by the authored line) still completes the turn.
             (Phase::Active { turn: Thinking }, Event::ReplyFinished, _) => active(idle),
@@ -308,6 +324,37 @@ mod tests {
         s.apply(Event::ReplyFinished).unwrap();
         assert_eq!(s.turn(), Some(Waiting));
         assert_eq!(s.turns_completed(), 1);
+    }
+
+    #[test]
+    fn the_opening_turn_goes_from_idle_to_thinking_on_both_channels() {
+        for mut s in [voice(), text()] {
+            assert_eq!(s.phase(), active(Session::idle(s.channel())));
+            s.apply(Event::OpeningTurn).unwrap();
+            assert_eq!(s.turn(), Some(Thinking));
+            s.apply(Event::ReplyStarted).unwrap();
+            let speaking = if s.channel() == Channel::Voice {
+                Speaking
+            } else {
+                Replying
+            };
+            assert_eq!(s.turn(), Some(speaking));
+            s.apply(Event::ReplyFinished).unwrap();
+            assert_eq!(s.phase(), active(Session::idle(s.channel())));
+            assert_eq!(s.turns_completed(), 1);
+        }
+    }
+
+    #[test]
+    fn an_opening_turn_is_refused_once_a_turn_is_in_flight() {
+        let mut s = voice();
+        s.apply(Event::UtteranceEnded).unwrap();
+        assert!(s.apply(Event::OpeningTurn).is_err());
+        s.apply(Event::TranscriptReady).unwrap();
+        assert!(s.apply(Event::OpeningTurn).is_err());
+        let mut s = text();
+        s.apply(Event::TextSent).unwrap();
+        assert!(s.apply(Event::OpeningTurn).is_err());
     }
 
     #[test]
