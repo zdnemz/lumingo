@@ -104,6 +104,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "warning: no structured-output ladder level worked in the probe; T2 calls will fail"
         );
     }
+    // Diagnosis switch for live checks: force a ladder level, to compare what a
+    // provider does at each level when the probe's choice does not work.
+    if let Ok(forced) = std::env::var("TUTOR_LLM_FORCE_LEVEL")
+        && let Some(level) = forced.parse().ok().and_then(llm_client::Level::from_number)
+    {
+        client.set_structured_level(level);
+        println!("forced structured level {}", level.number());
+    }
 
     // The tutor opens; its reply is the first `tutor_before` of the log.
     session.apply(Event::OpeningTurn)?;
