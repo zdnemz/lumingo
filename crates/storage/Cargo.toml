@@ -17,6 +17,7 @@ thiserror = "2.0.21"
 tracing = "0.1.44"
 
 [dev-dependencies]
+assessment-engine = { path = "../assessment-engine", default-features = false }
 curriculum = { path = "../curriculum" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 

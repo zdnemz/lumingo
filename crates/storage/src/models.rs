@@ -330,6 +330,63 @@ pub struct ErrorStat {
     pub last_seen: Option<String>,
 }
 
+text_enum! {
+    /// What kind of item the review scheduler tracks.
+    ReviewKind {
+        Vocab => "vocab",
+        Grammar => "grammar",
+        Pron => "pron",
+    }
+}
+
+/// One scheduled review item, as stored. `item_ref` is `<unit id>/<item id>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewItem {
+    pub id: i64,
+    pub profile_id: i64,
+    pub kind: ReviewKind,
+    pub item_ref: String,
+    /// `YYYY-MM-DD`.
+    pub due_at: String,
+    pub interval_days: f64,
+    pub ease: f64,
+    pub reps: i64,
+    pub lapses: i64,
+    pub last_reviewed_at: Option<String>,
+}
+
+/// What to write when enrolling an item into the review schedule. Enrolling an
+/// item that is already scheduled updates its due date and leaves its history.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewReviewItem {
+    pub profile_id: i64,
+    pub kind: ReviewKind,
+    pub item_ref: String,
+    pub due_at: String,
+}
+
+/// The scheduler's numbers for one review, to write back after a result.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewUpdate {
+    pub due_at: String,
+    pub interval_days: f64,
+    pub ease: f64,
+    pub reps: i64,
+    pub lapses: i64,
+    /// The date the review happened, `YYYY-MM-DD`.
+    pub last_reviewed_at: String,
+}
+
+/// One objective's mastery for a profile.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectiveMastery {
+    pub profile_id: i64,
+    pub objective_id: String,
+    pub mastery: f64,
+    pub attempts: i64,
+    pub last_attempt_at: Option<String>,
+}
+
 /// One scored dimension of one response.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NewAttempt {

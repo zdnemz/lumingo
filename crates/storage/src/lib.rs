@@ -35,6 +35,7 @@ mod db;
 mod error;
 mod models;
 mod profiles;
+mod review;
 mod rows;
 mod sessions;
 mod turns;
