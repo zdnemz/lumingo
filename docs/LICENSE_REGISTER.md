@@ -49,7 +49,7 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 | clap | Command-line options | MIT OR Apache-2.0 | ok |
 | anyhow, thiserror | Errors | MIT OR Apache-2.0 | ok |
 | tracing, tracing-subscriber | Logging | MIT | ok |
-| sha2, base64 | Content-Security-Policy script hashes | MIT OR Apache-2.0 | ok |
+| sha2, base64 | Content-Security-Policy script hashes; SHA-256 checksums of unit files and of the unit manifest in `curriculum` (index rows in the database) | MIT OR Apache-2.0 | ok |
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
 

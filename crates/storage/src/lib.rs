@@ -30,6 +30,7 @@
 
 mod analysis;
 mod attempts;
+mod curriculum;
 mod db;
 mod error;
 mod models;
@@ -38,6 +39,10 @@ mod rows;
 mod sessions;
 mod turns;
 
+pub use curriculum::{
+    CurriculumVersion, IndexStatus, IndexedObjective, IndexedUnit, NewCurriculumVersion,
+    NewIndexedObjective, NewIndexedUnit,
+};
 pub use db::{Database, OpenConfig, OpenMigration, SCHEMA_VERSION};
 pub use error::StorageError;
 pub use models::*;

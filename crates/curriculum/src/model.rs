@@ -31,6 +31,23 @@ pub enum Skill {
     Pronunciation,
 }
 
+impl Skill {
+    /// The exact text the JSON form uses, and what the database index stores.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Listening => "listening",
+            Self::Reading => "reading",
+            Self::SpeakingProduction => "speaking_production",
+            Self::SpeakingInteraction => "speaking_interaction",
+            Self::Writing => "writing",
+            Self::Mediation => "mediation",
+            Self::Grammar => "grammar",
+            Self::Vocabulary => "vocabulary",
+            Self::Pronunciation => "pronunciation",
+        }
+    }
+}
+
 /// English is always present. Indonesian is required for A1 to B1 by the validators.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Localized {

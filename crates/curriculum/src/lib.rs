@@ -5,10 +5,14 @@
 //! express (CURRICULUM_SPEC section 6) are validators in a later task.
 #![forbid(unsafe_code)]
 
+pub mod index;
 mod load;
 mod model;
 mod validate;
 
+pub use index::{
+    UnitIndexEntry, UnitObjective, content_version_for, manifest_checksum, sha256_hex,
+};
 pub use load::{LoadError, LoadedFile, SchemaIssue, UnitLoader, load_dir};
 pub use model::*;
 pub use validate::{Diagnostic, SetOptions, Severity, validate_set, validate_unit};

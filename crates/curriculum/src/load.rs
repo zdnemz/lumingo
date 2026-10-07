@@ -157,6 +157,16 @@ impl UnitLoader {
         self.load_value(value)
     }
 
+    /// Loads from the raw bytes of a file. The index needs the bytes themselves
+    /// for the checksum, so it loads through this and never re-reads the file.
+    pub fn load_bytes(&self, bytes: &[u8]) -> Result<Unit, LoadError> {
+        let value: Value = serde_json::from_slice(bytes).map_err(|e| LoadError::Json {
+            line: e.line(),
+            column: e.column(),
+        })?;
+        self.load_value(value)
+    }
+
     pub fn load_file(&self, path: &Path) -> Result<Unit, LoadError> {
         let text = fs::read_to_string(path).map_err(|_| LoadError::Io(path.to_path_buf()))?;
         self.load_str(&text)
