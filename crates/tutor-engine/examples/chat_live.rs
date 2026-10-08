@@ -107,6 +107,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("== live text chat: {protocol}, model {model} ==");
     println!("== 10 messages, text channel, no speech model ==");
 
+    // The capability probe, as the app runs it for a new profile: it finds the
+    // structured-output ladder level this provider supports, which the T2
+    // calls then start from. Without it a gateway that ignores the native
+    // schema (the owner's does) fails every structured call at level 1.
+    let caps = client.probe(cancel.clone()).await;
+    println!(
+        "probe: auth {}, stream {}, structured level {:?}, first token {:?} ms",
+        caps.auth_ok, caps.stream_ok, caps.structured_level, caps.ttft_ms
+    );
+    if !caps.auth_ok {
+        eprintln!("the provider did not accept the key; stopping the live check");
+        return Ok(());
+    }
+    if caps.structured_level.is_none() {
+        eprintln!(
+            "warning: no structured-output ladder level worked in the probe; T2 calls will fail"
+        );
+    }
+    // Diagnosis switch for live checks: force a ladder level, to compare what a
+    // provider does at each level when the probe's choice does not work.
+    if let Ok(forced) = std::env::var("TUTOR_LLM_FORCE_LEVEL")
+        && let Some(level) = forced.parse().ok().and_then(llm_client::Level::from_number)
+    {
+        client.set_structured_level(level);
+        println!("forced structured level {}", level.number());
+    }
+
     let mut emit = |event: tutor_engine::UiEvent| {
         if let tutor_engine::UiEvent::TutorTextDelta { delta } = event {
             print!("{delta}");
