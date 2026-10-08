@@ -1,14 +1,43 @@
 //! `content-cli validate <dir> [--complete]`: loads every unit under `dir`,
 //! runs the per-unit and cross-unit rules, prints one block per unit and exits
 //! with 1 when there is any error. Warnings are listed and never fail the run.
+//! W03 runs through the real rule-based checker (harper-core); a build without
+//! it would report W03 as skipped instead.
 
 use anyhow::{Result, bail};
 use curriculum::{
-    Diagnostic, LoadError, SetOptions, Severity, UnitLoader, load_dir, validate_set, validate_unit,
+    Diagnostic, GrammarCheck, LoadError, SetOptions, Severity, UnitLoader, UnitOptions, load_dir,
+    validate_set, validate_unit_with,
 };
 use std::{collections::BTreeMap, path::PathBuf, process::ExitCode};
 
 const USAGE: &str = "usage: content-cli validate <dir> [--complete]\n  --complete  also require units 1 to 30 at every level (rule X01)";
+
+/// W03's checker: the rule-based grammar checker of `assessment-engine`
+/// (harper-core, no network). Spelling is off on purpose: units are full of
+/// names and place names the dictionary does not know, and W03 is about
+/// grammar, not spelling.
+struct HarperCheck {
+    checker: assessment_engine::text_metrics::GrammarChecker,
+}
+
+impl HarperCheck {
+    fn new() -> Self {
+        Self {
+            checker: assessment_engine::text_metrics::GrammarChecker::new(),
+        }
+    }
+}
+
+impl GrammarCheck for HarperCheck {
+    fn findings(&mut self, text: &str) -> Vec<String> {
+        self.checker
+            .findings(text, false)
+            .into_iter()
+            .map(|f| format!("{}: {}", f.kind, f.message))
+            .collect()
+    }
+}
 
 fn main() -> ExitCode {
     match run() {
@@ -38,6 +67,7 @@ fn run() -> Result<bool> {
     let Some(dir) = dir else { bail!(USAGE) };
 
     let loader = UnitLoader::new();
+    let mut checker = HarperCheck::new();
     let mut units = Vec::new();
     let mut report: BTreeMap<String, Vec<Diagnostic>> = BTreeMap::new();
     let mut load_failures = 0;
@@ -47,7 +77,12 @@ fn run() -> Result<bool> {
                 report
                     .entry(unit.id.clone())
                     .or_default()
-                    .extend(validate_unit(&unit));
+                    .extend(validate_unit_with(
+                        &unit,
+                        UnitOptions {
+                            grammar_check: Some(&mut checker),
+                        },
+                    ));
                 units.push(unit);
             }
             Err(e) => {
@@ -72,7 +107,7 @@ fn run() -> Result<bool> {
             .push(d);
     }
 
-    let (mut errors, mut warnings) = (load_failures, 0);
+    let (mut errors, mut warnings, mut skipped) = (load_failures, 0, 0);
     for (unit, diagnostics) in &report {
         if diagnostics.is_empty() {
             println!("{unit}: ok");
@@ -89,6 +124,10 @@ fn run() -> Result<bool> {
                     warnings += 1;
                     "warning"
                 }
+                Severity::Skipped => {
+                    skipped += 1;
+                    "skipped"
+                }
             };
             println!(
                 "  {kind} {} {} {}",
@@ -99,7 +138,7 @@ fn run() -> Result<bool> {
         }
     }
     println!(
-        "{} unit(s), {errors} error(s), {warnings} warning(s)",
+        "{} unit(s), {errors} error(s), {warnings} warning(s), {skipped} skipped",
         units.len() + load_failures
     );
     Ok(errors == 0)

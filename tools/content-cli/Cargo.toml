@@ -9,6 +9,9 @@ description = "Validates Lumingo curriculum units and prints a report"
 
 [dependencies]
 anyhow = "1"
+# The real W03 checker (harper-core through its `grammar` feature, default on).
+# An internal path dependency; harper-core itself is already in the register.
+assessment-engine = { path = "../../crates/assessment-engine" }
 curriculum = { path = "../../crates/curriculum" }
 
 [lints]

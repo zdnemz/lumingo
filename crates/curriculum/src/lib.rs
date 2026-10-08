@@ -17,4 +17,7 @@ pub use index::{
 pub use load::{LoadError, LoadedFile, SchemaIssue, UnitLoader, load_dir};
 pub use model::*;
 pub use playable::NotPlayable;
-pub use validate::{Diagnostic, SetOptions, Severity, validate_set, validate_unit};
+pub use validate::{
+    Diagnostic, GrammarCheck, SetOptions, Severity, UnitOptions, validate_set, validate_unit,
+    validate_unit_with,
+};

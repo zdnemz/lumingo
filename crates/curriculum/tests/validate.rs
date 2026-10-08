@@ -1,6 +1,9 @@
 #![allow(clippy::unwrap_used)] // test helpers; clippy.toml only exempts #[test] functions
 
-use curriculum::{Diagnostic, SetOptions, Severity, Unit, UnitLoader, validate_set, validate_unit};
+use curriculum::{
+    Diagnostic, GrammarCheck, SetOptions, Severity, Unit, UnitLoader, UnitOptions, validate_set,
+    validate_unit, validate_unit_with,
+};
 use serde_json::{Value, json};
 
 const EXAMPLE: &str = include_str!("../../../curriculum/examples/a1-u01.example.json");
@@ -390,6 +393,123 @@ fn w05_to_w07_are_warnings_not_errors() {
         ds.iter()
             .any(|d| d.code == "W07" && d.severity == Severity::Warning)
     );
+}
+
+/// A fake W03 checker: flags any text containing "I has".
+struct FlagsIHas;
+
+impl GrammarCheck for FlagsIHas {
+    fn findings(&mut self, text: &str) -> Vec<String> {
+        if text.contains("I has") {
+            vec!["the verb must agree with the pronoun".to_owned()]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+/// Runs the per-unit rules with the fake checker linked.
+fn with_checker(change: impl FnOnce(&mut Value)) -> Vec<Diagnostic> {
+    let mut v = example();
+    change(&mut v);
+    let mut checker = FlagsIHas;
+    validate_unit_with(
+        &load(v),
+        UnitOptions {
+            grammar_check: Some(&mut checker),
+        },
+    )
+}
+
+#[test]
+fn w03_reports_grammar_findings_in_at_answers_only() {
+    // The above answer contains the flagged phrase too, but only `at` is checked.
+    let ds = with_checker(|v| {
+        let a = activity(v, "guided_speaking");
+        a["model_answers"][1]["text"] = json!("Hello! I has Arif. I am from Makassar.");
+        a["model_answers"][2]["text"] =
+            json!("Good morning! I has Arif and I am from Makassar, in West Java.");
+    });
+    let w03: Vec<&Diagnostic> = ds.iter().filter(|d| d.code == "W03").collect();
+    assert_eq!(w03.len(), 1, "{ds:#?}");
+    assert_eq!(w03[0].severity, Severity::Warning);
+    assert_eq!(w03[0].path, "/activities/9/model_answers/1/text");
+    assert!(w03[0].message.contains("the verb must agree"), "{w03:?}");
+}
+
+#[test]
+fn w03_without_a_checker_is_skipped_never_clean() {
+    let ds = validate_unit(&load(example()));
+    let w03: Vec<&Diagnostic> = ds.iter().filter(|d| d.code == "W03").collect();
+    assert_eq!(w03.len(), 1, "{ds:#?}");
+    assert_eq!(w03[0].severity, Severity::Skipped);
+    assert!(
+        w03[0].message.contains("no rule-based grammar checker"),
+        "{w03:?}"
+    );
+    // with a checker linked the example is clean of W03: no skip, no finding
+    let ds = with_checker(|_| {});
+    assert!(ds.iter().all(|d| d.code != "W03"), "{ds:#?}");
+}
+
+#[test]
+fn w04_the_example_unit_has_no_near_duplicates() {
+    let ds = validate_unit(&load(example()));
+    assert!(ds.iter().all(|d| d.code != "W04"), "{ds:#?}");
+}
+
+#[test]
+fn w04_a_copied_stem_is_reported() {
+    let ds = with(|v| {
+        let stem = v["activities"][1]["stem"].clone();
+        v["activities"][12]["stem"] = stem;
+    });
+    let w04: Vec<&Diagnostic> = ds.iter().filter(|d| d.code == "W04").collect();
+    assert_eq!(w04.len(), 1, "{ds:#?}");
+    assert_eq!(w04[0].severity, Severity::Warning);
+    assert_eq!(w04[0].path, "/activities/12/stem");
+    assert!(w04[0].message.contains("duplicates"), "{w04:?}");
+    assert!(w04[0].message.contains("/activities/1/stem"), "{w04:?}");
+}
+
+#[test]
+fn w04_nearly_equal_long_texts_are_reported() {
+    // Put a one-word-changed copy of the reading passage into the earlier mcq:
+    // the pair is reported once, at the later activity, naming both.
+    let ds = with(|v| {
+        let passage = v["activities"][13]["passage"]
+            .as_str()
+            .unwrap()
+            .replace("Surabaya", "Semarang");
+        v["activities"][12]["passage"] = json!(passage);
+    });
+    let w04: Vec<&Diagnostic> = ds.iter().filter(|d| d.code == "W04").collect();
+    assert_eq!(w04.len(), 1, "{ds:#?}");
+    assert_eq!(w04[0].severity, Severity::Warning);
+    assert_eq!(w04[0].path, "/activities/13/passage");
+    assert!(w04[0].message.contains("nearly"), "{w04:?}");
+    assert!(w04[0].message.contains("/activities/12/passage"), "{w04:?}");
+}
+
+#[test]
+fn w04_short_texts_are_only_compared_for_equality() {
+    // "My name is Dewi" (four words) copied into another activity is caught...
+    let ds = with(|v| v["activities"][15]["sentence"] = json!("My name is Dewi"));
+    assert!(
+        ds.iter()
+            .any(|d| d.code == "W04" && d.path == "/activities/15/sentence"),
+        "{ds:#?}"
+    );
+    // ...a two-word copy too, because equality needs no length...
+    let ds = with(|v| v["activities"][16]["sentence"] = json!("I Dewi."));
+    assert!(
+        ds.iter()
+            .any(|d| d.code == "W04" && d.path == "/activities/16/sentence"),
+        "{ds:#?}"
+    );
+    // ...but a short near miss does not count as "nearly the same".
+    let ds = with(|v| v["activities"][15]["sentence"] = json!("My name is Budi"));
+    assert!(ds.iter().all(|d| d.code != "W04"), "{ds:#?}");
 }
 
 fn second_unit() -> Value {

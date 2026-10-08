@@ -1009,6 +1009,7 @@ name = "content-cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "assessment-engine",
  "curriculum",
 ]
 

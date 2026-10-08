@@ -3,10 +3,11 @@
 //! `Unit`, plus the cross-unit rules over a set of units.
 //!
 //! Not implemented yet, because their inputs do not exist in the repository:
-//! E15's neighbour W01 to W04 (word lists and the grammar checker are not fed in),
-//! X03 and X05 (syllabus files), X06 (rubric catalog), and the "every second unit"
-//! and "every third unit" cadence for B2 and above, which is a property of a whole
-//! level and is reported by neither function.
+//! W01 and W02 (word lists), X03 and X05 (syllabus files), X06 (rubric catalog),
+//! and the "every second unit" and "every third unit" cadence for B2 and above,
+//! which is a property of a whole level and is reported by neither function.
+//! W03 runs only when the caller links a [`GrammarCheck`]; without one the report
+//! says `skipped` (see [`Severity::Skipped`]), never that the answers are clean.
 
 use crate::{Activity, Level, Localized, ModelBand, Scoring, Skill, Unit};
 use assessment_engine::{
@@ -19,6 +20,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 pub enum Severity {
     Error,
     Warning,
+    /// A rule that needs input the caller did not link (W03 without a grammar
+    /// checker). A skipped rule is never a pass, and the report must say so.
+    Skipped,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,6 +60,26 @@ impl Sink<'_> {
             message: message.into(),
         });
     }
+
+    fn skipped(&mut self, code: &'static str, message: impl Into<String>) {
+        self.out.push(Diagnostic {
+            code,
+            severity: Severity::Skipped,
+            unit: self.unit.to_owned(),
+            path: String::new(),
+            message: message.into(),
+        });
+    }
+}
+
+/// The rule-based grammar checker W03 runs against `at` model answers. The
+/// caller links one (`assessment-engine` wraps harper-core behind its `grammar`
+/// feature); this crate does not depend on it, so a build without a checker
+/// reports W03 as skipped instead of reading an empty list as "clean". `&mut`
+/// because building a checker loads a dictionary and linting takes it mutably.
+pub trait GrammarCheck {
+    /// One string per finding, in the checker's own words.
+    fn findings(&mut self, text: &str) -> Vec<String>;
 }
 
 /// Inclusive word ranges per level (section 4). Starting values, tuned with the pilot units.
@@ -216,8 +240,24 @@ fn skill_group(s: Skill) -> Option<&'static str> {
     }
 }
 
-/// Runs the per-unit rules E02 to E20 and the warnings W05 to W07.
+/// What the per-unit rules may use besides the unit itself.
+#[derive(Default)]
+pub struct UnitOptions<'a> {
+    /// The rule-based checker for W03. Without it, W03 is reported as skipped.
+    pub grammar_check: Option<&'a mut dyn GrammarCheck>,
+}
+
+/// Runs the per-unit rules E02 to E20 and the warnings W03 to W07. W03 is
+/// skipped because no grammar checker is linked; use [`validate_unit_with`] to
+/// link one.
 pub fn validate_unit(u: &Unit) -> Vec<Diagnostic> {
+    validate_unit_with(u, UnitOptions::default())
+}
+
+/// Runs the per-unit rules E02 to E20 and the warnings W03 to W07, with the
+/// optional inputs the caller can link (CURRICULUM_SPEC section 6). A rule whose
+/// input is not linked is reported as `Skipped`, never as a pass.
+pub fn validate_unit_with(u: &Unit, mut options: UnitOptions<'_>) -> Vec<Diagnostic> {
     let mut s = Sink {
         unit: &u.id,
         out: Vec::new(),
@@ -619,6 +659,8 @@ pub fn validate_unit(u: &Unit) -> Vec<Diagnostic> {
         }
     }
     check_minimum_content(&mut s, u, early, &activity_ids);
+    check_at_answers(&mut s, u, options.grammar_check.take());
+    check_near_duplicates(&mut s, u);
     s.out
 }
 
@@ -747,6 +789,143 @@ fn check_minimum_content(s: &mut Sink, u: &Unit, early: bool, activity_ids: &Has
             "a productive writing task",
         );
     }
+}
+
+/// W03: every `at` model answer of the productive tasks runs through the
+/// rule-based grammar checker (CURRICULUM_SPEC section 6). Spelling is left out:
+/// the unit is full of names and place names the dictionary does not know, and
+/// the rule names the grammar checker, not the speller. Without a checker the
+/// rule is reported as skipped, never as a pass.
+fn check_at_answers(s: &mut Sink, u: &Unit, checker: Option<&mut dyn GrammarCheck>) {
+    let Some(checker) = checker else {
+        s.skipped(
+            "W03",
+            "no rule-based grammar checker is linked into this build",
+        );
+        return;
+    };
+    for (i, a) in u.activities.iter().enumerate() {
+        let answers = match a {
+            Activity::GuidedSpeaking(g) | Activity::GuidedWriting(g) => &g.model_answers,
+            Activity::Mediation { model_answers, .. } => model_answers,
+            _ => continue,
+        };
+        for (m, answer) in answers.iter().enumerate() {
+            if answer.band != ModelBand::At {
+                continue;
+            }
+            let findings = checker.findings(&answer.text);
+            if !findings.is_empty() {
+                s.warning(
+                    "W03",
+                    format!("/activities/{i}/model_answers/{m}/text"),
+                    format!(
+                        "the grammar checker reports {} finding(s) in the `at` answer: {}",
+                        findings.len(),
+                        findings.join("; ")
+                    ),
+                );
+            }
+        }
+    }
+}
+
+/// The texts of one activity that W04 compares, with the field each came from.
+/// Empty for types with no free text of their own (`match`, `minimal_pairs`)
+/// and for a `listening_set` that plays a dialogue: the dialogue's text belongs
+/// to the `shadowing` activities that point at it, not to the set.
+fn comparison_texts(a: &Activity) -> Vec<(&'static str, &str)> {
+    match a {
+        Activity::Mcq {
+            stem,
+            passage,
+            audio_text,
+            ..
+        } => {
+            let mut v = vec![("stem", stem.as_str())];
+            v.extend(passage.as_deref().map(|p| ("passage", p)));
+            v.extend(audio_text.as_deref().map(|t| ("audio_text", t)));
+            v
+        }
+        Activity::GapFill { text, .. } => vec![("text", text)],
+        Activity::Reorder { answer, .. } => vec![("answer", answer)],
+        Activity::Dictation { audio_text, .. } => vec![("audio_text", audio_text)],
+        Activity::ReadAloud { text, .. } => vec![("text", text)],
+        Activity::GuidedSpeaking(g) | Activity::GuidedWriting(g) => vec![("prompt", &g.prompt.en)],
+        Activity::Roleplay { scenario, .. } => vec![("scenario", &scenario.en)],
+        Activity::Mediation { source_text, .. } => vec![("source_text", source_text)],
+        Activity::ReadingSet { passage, .. } => vec![("passage", passage)],
+        Activity::ListeningSet {
+            audio_text: Some(t),
+            ..
+        } => vec![("audio_text", t)],
+        Activity::ErrorCorrection { sentence, .. } => vec![("sentence", sentence)],
+        _ => Vec::new(),
+    }
+}
+
+/// Two texts count as nearly equal for W04 when their word sets agree in at
+/// least this share (Jaccard). Texts with fewer than four distinct words are
+/// compared only by equality: on two or three words, any overlap is noise.
+const NEAR_DUPLICATE_SIMILARITY: f64 = 0.9;
+
+/// W04: two activities must not share nearly the same stem or text
+/// (CURRICULUM_SPEC section 6). Words are compared in the `norm/1` form, so
+/// contractions and punctuation do not hide a copy.
+fn check_near_duplicates(s: &mut Sink, u: &Unit) {
+    let texts: Vec<(usize, &'static str, &str)> = u
+        .activities
+        .iter()
+        .enumerate()
+        .flat_map(|(i, a)| comparison_texts(a).into_iter().map(move |(f, t)| (i, f, t)))
+        .collect();
+    for (n, (i, field, text)) in texts.iter().enumerate() {
+        for (j, other_field, other) in &texts[n + 1..] {
+            if *j == *i {
+                continue;
+            }
+            let Some(duplicate) = nearly_equal(text, other) else {
+                continue;
+            };
+            let earlier = format!(
+                "`/activities/{i}/{field}` (`{}`)",
+                u.activities[*i].common().id
+            );
+            let message = match duplicate {
+                Duplicate::Same => format!("the text duplicates {earlier}"),
+                Duplicate::Nearly(similarity) => format!(
+                    "the text nearly duplicates {earlier}, word-set overlap {similarity:.2}"
+                ),
+            };
+            s.warning("W04", format!("/activities/{j}/{other_field}"), message);
+        }
+    }
+}
+
+/// How two texts are the same for W04.
+enum Duplicate {
+    /// Equal after `norm/1`.
+    Same,
+    /// The share of the combined word sets they have in common.
+    Nearly(f64),
+}
+
+/// How `a` and `b` duplicate each other, or `None`. The words are compared
+/// after `norm/1`, then as token sets.
+fn nearly_equal(a: &str, b: &str) -> Option<Duplicate> {
+    let wa = normalize(a);
+    let wb = normalize(b);
+    if wa == wb {
+        return Some(Duplicate::Same);
+    }
+    let ta: HashSet<String> = tokenize(&wa).into_iter().collect();
+    let tb: HashSet<String> = tokenize(&wb).into_iter().collect();
+    if ta.len() < 4 || tb.len() < 4 {
+        return None;
+    }
+    let shared = ta.intersection(&tb).count();
+    let similarity = shared as f64 / ta.union(&tb).count() as f64;
+    (similarity >= NEAR_DUPLICATE_SIMILARITY).then_some(Duplicate::Nearly(similarity))
 }
 
 /// Which cross-unit rules to run.
