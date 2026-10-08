@@ -14,6 +14,10 @@
 //! The chat runs a free topic from a small bank (the real catalog is C-05's),
 //! analyses each message at the T2 cadence, and prints the end summary with
 //! the error patterns. Nothing here touches a database or a speech model.
+//!
+//! Every message is logged with the seq the caller would store it at, and each
+//! analysis batch is built from that log by seq — never by array index, which
+//! would feed T2 the wrong text (the first run of this check did exactly that).
 
 use std::error::Error;
 
@@ -21,8 +25,8 @@ use llm_client::{Timeouts, load_env_profile};
 use tokio_util::sync::CancellationToken;
 use tutor_engine::{
     AnalysisCadence, AnalysisInput, AnalysisTurn, CONVERSATION_ERROR_CAP, Chat, ChatConfig,
-    ChatSummary, ChatTopic, FeedbackMode, InputMode, ReliabilityWindow, ReplyOutcome, TopicBank,
-    run_analysis, session_summary,
+    ChatSummary, ChatTopic, ErrorFinding, FeedbackMode, InputMode, ReliabilityWindow, ReplyOutcome,
+    SummarisedTurn, TopicBank, run_analysis, session_summary,
 };
 
 /// Ten fixed learner messages: greetings, a small mistake or two, and a
@@ -76,6 +80,18 @@ const BANK: &str = r#"{
         }
     }
 }"#;
+
+/// One learner message as the check logs it: the seq the caller would store it
+/// at, the tutor message before it, the reply it got, and what T2 said about
+/// it once a call covered it.
+struct Logged {
+    seq: i64,
+    learner_text: String,
+    tutor_before: String,
+    tutor_reply: String,
+    /// `None` while no completed call has covered this message.
+    analysed: Option<Vec<ErrorFinding>>,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -156,8 +172,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut analyses_failed = 0u32;
     let mut dropped_total = 0usize;
     let mut tutor_before = opening.report.text.clone();
-    // One summarised turn per learner message, for the end summary.
-    let mut summarised: Vec<tutor_engine::SummarisedTurn> = Vec::new();
+    let mut log: Vec<Logged> = Vec::new();
 
     for (index, line) in LEARNER_LINES.iter().enumerate() {
         println!("\nlearner> {line}");
@@ -174,86 +189,95 @@ async fn main() -> Result<(), Box<dyn Error>> {
             turn.report.outcome,
             turn.report.sentences
         );
-
-        // T2: the analysis of this message, at the session's cadence.
+        // The caller would store the message at this seq; the log keeps the
+        // text the analysis must see, keyed by that seq.
         let seq = turn.learner_seq.unwrap_or((index + 1) as i64);
+        log.push(Logged {
+            seq,
+            learner_text: (*line).to_owned(),
+            tutor_before: tutor_before.clone(),
+            tutor_reply: turn.report.text.clone(),
+            analysed: None,
+        });
+        tutor_before = turn.report.text.clone();
+
+        // T2: the analysis of this message, at the session's cadence. After a
+        // failure the cadence re-carries every pending message, so a call can
+        // cover more than the current one.
         cadence.enqueue(seq);
         let due = cadence.due();
-        let mut analysed = false;
-        if !due.is_empty() {
-            let input = AnalysisInput::free(
-                curriculum::Level::A1,
-                InputMode::Text,
-                "Indonesian",
-                due.iter()
-                    .map(|seq| AnalysisTurn {
-                        turn_seq: *seq,
-                        tutor_before: tutor_before.clone(),
-                        learner_text: LEARNER_LINES
-                            .get((*seq - 1) as usize)
-                            .unwrap_or(&"")
-                            .to_string(),
-                        tutor_reply: turn.report.text.clone(),
-                    })
-                    .collect(),
-            );
-            match run_analysis(&client, &input, CONVERSATION_ERROR_CAP, &cancel).await {
-                Ok(outcome) => {
-                    analyses_ok += 1;
-                    dropped_total += outcome.filtered.counts.dropped;
-                    window.record(outcome.filtered.counts);
-                    chat.apply_analysis(&outcome.filtered);
-                    cadence.mark_analysed(&due);
-                    analysed = true;
-                    let errors = outcome
-                        .filtered
-                        .turns
-                        .iter()
-                        .find(|t| t.turn_seq == seq)
-                        .map(|t| t.errors.clone())
-                        .unwrap_or_default();
-                    println!(
-                        "         T2: valid at ladder level {}, {} error(s) kept, {} dropped",
-                        outcome.ladder_level,
-                        errors.len(),
-                        outcome.filtered.counts.dropped
-                    );
-                    summarised.push(tutor_engine::SummarisedTurn {
-                        seq,
-                        analysed: true,
-                        errors,
-                    });
-                }
-                Err(error) => {
-                    analyses_failed += 1;
-                    if let tutor_engine::AnalysisFailure::Provider(
-                        llm_client::LlmError::RateLimited { .. },
-                    ) = &error
-                    {
-                        cadence.note_rate_limited();
-                        println!("         T2: rate limited; switching to batched cadence");
-                    } else {
-                        println!("         T2: {error}");
-                    }
-                }
-            }
-        } else {
+        if due.is_empty() {
             println!(
                 "         T2: batched, {} turn(s) waiting",
                 cadence.pending()
             );
+            continue;
         }
-        if !analysed {
-            summarised.push(tutor_engine::SummarisedTurn {
-                seq,
-                analysed: false,
-                errors: Vec::new(),
-            });
+        let input = AnalysisInput::free(
+            curriculum::Level::A1,
+            InputMode::Text,
+            "Indonesian",
+            log.iter()
+                .filter(|entry| due.contains(&entry.seq))
+                .map(|entry| AnalysisTurn {
+                    turn_seq: entry.seq,
+                    tutor_before: entry.tutor_before.clone(),
+                    learner_text: entry.learner_text.clone(),
+                    tutor_reply: entry.tutor_reply.clone(),
+                })
+                .collect(),
+        );
+        match run_analysis(&client, &input, CONVERSATION_ERROR_CAP, &cancel).await {
+            Ok(outcome) => {
+                analyses_ok += 1;
+                dropped_total += outcome.filtered.counts.dropped;
+                window.record(outcome.filtered.counts);
+                chat.apply_analysis(&outcome.filtered);
+                cadence.mark_analysed(&due);
+                // Every message the call carried is analysed, whatever the
+                // filter kept of it.
+                for entry in log.iter_mut().filter(|entry| due.contains(&entry.seq)) {
+                    entry.analysed = Some(
+                        outcome
+                            .filtered
+                            .turns
+                            .iter()
+                            .find(|t| t.turn_seq == entry.seq)
+                            .map(|t| t.errors.clone())
+                            .unwrap_or_default(),
+                    );
+                }
+                let current_errors = log
+                    .iter()
+                    .find(|entry| entry.seq == seq)
+                    .and_then(|entry| entry.analysed.as_ref())
+                    .map(Vec::len)
+                    .unwrap_or_default();
+                println!(
+                    "         T2: valid at ladder level {}, covering {} turn(s), \
+                     {} error(s) on this turn, {} dropped",
+                    outcome.ladder_level,
+                    due.len(),
+                    current_errors,
+                    outcome.filtered.counts.dropped
+                );
+            }
+            Err(error) => {
+                analyses_failed += 1;
+                if let tutor_engine::AnalysisFailure::Provider(
+                    llm_client::LlmError::RateLimited { .. },
+                ) = &error
+                {
+                    cadence.note_rate_limited();
+                    println!("         T2: rate limited; switching to batched cadence");
+                } else {
+                    println!("         T2: {error}");
+                }
+            }
         }
-        tutor_before = turn.report.text.clone();
     }
 
-    // Session end: flush whatever the cadence still holds.
+    // Session end: flush whatever the cadence still holds (normally nothing).
     let left = cadence.flush();
     if !left.is_empty() {
         println!("\nflush: {} turn(s) left at session end", left.len());
@@ -261,14 +285,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             curriculum::Level::A1,
             InputMode::Text,
             "Indonesian",
-            left.iter()
-                .map(|seq| AnalysisTurn {
-                    turn_seq: *seq,
-                    tutor_before: tutor_before.clone(),
-                    learner_text: LEARNER_LINES
-                        .get((*seq - 1) as usize)
-                        .unwrap_or(&"")
-                        .to_string(),
+            log.iter()
+                .filter(|entry| left.contains(&entry.seq))
+                .map(|entry| AnalysisTurn {
+                    turn_seq: entry.seq,
+                    tutor_before: entry.tutor_before.clone(),
+                    learner_text: entry.learner_text.clone(),
                     tutor_reply: String::new(),
                 })
                 .collect(),
@@ -278,19 +300,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 analyses_ok += 1;
                 dropped_total += outcome.filtered.counts.dropped;
                 window.record(outcome.filtered.counts);
-                for turn in &mut summarised {
-                    if left.contains(&turn.seq) {
-                        turn.analysed = true;
-                        turn.errors = outcome
+                for entry in log.iter_mut().filter(|entry| left.contains(&entry.seq)) {
+                    entry.analysed = Some(
+                        outcome
                             .filtered
                             .turns
                             .iter()
-                            .find(|t| t.turn_seq == turn.seq)
+                            .find(|t| t.turn_seq == entry.seq)
                             .map(|t| t.errors.clone())
-                            .unwrap_or_default();
-                    }
+                            .unwrap_or_default(),
+                    );
                 }
                 cadence.mark_analysed(&left);
+                println!(
+                    "         T2: valid at ladder level {}, {} dropped",
+                    outcome.ladder_level, outcome.filtered.counts.dropped
+                );
             }
             Err(error) => {
                 analyses_failed += 1;
@@ -299,6 +324,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    let summarised: Vec<SummarisedTurn> = log
+        .iter()
+        .map(|entry| SummarisedTurn {
+            seq: entry.seq,
+            analysed: entry.analysed.is_some(),
+            errors: entry.analysed.clone().unwrap_or_default(),
+        })
+        .collect();
     let summary: ChatSummary = session_summary(&summarised, window.unreliable());
     println!();
     println!("== summary ==");
