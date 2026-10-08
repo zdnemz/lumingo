@@ -1,95 +1,29 @@
-//! Deterministic scoring and the `norm/1` normaliser (ASSESSMENT_SPEC section 4).
-//! Every function takes plain answers and returns a score from 0 to 1. Confidence
-//! of these attempts is always 1.0 and a success is a score of at least 0.7.
+//! Scores for objective items (assessment spec, section 4).
+//!
+//! These functions take what the learner answered and what is accepted, and
+//! return a score from 0 to 1. Confidence is always 1.0 for these, and an
+//! attempt counts as a success when its score is at least [`SUCCESS_THRESHOLD`].
 
-pub const NORMALISER_VERSION: &str = "norm/1";
+use crate::normalise::{edit_distance, normalize};
 
-/// Contractions and their full forms. Both sides normalise to the full form, so
-/// "I'm" equals "I am". `'s` is read as "is" (never as "has" or a possessive), so
-/// "he's" matches "he is"; possessives like "Sari's" are left alone. `'d` is
-/// ambiguous (would or had) and is not in the table.
-const CONTRACTIONS: [(&str, &str); 36] = [
-    ("i'm", "i am"),
-    ("you're", "you are"),
-    ("we're", "we are"),
-    ("they're", "they are"),
-    ("he's", "he is"),
-    ("she's", "she is"),
-    ("it's", "it is"),
-    ("that's", "that is"),
-    ("there's", "there is"),
-    ("what's", "what is"),
-    ("here's", "here is"),
-    ("isn't", "is not"),
-    ("aren't", "are not"),
-    ("wasn't", "was not"),
-    ("weren't", "were not"),
-    ("don't", "do not"),
-    ("doesn't", "does not"),
-    ("didn't", "did not"),
-    ("can't", "cannot"),
-    ("won't", "will not"),
-    ("wouldn't", "would not"),
-    ("shouldn't", "should not"),
-    ("couldn't", "could not"),
-    ("haven't", "have not"),
-    ("hasn't", "has not"),
-    ("hadn't", "had not"),
-    ("i've", "i have"),
-    ("you've", "you have"),
-    ("we've", "we have"),
-    ("they've", "they have"),
-    ("i'll", "i will"),
-    ("you'll", "you will"),
-    ("he'll", "he will"),
-    ("she'll", "she will"),
-    ("we'll", "we will"),
-    ("let's", "let us"),
-];
+/// A score at or above this is a success.
+pub const SUCCESS_THRESHOLD: f64 = 0.7;
 
-/// `norm/1`: trim, lowercase, collapse whitespace, straighten curly quotes and
-/// apostrophes, drop final `.`, `?` and `!`, and expand contractions.
-pub fn normalize(text: &str) -> String {
-    let straight: String = text
-        .chars()
-        .map(|c| match c {
-            '\u{2018}' | '\u{2019}' | '\u{201B}' => '\'',
-            '\u{201C}' | '\u{201D}' => '"',
-            c => c,
-        })
-        .collect();
-    let lowered = straight.to_lowercase();
-    let trimmed =
-        lowered.trim_end_matches(|c: char| c.is_whitespace() || matches!(c, '.' | '?' | '!'));
-    let mut words: Vec<&str> = Vec::new();
-    for word in trimmed.split_whitespace() {
-        match CONTRACTIONS.iter().find(|(short, _)| *short == word) {
-            Some((_, full)) => words.extend(full.split(' ')),
-            None => words.push(word),
-        }
-    }
-    words.join(" ")
+pub fn is_success(score: f64) -> bool {
+    score >= SUCCESS_THRESHOLD
 }
 
-/// `can not` and `cannot` are the same answer.
-fn canonical(text: &str) -> String {
-    normalize(text).replace("can not", "cannot")
+/// A gap answer this close to an accepted answer of at least this many letters
+/// earns half credit and a spelling note.
+const NEAR_MISS_MIN_LETTERS: usize = 5;
+
+/// 1 for the right option, otherwise 0.
+pub fn score_mcq(chosen: usize, correct: usize) -> f64 {
+    if chosen == correct { 1.0 } else { 0.0 }
 }
 
-/// 1 for a match with any accepted answer after normalisation, else 0. Serves
-/// `reorder`, `error_correction` and exact-answer items.
-pub fn score_exact(given: &str, accepted: &[&str]) -> f64 {
-    let given = canonical(given);
-    f64::from(accepted.iter().any(|a| canonical(a) == given))
-}
-
-/// `mcq` and each question of a set: 1 or 0.
-pub fn score_choice(given: usize, correct: usize) -> f64 {
-    f64::from(given == correct)
-}
-
-/// Share of items correct, for `match`, `minimal_pairs`, `reading_set` and
-/// `listening_set`. No items scores 0 so an empty activity is never a success.
+/// Share of `total` that is `correct`. Used for question sets and minimal pairs.
+/// An empty set scores 0 rather than dividing by zero.
 pub fn score_share(correct: usize, total: usize) -> f64 {
     if total == 0 {
         0.0
@@ -98,163 +32,237 @@ pub fn score_share(correct: usize, total: usize) -> f64 {
     }
 }
 
+/// The result of a gap-fill item.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GapScore {
     pub score: f64,
-    /// Indexes of gaps that earned half credit for a one-letter slip.
+    /// Indexes of gaps that earned half credit because of a small spelling slip.
     pub spelling_notes: Vec<usize>,
 }
 
-/// Share of gaps correct. An answer one edit away from an accepted answer of
-/// five letters or more earns 0.5 and a spelling note. `accepted[i]` lists the
-/// accepted answers for gap `i`; a missing answer scores 0.
-pub fn score_gap_fill(given: &[&str], accepted: &[Vec<&str>]) -> GapScore {
-    let mut total = 0.0;
-    let mut spelling_notes = Vec::new();
-    for (i, options) in accepted.iter().enumerate() {
-        let Some(answer) = given.get(i).map(|g| canonical(g)) else {
-            continue;
+/// Share of gaps correct. `answers[i]` is checked against `accepted[i]`, the
+/// list of accepted answers for that gap. A missing answer is wrong. A wrong
+/// answer one edit away from an accepted answer of five letters or more earns 0.5.
+pub fn score_gap_fill(answers: &[String], accepted: &[Vec<String>]) -> GapScore {
+    if accepted.is_empty() {
+        return GapScore {
+            score: 0.0,
+            spelling_notes: Vec::new(),
         };
-        if options.iter().any(|o| canonical(o) == answer) {
+    }
+    let mut total = 0.0;
+    let mut notes = Vec::new();
+    for (index, options) in accepted.iter().enumerate() {
+        let given = answers.get(index).map(|a| normalize(a)).unwrap_or_default();
+        if given.is_empty() {
+            continue;
+        }
+        let normalised: Vec<String> = options.iter().map(|o| normalize(o)).collect();
+        if normalised.contains(&given) {
             total += 1.0;
-        } else if options.iter().any(|o| {
-            let o = canonical(o);
-            o.chars().count() >= 5
-                && edit_distance(
-                    &o.chars().collect::<Vec<_>>(),
-                    &answer.chars().collect::<Vec<_>>(),
-                ) == 1
+        } else if normalised.iter().any(|option| {
+            option.chars().count() >= NEAR_MISS_MIN_LETTERS && edit_distance(option, &given) == 1
         }) {
             total += 0.5;
-            spelling_notes.push(i);
+            notes.push(index);
         }
     }
     GapScore {
-        score: score_share_f(total, accepted.len()),
-        spelling_notes,
+        score: total / accepted.len() as f64,
+        spelling_notes: notes,
     }
 }
 
-fn score_share_f(points: f64, total: usize) -> f64 {
-    if total == 0 {
-        0.0
-    } else {
-        points / total as f64
-    }
+/// 1 when the tokens are in the accepted order, otherwise 0.
+pub fn score_reorder(given: &[String], answer: &[String]) -> f64 {
+    let same = given.len() == answer.len()
+        && given
+            .iter()
+            .zip(answer)
+            .all(|(a, b)| normalize(a) == normalize(b));
+    if same { 1.0 } else { 0.0 }
 }
 
-/// 1 minus the word error rate against the best accepted answer, not below 0.
-pub fn score_dictation(given: &str, accepted: &[&str]) -> f64 {
-    let hyp: Vec<String> = canonical(given)
+/// Share of pairs matched correctly. `given[i]` is the right-hand index the
+/// learner chose for left-hand item `i`, and `correct[i]` the right one.
+pub fn score_match(given: &[Option<usize>], correct: &[usize]) -> f64 {
+    let right = correct
+        .iter()
+        .enumerate()
+        .filter(|(index, expected)| given.get(*index).copied().flatten() == Some(**expected))
+        .count();
+    score_share(right, correct.len())
+}
+
+/// The words of a text, for comparing what was heard with what was said.
+/// Punctuation touching a word is not part of the word: a dictation is not
+/// marked down for a missing comma.
+fn words_of(text: &str) -> Vec<String> {
+    normalize(text)
         .split_whitespace()
-        .map(str::to_owned)
-        .collect();
+        .map(|token| {
+            token
+                .trim_matches(|c: char| !c.is_alphanumeric())
+                .to_owned()
+        })
+        .filter(|word| !word.is_empty())
+        .collect()
+}
+
+/// Word-level edit distance between two word lists.
+fn word_distance(a: &[String], b: &[String]) -> usize {
+    let mut previous: Vec<usize> = (0..=b.len()).collect();
+    for (i, wa) in a.iter().enumerate() {
+        let mut current = vec![i + 1];
+        for (j, wb) in b.iter().enumerate() {
+            let cost = usize::from(wa != wb);
+            let value = (previous[j] + cost)
+                .min(previous[j + 1] + 1)
+                .min(current[j] + 1);
+            current.push(value);
+        }
+        previous = current;
+    }
+    previous[b.len()]
+}
+
+/// 1 minus the word error rate against the best accepted answer, never below 0.
+pub fn score_dictation(response: &str, accepted: &[String]) -> f64 {
+    let heard = words_of(response);
     accepted
         .iter()
-        .map(|a| {
-            let reference: Vec<String> =
-                canonical(a).split_whitespace().map(str::to_owned).collect();
+        .map(|reference| {
+            let reference = words_of(reference);
             if reference.is_empty() {
-                return f64::from(hyp.is_empty());
+                return 0.0;
             }
-            (1.0 - edit_distance(&reference, &hyp) as f64 / reference.len() as f64).max(0.0)
+            let rate = word_distance(&reference, &heard) as f64 / reference.len() as f64;
+            (1.0 - rate).max(0.0)
         })
         .fold(0.0, f64::max)
 }
 
-/// Levenshtein distance over any comparable items (characters or words).
-fn edit_distance<T: PartialEq>(a: &[T], b: &[T]) -> usize {
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    for (i, x) in a.iter().enumerate() {
-        let mut cur = vec![i + 1];
-        for (j, y) in b.iter().enumerate() {
-            cur.push(
-                (prev[j] + usize::from(x != y))
-                    .min(prev[j + 1] + 1)
-                    .min(cur[j] + 1),
-            );
-        }
-        prev = cur;
+/// 1 when the rewritten sentence equals an accepted answer after normalisation, otherwise 0.
+pub fn score_error_correction(response: &str, accepted: &[String]) -> f64 {
+    let given = normalize(response);
+    if !given.is_empty() && accepted.iter().any(|a| normalize(a) == given) {
+        1.0
+    } else {
+        0.0
     }
-    prev[b.len()]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn normalisation_follows_norm_1() {
-        assert_eq!(normalize("  Hello \t  World?! "), "hello world");
-        assert_eq!(
-            normalize("It\u{2019}s \u{201C}fine\u{201D}."),
-            "it is \"fine\""
-        );
-        assert_eq!(normalize("She said no..."), "she said no");
-        assert_eq!(normalize("Sari's book."), "sari's book");
+    fn s(items: &[&str]) -> Vec<String> {
+        items.iter().map(|i| (*i).to_owned()).collect()
     }
 
     #[test]
-    fn contractions_equal_their_full_forms() {
-        for (short, full) in [
-            ("I'm happy.", "I am happy"),
-            ("We don\u{2019}t know", "we do not know"),
-            ("He's here", "he is here"),
-            ("Let's go!", "Let us go"),
-        ] {
-            assert_eq!(score_exact(short, &[full]), 1.0, "{short}");
-            assert_eq!(score_exact(full, &[short]), 1.0, "{full}");
-        }
-        assert_eq!(score_exact("I can't go", &["I can not go"]), 1.0);
+    fn mcq_is_one_or_zero() {
+        assert_eq!(score_mcq(2, 2), 1.0);
+        assert_eq!(score_mcq(0, 2), 0.0);
     }
 
     #[test]
-    fn exact_items_accept_any_listed_answer_and_nothing_else() {
-        assert_eq!(
-            score_exact(
-                "She goes to school.",
-                &["She goes to school", "She is going to school"]
-            ),
-            1.0
-        );
-        assert_eq!(
-            score_exact("She go to school", &["She goes to school"]),
-            0.0
-        );
-        assert_eq!(score_exact("", &["x"]), 0.0);
-    }
-
-    #[test]
-    fn choice_and_share_scores() {
-        assert_eq!((score_choice(2, 2), score_choice(1, 2)), (1.0, 0.0));
+    fn a_set_scores_the_share_correct_and_an_empty_set_scores_zero() {
         assert_eq!(score_share(3, 4), 0.75);
         assert_eq!(score_share(0, 0), 0.0);
     }
 
     #[test]
-    fn gap_fill_gives_half_credit_for_one_edit_only_on_long_answers() {
-        let accepted = vec![vec!["morning"], vec!["went", "go"], vec!["tomorrow"]];
-        // exact, exact via the other accepted answer, one edit away from a long word
-        let s = score_gap_fill(&["morning", "go", "tomorow"], &accepted);
-        assert_eq!(s.spelling_notes, [2]);
-        assert!((s.score - (2.5 / 3.0)).abs() < 1e-9);
-        // "wnt" is one edit from "went", but "went" has four letters: no credit
-        assert_eq!(
-            score_gap_fill(&["morning", "wnt", "tomorrow"], &accepted).score,
-            2.0 / 3.0
-        );
-        // two edits away earns nothing; a missing answer earns nothing
-        assert_eq!(score_gap_fill(&["mornxxg"], &accepted).score, 0.0);
+    fn the_success_line_is_seven_tenths() {
+        assert!(is_success(0.7));
+        assert!(!is_success(0.699));
     }
 
     #[test]
-    fn dictation_is_one_minus_word_error_rate_against_the_best_answer() {
-        assert_eq!(score_dictation("I like tea", &["I like tea."]), 1.0);
-        assert!((score_dictation("I like", &["I like tea"]) - 2.0 / 3.0).abs() < 1e-9);
-        // one extra word against the closer answer: word error rate 1/3
-        let best = score_dictation("I love hot tea", &["I like tea", "I love tea"]);
-        assert!((best - 2.0 / 3.0).abs() < 1e-9);
-        assert_eq!(score_dictation("a b c d e f", &["x y"]), 0.0);
-        assert_eq!(score_dictation("", &["I like tea"]), 0.0);
+    fn gap_fill_scores_the_share_of_gaps() {
+        let accepted = vec![s(&["am", "'m"]), s(&["is"])];
+        let result = score_gap_fill(&s(&["am", "are"]), &accepted);
+        assert_eq!(result.score, 0.5);
+        assert!(result.spelling_notes.is_empty());
+        assert_eq!(score_gap_fill(&s(&["AM", "Is."]), &accepted).score, 1.0);
+    }
+
+    #[test]
+    fn gap_fill_gives_half_credit_for_one_slip_in_a_long_word() {
+        let accepted = vec![s(&["beautiful"])];
+        let result = score_gap_fill(&s(&["beautifull"]), &accepted);
+        assert_eq!(result.score, 0.5);
+        assert_eq!(result.spelling_notes, [0]);
+        // Two neighbouring letters swapped is one edit, so it still earns half credit.
+        assert_eq!(score_gap_fill(&s(&["beatuiful"]), &accepted).score, 0.5);
+        // Two separate slips are more than one edit.
+        assert_eq!(score_gap_fill(&s(&["beutifull"]), &accepted).score, 0.0);
+    }
+
+    #[test]
+    fn a_short_word_gets_no_half_credit_for_a_slip() {
+        assert_eq!(score_gap_fill(&s(&["tre"]), &[s(&["tree"])]).score, 0.0);
+        assert_eq!(score_gap_fill(&s(&["teh"]), &[s(&["the"])]).score, 0.0);
+    }
+
+    #[test]
+    fn gap_fill_treats_a_missing_or_blank_answer_as_wrong() {
+        let accepted = vec![s(&["am"]), s(&["is"]), s(&["are"])];
+        assert_eq!(score_gap_fill(&s(&["am"]), &accepted).score, 1.0 / 3.0);
+        assert_eq!(score_gap_fill(&s(&["", "  ", ""]), &accepted).score, 0.0);
+        assert_eq!(score_gap_fill(&[], &[]).score, 0.0);
+    }
+
+    #[test]
+    fn reorder_needs_the_exact_order() {
+        let answer = s(&["My", "name", "is", "Dewi"]);
+        assert_eq!(
+            score_reorder(&s(&["my", "NAME", "is", "dewi"]), &answer),
+            1.0
+        );
+        assert_eq!(
+            score_reorder(&s(&["name", "my", "is", "Dewi"]), &answer),
+            0.0
+        );
+        assert_eq!(score_reorder(&s(&["My", "name", "is"]), &answer), 0.0);
+    }
+
+    #[test]
+    fn match_scores_the_share_of_pairs() {
+        let correct = [1, 0, 2];
+        assert_eq!(score_match(&[Some(1), Some(0), Some(2)], &correct), 1.0);
+        assert!((score_match(&[Some(1), Some(2), None], &correct) - 1.0 / 3.0).abs() < 1e-9);
+        assert_eq!(score_match(&[], &correct), 0.0);
+        assert_eq!(score_match(&[], &[]), 0.0);
+    }
+
+    #[test]
+    fn dictation_is_one_minus_the_word_error_rate() {
+        let accepted = s(&["Good morning, I'm Dewi."]);
+        assert_eq!(score_dictation("good morning i am dewi", &accepted), 1.0);
+        // One wrong word out of five reference words once "I'm" is written out: good morning i am dewi.
+        let one_wrong = score_dictation("good morning i am dewa", &accepted);
+        assert!((one_wrong - 0.8).abs() < 1e-9, "{one_wrong}");
+        assert_eq!(score_dictation("", &accepted), 0.0);
+    }
+
+    #[test]
+    fn dictation_never_goes_below_zero_and_takes_the_best_accepted_answer() {
+        let accepted = s(&["see you", "see you later"]);
+        assert_eq!(
+            score_dictation("completely different words here now", &accepted),
+            0.0
+        );
+        assert_eq!(score_dictation("see you later", &accepted), 1.0);
+        assert_eq!(score_dictation("anything", &[]), 0.0);
+    }
+
+    #[test]
+    fn error_correction_needs_an_accepted_sentence() {
+        let accepted = s(&["I am a student.", "I'm a student."]);
+        assert_eq!(score_error_correction("i am a student", &accepted), 1.0);
+        assert_eq!(score_error_correction("I'm a student!", &accepted), 1.0);
+        assert_eq!(score_error_correction("I a student", &accepted), 0.0);
+        assert_eq!(score_error_correction("", &accepted), 0.0);
     }
 }

@@ -1,57 +1,57 @@
-/// An API key held in memory only. `Debug` hides it and there is no `Display`,
-/// no `Serialize` and no accessor outside this crate.
-#[derive(Clone)]
+//! The API key type. It has no `Display`, no `Serialize`, and a `Debug` that
+//! prints nothing of the value. The only way out is `expose`, which the adapters
+//! call once, to build a sensitive header value.
+
+use std::fmt;
+
+/// A provider key held in memory only.
+#[derive(Clone, PartialEq, Eq)]
 pub struct ApiKey(String);
 
+/// Why a key was refused. Never carries the key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum KeyError {
+    #[error("the key is empty")]
+    Empty,
+    #[error("the key contains whitespace or characters that cannot be sent in an HTTP header")]
+    InvalidCharacters,
+}
+
 impl ApiKey {
-    pub fn new(key: impl Into<String>) -> Self {
-        Self(key.into())
+    /// Accepts visible ASCII only. Surrounding whitespace is trimmed first because
+    /// keys pasted into a settings field or a `.env` file often carry a newline.
+    pub fn new(raw: &str) -> Result<Self, KeyError> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(KeyError::Empty);
+        }
+        if !trimmed.chars().all(|c| c.is_ascii_graphic()) {
+            return Err(KeyError::InvalidCharacters);
+        }
+        Ok(Self(trimmed.to_owned()))
     }
 
+    /// The raw value, for building an authentication header and for removing the
+    /// key from provider error text. Do not log or format the result.
     pub(crate) fn expose(&self) -> &str {
         &self.0
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// Last four characters, for the settings screen (`has_key` and a hint).
-    pub fn last_four(&self) -> String {
-        let chars: Vec<char> = self.0.chars().collect();
-        chars[chars.len().saturating_sub(4)..].iter().collect()
+    /// The last four characters, for display in settings. Keys shorter than eight
+    /// characters return `None`, because four characters would be half the key.
+    pub fn last4(&self) -> Option<String> {
+        let count = self.0.chars().count();
+        if count < 8 {
+            return None;
+        }
+        Some(self.0.chars().skip(count - 4).collect())
     }
 }
 
-impl std::fmt::Debug for ApiKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for ApiKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ApiKey(<redacted>)")
     }
-}
-
-const MAX_MESSAGE_CHARS: usize = 200;
-
-/// Shortens a server message and removes the key and key-like words (`sk-...`)
-/// before it can be stored or shown.
-pub(crate) fn redact(text: &str, key: &ApiKey) -> String {
-    let mut out = if key.0.is_empty() {
-        text.to_owned()
-    } else {
-        text.replace(&key.0, "[key]")
-    };
-    out = out
-        .split(' ')
-        .map(|w| {
-            let bare = w.trim_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '_');
-            if bare.starts_with("sk-") && bare.len() > 8 {
-                w.replace(bare, "[key]")
-            } else {
-                w.to_owned()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-    out.chars().take(MAX_MESSAGE_CHARS).collect()
 }
 
 #[cfg(test)]
@@ -59,24 +59,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn debug_hides_the_key_and_last_four_shows_a_hint() {
-        let k = ApiKey::new("sk-abcdef123456");
-        assert!(!format!("{k:?}").contains("abcdef"));
-        assert_eq!(k.last_four(), "3456");
-        assert_eq!(ApiKey::new("ab").last_four(), "ab");
+    fn debug_never_shows_the_value() {
+        let key = ApiKey::new("sk-test-1234567890abcdef").expect("valid");
+        let printed = format!("{key:?} {:#?}", Some(&key));
+        assert!(!printed.contains("1234567890"));
+        assert!(!printed.contains("cdef"));
+        assert!(printed.contains("redacted"));
     }
 
     #[test]
-    fn redact_removes_the_key_and_key_like_words_and_truncates() {
-        let k = ApiKey::new("secret-value-123");
-        let msg = redact(
-            "bad key secret-value-123, also sk-proj-ABCDEFGH1234 was seen.",
-            &k,
+    fn last4_needs_a_long_enough_key() {
+        assert_eq!(
+            ApiKey::new("sk-test-1234567890abcdef")
+                .expect("valid")
+                .last4()
+                .as_deref(),
+            Some("cdef")
         );
-        assert!(
-            !msg.contains("secret-value") && !msg.contains("ABCDEFGH"),
-            "{msg}"
+        assert_eq!(ApiKey::new("short").expect("valid").last4(), None);
+    }
+
+    #[test]
+    fn trims_and_rejects_bad_values() {
+        assert_eq!(
+            ApiKey::new("  abc12345  \n").expect("valid").expose(),
+            "abc12345"
         );
-        assert_eq!(redact(&"x".repeat(500), &k).chars().count(), 200);
+        assert_eq!(ApiKey::new("  ").unwrap_err(), KeyError::Empty);
+        assert_eq!(
+            ApiKey::new("two words").unwrap_err(),
+            KeyError::InvalidCharacters
+        );
+        assert_eq!(
+            ApiKey::new("naïve-key").unwrap_err(),
+            KeyError::InvalidCharacters
+        );
     }
 }

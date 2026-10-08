@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:schema:placement_items:1.0",
+  "title": "Placement items",
+  "description": "curriculum/placement/items.json: about 60 deterministic items across levels (listening, reading, grammar, vocabulary) and 6 short speaking tasks (docs/CURRICULUM_SPEC.md section 1, docs/ASSESSMENT_SPEC.md section 10). Inferred from those two sections; the spec ships no schema. Item fields repeat those of mcq, gap_fill and reorder in unit.schema.json, and speaking tasks repeat the prompt fields of guided_speaking.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "version", "items", "speaking_tasks"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "version": { "type": "integer", "minimum": 1 },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "speaking_tasks": {
+      "type": "array",
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/speaking_task" }
+    }
+  },
+  "$defs": {
+    "level": { "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+    "local_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "maxLength": 64
+    },
+    "localized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "item_common": {
+      "type": "object",
+      "required": ["id", "type", "level", "skill"],
+      "properties": {
+        "id": { "$ref": "#/$defs/local_id" },
+        "type": { "type": "string" },
+        "level": { "$ref": "#/$defs/level" },
+        "skill": { "enum": ["listening", "reading", "grammar", "vocabulary"] }
+      }
+    },
+    "item": {
+      "oneOf": [
+        { "$ref": "#/$defs/item_mcq" },
+        { "$ref": "#/$defs/item_gap_fill" },
+        { "$ref": "#/$defs/item_reorder" }
+      ]
+    },
+    "item_mcq": {
+      "allOf": [{ "$ref": "#/$defs/item_common" }],
+      "required": ["stem", "options", "answer_index"],
+      "properties": {
+        "type": { "const": "mcq" },
+        "passage": { "type": "string", "minLength": 1 },
+        "audio_text": { "type": "string", "minLength": 1 },
+        "stem": { "type": "string", "minLength": 1 },
+        "options": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 5,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "answer_index": { "type": "integer", "minimum": 0, "maximum": 4 }
+      },
+      "unevaluatedProperties": false
+    },
+    "item_gap_fill": {
+      "allOf": [{ "$ref": "#/$defs/item_common" }],
+      "required": ["text", "answers"],
+      "properties": {
+        "type": { "const": "gap_fill" },
+        "text": { "type": "string", "pattern": "___" },
+        "answers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "item_reorder": {
+      "allOf": [{ "$ref": "#/$defs/item_common" }],
+      "required": ["tokens", "answer"],
+      "properties": {
+        "type": { "const": "reorder" },
+        "tokens": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 12,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "answer": { "type": "string", "minLength": 1 }
+      },
+      "unevaluatedProperties": false
+    },
+    "speaking_task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "level",
+        "prompt",
+        "content_points",
+        "rubric_id",
+        "min_words",
+        "max_words"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/local_id" },
+        "level": { "$ref": "#/$defs/level" },
+        "prompt": { "$ref": "#/$defs/localized" },
+        "content_points": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "rubric_id": { "$ref": "#/$defs/local_id" },
+        "min_words": { "type": "integer", "minimum": 1 },
+        "max_words": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

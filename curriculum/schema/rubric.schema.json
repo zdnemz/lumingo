@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:local-english-tutor:schema:rubric:1.0",
+  "title": "Rubric",
+  "description": "One rubric file of curriculum/catalogs/rubrics/: one level and one task family, with a description for each band 0 to 4 of each dimension, in the project's own words. Inferred from docs/ASSESSMENT_SPEC.md section 5.1 (id, version, level, task family, band descriptions per dimension; interaction only for interactive tasks) and docs/CURRICULUM_SPEC.md section 9. The spec ships no schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "version", "level", "task_family", "dimensions"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "id": {
+      "description": "The value units give in rubric_id. Starts with rubric- and names the level.",
+      "type": "string",
+      "pattern": "^rubric-(a1|a2|b1|b2|c1|c2)-[a-z0-9]+(-[a-z0-9]+)*$",
+      "maxLength": 64
+    },
+    "version": {
+      "description": "Whole number, raised when a band description changes. Stored with every rubric score.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "level": { "$ref": "#/$defs/level" },
+    "task_family": {
+      "enum": ["spoken_production", "written_production", "spoken_interaction", "mediation"]
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_achievement", "range", "accuracy", "coherence"],
+      "properties": {
+        "task_achievement": { "$ref": "#/$defs/dimension" },
+        "range": { "$ref": "#/$defs/dimension" },
+        "accuracy": { "$ref": "#/$defs/dimension" },
+        "coherence": { "$ref": "#/$defs/dimension" },
+        "interaction": { "$ref": "#/$defs/dimension" }
+      }
+    }
+  },
+  "if": {
+    "required": ["task_family"],
+    "properties": { "task_family": { "const": "spoken_interaction" } }
+  },
+  "then": {
+    "properties": { "dimensions": { "required": ["interaction"] } }
+  },
+  "else": {
+    "properties": { "dimensions": { "not": { "required": ["interaction"] } } }
+  },
+  "$defs": {
+    "level": { "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+    "localized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "band_description": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["band", "description"],
+      "properties": {
+        "band": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "description": { "$ref": "#/$defs/localized" }
+      }
+    },
+    "dimension": {
+      "description": "Exactly five descriptions, for bands 0, 1, 2, 3 and 4 in that order.",
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        { "$ref": "#/$defs/band_description", "properties": { "band": { "const": 0 } } },
+        { "$ref": "#/$defs/band_description", "properties": { "band": { "const": 1 } } },
+        { "$ref": "#/$defs/band_description", "properties": { "band": { "const": 2 } } },
+        { "$ref": "#/$defs/band_description", "properties": { "band": { "const": 3 } } },
+        { "$ref": "#/$defs/band_description", "properties": { "band": { "const": 4 } } }
+      ]
+    }
+  }
+}

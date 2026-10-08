@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { ServerStateProvider } from "@/api/ServerState";
+import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { Mascot } from "@/sprites/Mascot";
 import { Sprite } from "@/sprites/Sprite";
 import type { SpriteName } from "@/sprites/data";
@@ -18,16 +20,26 @@ interface NavItem {
 // A screen appears here when it exists. Links to screens that are not built yet would be dead ends.
 const NAV: readonly NavItem[] = [
   { href: "/", label: "nav.home", icon: "icon-map" },
+  { href: "/progress/", label: "nav.progress", icon: "icon-star" },
   { href: "/settings/", label: "nav.settings", icon: "icon-gear" },
 ];
 
 function isCurrent(pathname: string | null, href: string): boolean {
   if (pathname === null) return false;
   const clean = (value: string) => (value.length > 1 ? value.replace(/\/$/, "") : value);
-  return clean(pathname) === clean(href);
+  // The settings pages are sub-pages, so "Settings" stays marked on all of them.
+  return href === "/" ? clean(pathname) === "/" : clean(pathname).startsWith(clean(href));
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <ServerStateProvider>
+      <Frame>{children}</Frame>
+    </ServerStateProvider>
+  );
+}
+
+function Frame({ children }: { children: ReactNode }) {
   const t = useT();
   const pathname = usePathname();
   return (
@@ -59,6 +71,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
+      <div className="px-container shell__banners">
+        <ConnectionBanner />
+      </div>
       <main id="main" className="px-container shell__main" tabIndex={-1}>
         {children}
       </main>

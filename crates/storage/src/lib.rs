@@ -1,49 +1,90 @@
-//! Local database for Lumingo: the schema migrations and the repositories that
-//! wrap them. Other crates never see SQL.
+//! Local database for Lumingo: migrations and the repositories that wrap them.
 //!
-//! The schema is migration 0001, copied unchanged from the blueprint's
-//! `docs/sql/`. Once a migration has shipped, the copy in `migrations/` is the
-//! source of truth and must never be edited; a change is a new numbered file.
+//! The schema lives in `migrations/`. Once a migration has shipped, the file in
+//! this crate is the source of truth and must never be edited; a change is a new
+//! numbered file.
+//!
+//! Other crates never see SQL. They open a [`Database`] and call repository
+//! functions with plain serde types. Every timestamp and every calendar day is
+//! supplied by the caller, so the crate has no hidden dependence on the clock or
+//! the time zone.
 //!
 //! # Opening
 //!
-//! [`Database::open`] creates or opens the file in WAL mode with foreign keys
-//! on and a busy timeout, copies the old file with `VACUUM INTO` to
-//! `<db>.bak-<version>` before an upgrade of an existing schema (the newest two
-//! backups are kept), and runs the migrations. One write connection serialises
-//! writes; a small pool reads. A file written by a newer build, a file whose
-//! applied migration was edited, or a file that is not ours is refused and left
-//! untouched.
+//! [`Database::open`] creates or opens the file in WAL mode with foreign keys on
+//! and a busy timeout, copies the old file to `<db>.bak-<old version>` before a
+//! migration that changes an existing schema (the newest two backups are kept),
+//! and runs the migrations. One write connection serialises writes; a small pool
+//! reads. A file written by a newer build, or whose applied migration was edited,
+//! is refused and left untouched.
 //!
 //! # Repositories
 //!
-//! Each is a method on [`Database`]: `profiles`, `sessions` (including the
-//! audio-clip listing used before a delete), `turns`, `analysis`, and
-//! `attempts` with its evidence and pending-scoring queue. A repository returns
-//! the plain types of [`models`]; a text value the schema constrains with CHECK
-//! is a typed enum, so a row written by a newer build is a typed error, not a
-//! silent string.
+//! Each is a method on [`Database`] that returns a short-lived handle:
+//! `profiles`, `settings`, `providers`, `models`, `curriculum`, `sessions`,
+//! `turns`, `analysis`, `generated_content`, `audio_clips`, `attempts`,
+//! `evidence`, `pending_scoring`, `estimates`, `pron_results`, `unit_progress`,
+//! `mastery`, `error_stats`, `review_schedule`, `diagnostics` and `game`.
 //!
-//! Every timestamp is supplied by the caller as UTC ISO-8601 text; the crate
-//! has no clock of its own, so its behaviour is deterministic in tests.
+//! They are plain inserts and reads. Scoring, eligibility and levels belong to
+//! the assessment crate: `estimates` stores the level it is given and nothing
+//! here derives one. The game layer (XP, streaks, cosmetics) shares no table or
+//! key with attempts, evidence or estimates; see `migrations/0002_game.sql`.
 #![forbid(unsafe_code)]
 
 mod analysis;
 mod attempts;
+mod content;
 mod curriculum;
 mod db;
+mod diagnostics;
+mod enums;
 mod error;
+mod estimates;
+mod game;
 mod models;
 mod profiles;
-mod review;
-mod rows;
+mod progress;
+mod pron;
+mod providers;
+mod row;
 mod sessions;
+mod settings;
+mod streak;
+mod time;
 mod turns;
 
-pub use curriculum::{
-    CurriculumVersion, IndexStatus, IndexedObjective, IndexedUnit, NewCurriculumVersion,
-    NewIndexedObjective, NewIndexedUnit,
+pub use analysis::{Analysis, ErrorEvent, NewErrorEvent, TurnAnalysis};
+pub use attempts::{
+    Attempt, Attempts, Evidence, EvidenceRepo, NewAttempt, NewEvidence, PendingScoring,
+    PendingScoringRepo, ResponseGroup, ScoreUpdate, group_by_response,
 };
-pub use db::{Database, OpenConfig, OpenMigration, SCHEMA_VERSION};
-pub use error::StorageError;
-pub use models::*;
+pub use content::{
+    AudioClip, AudioClips, GeneratedContent, GeneratedContentRepo, NewGeneratedContent,
+};
+pub use curriculum::{
+    Curriculum, CurriculumVersion, IndexStatus, IndexedObjective, IndexedUnit,
+    NewCurriculumVersion, NewObjective, NewUnit,
+};
+pub use db::{Database, OpenConfig, SCHEMA_VERSION};
+pub use diagnostics::{Diagnostics, LlmCall, NewLlmCall, NewPerfSample, PerfSample};
+pub use enums::*;
+pub use error::{Result, StorageError};
+pub use estimates::{Estimates, NewSkillEstimate, SkillEstimate};
+pub use game::{
+    ActivityRecorded, EquippedCosmetics, Game, MAX_XP_AWARD, NewXp, RestToken, StreakDay, Unlocked,
+    XpAward, XpBySource, XpEntry, XpTotals,
+};
+pub use models::{InstalledModel, Models};
+pub use profiles::{NewProfile, Profile, Profiles};
+pub use progress::{
+    ErrorStat, ErrorStats, MasteryRepo, NewReviewItem, ObjectiveMastery, ReviewItem,
+    ReviewSchedule, UnitProgress, UnitProgressRepo,
+};
+pub use pron::{NewPronResult, PronResult, PronResults};
+pub use providers::{NewProviderProfile, ProviderProfile, Providers};
+pub use sessions::{NewSession, Session, Sessions};
+pub use settings::{Setting, Settings};
+pub use streak::StreakStatus;
+pub use time::{LocalDate, TimeError, Timestamp};
+pub use turns::{NewTurn, Turn, Turns};

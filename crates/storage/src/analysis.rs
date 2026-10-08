@@ -1,67 +1,128 @@
-//! Turn analysis: one row per analysed turn, holding the contract-validated
-//! JSON, plus the error events extracted from it and the per-category tally.
-//! The JSON must already have passed its schema check in `llm-client`; this
-//! table only enforces that it is valid JSON at all.
+//! The LLM's structured analysis of a learner turn, and the error events found
+//! in it. Both quote the learner, so both go away with the session.
 //!
-//! Writing an analysis twice for one turn replaces the previous row: the turn is
-//! the primary key, because a re-run analysis supersedes the first. The bundle
-//! write replaces the turn's error events in the same transaction and adjusts
-//! `error_stats` by the difference, so a re-analysis never double counts.
+//! Nothing here sets or states a CEFR level. `ladder_level` is the tutor's
+//! support ladder (1 to 4), not a proficiency level.
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sqlx::Row;
+use sqlx::sqlite::SqliteRow;
 
 use crate::db::Database;
-use crate::error::{StorageError, classify, not_found};
-use crate::models::{ErrorEvent, ErrorStat, NewErrorEvent, TurnAnalysis};
+use crate::enums::Severity;
+use crate::error::Result;
+use crate::row::{enum_col, expect_changed, json_col, json_text, timestamp_col};
+use crate::time::Timestamp;
+
+/// The validated analysis of one turn.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurnAnalysis {
+    pub turn_id: i64,
+    /// The analysis object, already validated against its schema in `contracts/`.
+    pub analysis: Value,
+    pub contract_version: String,
+    /// Support-ladder step the tutor used, 1 to 4.
+    pub ladder_level: i64,
+    pub model: String,
+    pub created_at: Timestamp,
+}
+
+impl TurnAnalysis {
+    fn from_row(row: &SqliteRow) -> Result<Self> {
+        Ok(Self {
+            turn_id: row.try_get("turn_id")?,
+            analysis: json_col(row, "analysis_json")?,
+            contract_version: row.try_get("contract_version")?,
+            ladder_level: row.try_get("ladder_level")?,
+            model: row.try_get("model")?,
+            created_at: timestamp_col(row, "created_at")?,
+        })
+    }
+}
+
+/// One error found in a learner turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErrorEvent {
+    pub id: i64,
+    pub turn_id: i64,
+    pub profile_id: i64,
+    pub category: String,
+    /// The learner's words, verbatim.
+    pub quote: String,
+    pub correction: String,
+    pub severity: Severity,
+    pub addressed: bool,
+    pub created_at: Timestamp,
+}
+
+/// An error event to store.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NewErrorEvent {
+    pub turn_id: i64,
+    pub profile_id: i64,
+    pub category: String,
+    pub quote: String,
+    pub correction: String,
+    pub severity: Severity,
+    pub created_at: Timestamp,
+}
+
+impl ErrorEvent {
+    fn from_row(row: &SqliteRow) -> Result<Self> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            turn_id: row.try_get("turn_id")?,
+            profile_id: row.try_get("profile_id")?,
+            category: row.try_get("category")?,
+            quote: row.try_get("quote")?,
+            correction: row.try_get("correction")?,
+            severity: enum_col(row, "severity")?,
+            addressed: row.try_get("addressed")?,
+            created_at: timestamp_col(row, "created_at")?,
+        })
+    }
+}
+
+/// Queries on `turn_analysis` and `error_events`.
+pub struct Analysis<'a> {
+    db: &'a Database,
+}
 
 impl Database {
-    /// Stores the analysis of a turn, replacing any earlier analysis of it.
-    pub async fn save_turn_analysis(&self, analysis: &TurnAnalysis) -> Result<(), StorageError> {
-        let mut tx = self.writer().begin().await?;
-        upsert_analysis(&mut tx, analysis).await?;
-        tx.commit().await?;
-        Ok(())
+    /// Turn-analysis queries.
+    pub fn analysis(&self) -> Analysis<'_> {
+        Analysis { db: self }
     }
+}
 
-    /// Stores one analysis with its error events and updates the per-category
-    /// tally, all in one transaction. Re-analysing a turn replaces its events
-    /// and corrects the tally by the difference.
-    pub async fn save_analysis_bundle(
-        &self,
-        analysis: &TurnAnalysis,
-        events: &[NewErrorEvent],
-    ) -> Result<(), StorageError> {
-        let mut tx = self.writer().begin().await?;
-        upsert_analysis(&mut tx, analysis).await?;
-
-        // Take back what the previous analysis of this turn contributed, one
-        // decrement per old event row.
-        let old: Vec<(i64, String)> =
-            sqlx::query_as("SELECT profile_id, category FROM error_events WHERE turn_id = ?")
-                .bind(analysis.turn_id)
-                .fetch_all(&mut *tx)
-                .await?;
-        sqlx::query("DELETE FROM error_events WHERE turn_id = ?")
-            .bind(analysis.turn_id)
-            .execute(&mut *tx)
-            .await?;
-        for (profile_id, category) in &old {
-            sqlx::query(
-                "UPDATE error_stats SET count = count - 1 \
-                 WHERE profile_id = ? AND category = ?",
-            )
-            .bind(profile_id)
-            .bind(category)
-            .execute(&mut *tx)
-            .await?;
-        }
-        sqlx::query("DELETE FROM error_stats WHERE count <= 0")
-            .execute(&mut *tx)
-            .await?;
-
+impl Analysis<'_> {
+    /// Stores the analysis of a turn together with the error events found in it,
+    /// all or nothing. A second call for the same turn replaces the analysis and
+    /// adds the new events.
+    pub async fn store(&self, analysis: &TurnAnalysis, events: &[NewErrorEvent]) -> Result<()> {
+        let mut tx = self.db.begin_write().await?;
+        sqlx::query(
+            "INSERT INTO turn_analysis \
+             (turn_id, analysis_json, contract_version, ladder_level, model, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+             ON CONFLICT (turn_id) DO UPDATE SET analysis_json = excluded.analysis_json, \
+             contract_version = excluded.contract_version, ladder_level = excluded.ladder_level, \
+             model = excluded.model, created_at = excluded.created_at",
+        )
+        .bind(analysis.turn_id)
+        .bind(json_text(&analysis.analysis))
+        .bind(&analysis.contract_version)
+        .bind(analysis.ladder_level)
+        .bind(&analysis.model)
+        .bind(analysis.created_at.to_string())
+        .execute(&mut *tx)
+        .await?;
         for event in events {
             sqlx::query(
                 "INSERT INTO error_events \
-                 (turn_id, profile_id, category, quote, correction, severity, addressed, created_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                 (turn_id, profile_id, category, quote, correction, severity, created_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             )
             .bind(event.turn_id)
             .bind(event.profile_id)
@@ -69,169 +130,38 @@ impl Database {
             .bind(&event.quote)
             .bind(&event.correction)
             .bind(event.severity.as_str())
-            .bind(event.addressed)
-            .bind(&event.created_at)
+            .bind(event.created_at.to_string())
             .execute(&mut *tx)
-            .await
-            .map_err(|error| classify("error_events", error))?;
-
-            sqlx::query(
-                "INSERT INTO error_stats (profile_id, category, count, last_seen) \
-                 VALUES (?, ?, 1, ?) \
-                 ON CONFLICT (profile_id, category) DO UPDATE SET \
-                   count = error_stats.count + 1, \
-                   last_seen = CASE \
-                     WHEN error_stats.last_seen IS NULL \
-                       OR error_stats.last_seen < excluded.last_seen \
-                     THEN excluded.last_seen ELSE error_stats.last_seen END",
-            )
-            .bind(event.profile_id)
-            .bind(&event.category)
-            .bind(&event.created_at)
-            .execute(&mut *tx)
-            .await
-            .map_err(|error| classify("error_stats", error))?;
+            .await?;
         }
-
         tx.commit().await?;
         Ok(())
     }
 
-    /// The error events of one turn, oldest first.
-    pub async fn error_events_for_turn(
-        &self,
-        turn_id: i64,
-    ) -> Result<Vec<ErrorEvent>, StorageError> {
-        let rows: Vec<ErrorEventRow> = sqlx::query_as(
-            "SELECT id, turn_id, profile_id, category, quote, correction, severity, addressed, created_at \
-             FROM error_events WHERE turn_id = ? ORDER BY id",
-        )
-        .bind(turn_id)
-        .fetch_all(self.readers())
-        .await?;
-        rows.into_iter().map(ErrorEvent::try_from).collect()
+    /// The analysis of a turn, if one was stored.
+    pub async fn get(&self, turn_id: i64) -> Result<Option<TurnAnalysis>> {
+        let row = sqlx::query("SELECT * FROM turn_analysis WHERE turn_id = ?1")
+            .bind(turn_id)
+            .fetch_optional(self.db.reader())
+            .await?;
+        row.as_ref().map(TurnAnalysis::from_row).transpose()
     }
 
-    /// The per-category tally of one profile, biggest first.
-    pub async fn error_stats(&self, profile_id: i64) -> Result<Vec<ErrorStat>, StorageError> {
-        let rows: Vec<ErrorStatRow> = sqlx::query_as(
-            "SELECT profile_id, category, count, last_seen FROM error_stats \
-             WHERE profile_id = ? ORDER BY count DESC, category",
-        )
-        .bind(profile_id)
-        .fetch_all(self.readers())
-        .await?;
-        Ok(rows
-            .into_iter()
-            .map(|row| ErrorStat {
-                profile_id: row.profile_id,
-                category: row.category,
-                count: row.count,
-                last_seen: row.last_seen,
-            })
-            .collect())
+    /// The error events of a turn, in the order they were stored.
+    pub async fn error_events(&self, turn_id: i64) -> Result<Vec<ErrorEvent>> {
+        let rows = sqlx::query("SELECT * FROM error_events WHERE turn_id = ?1 ORDER BY id")
+            .bind(turn_id)
+            .fetch_all(self.db.reader())
+            .await?;
+        rows.iter().map(ErrorEvent::from_row).collect()
     }
 
-    /// Reads the analysis of one turn.
-    pub async fn turn_analysis(&self, turn_id: i64) -> Result<TurnAnalysis, StorageError> {
-        let row: Option<TurnAnalysisRow> = sqlx::query_as(
-            "SELECT turn_id, analysis_json, contract_version, ladder_level, model, created_at \
-             FROM turn_analysis WHERE turn_id = ?",
-        )
-        .bind(turn_id)
-        .fetch_optional(self.readers())
-        .await?;
-
-        row.map(TurnAnalysis::from)
-            .ok_or_else(|| not_found("turn_analysis", turn_id))
+    /// Marks an error as addressed once the tutor has worked on it.
+    pub async fn mark_addressed(&self, error_event_id: i64) -> Result<()> {
+        let result = sqlx::query("UPDATE error_events SET addressed = 1 WHERE id = ?1")
+            .bind(error_event_id)
+            .execute(self.db.writer())
+            .await?;
+        expect_changed(&result, "error event")
     }
-}
-
-async fn upsert_analysis(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    analysis: &TurnAnalysis,
-) -> Result<(), StorageError> {
-    sqlx::query(
-        "INSERT INTO turn_analysis \
-         (turn_id, analysis_json, contract_version, ladder_level, model, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?) \
-         ON CONFLICT (turn_id) DO UPDATE SET \
-           analysis_json = excluded.analysis_json, \
-           contract_version = excluded.contract_version, \
-           ladder_level = excluded.ladder_level, \
-           model = excluded.model, \
-           created_at = excluded.created_at",
-    )
-    .bind(analysis.turn_id)
-    .bind(&analysis.analysis_json)
-    .bind(&analysis.contract_version)
-    .bind(analysis.ladder_level)
-    .bind(&analysis.model)
-    .bind(&analysis.created_at)
-    .execute(&mut **tx)
-    .await
-    .map_err(|error| classify("turn_analysis", error))?;
-    Ok(())
-}
-
-#[derive(sqlx::FromRow)]
-struct TurnAnalysisRow {
-    turn_id: i64,
-    analysis_json: String,
-    contract_version: String,
-    ladder_level: i64,
-    model: String,
-    created_at: String,
-}
-
-impl From<TurnAnalysisRow> for TurnAnalysis {
-    fn from(row: TurnAnalysisRow) -> Self {
-        TurnAnalysis {
-            turn_id: row.turn_id,
-            analysis_json: row.analysis_json,
-            contract_version: row.contract_version,
-            ladder_level: row.ladder_level,
-            model: row.model,
-            created_at: row.created_at,
-        }
-    }
-}
-
-#[derive(sqlx::FromRow)]
-struct ErrorEventRow {
-    id: i64,
-    turn_id: i64,
-    profile_id: i64,
-    category: String,
-    quote: String,
-    correction: String,
-    severity: String,
-    addressed: bool,
-    created_at: String,
-}
-
-impl TryFrom<ErrorEventRow> for ErrorEvent {
-    type Error = StorageError;
-
-    fn try_from(row: ErrorEventRow) -> Result<Self, Self::Error> {
-        Ok(ErrorEvent {
-            id: row.id,
-            turn_id: row.turn_id,
-            profile_id: row.profile_id,
-            category: row.category,
-            quote: row.quote,
-            correction: row.correction,
-            severity: crate::rows::parse_enum("error_events", row.severity)?,
-            addressed: row.addressed,
-            created_at: row.created_at,
-        })
-    }
-}
-
-#[derive(sqlx::FromRow)]
-struct ErrorStatRow {
-    profile_id: i64,
-    category: String,
-    count: i64,
-    last_seen: Option<String>,
 }

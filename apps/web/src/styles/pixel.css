@@ -345,7 +345,7 @@ textarea.px-field {
 .px-switch[aria-checked="true"] .px-switch__state {
   right: auto;
   left: var(--space-2);
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 .px-switch:disabled {
   opacity: 0.55;

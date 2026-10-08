@@ -58,6 +58,8 @@ describe("resolving settings", () => {
     expect(resolveMotion("on", true)).toBe("on");
     expect(resolveMotion("off", false)).toBe("off");
     expect(resolveTheme("day", true)).toBe("day");
+    expect(resolveTheme("forest", false)).toBe("forest");
+    expect(resolveTheme("ember", true)).toBe("ember");
   });
 
   it("builds the document values", () => {
@@ -88,7 +90,7 @@ function runBootScript(
 describe("boot script", () => {
   it("agrees with resolveDisplay for every stored combination", () => {
     const motions = ["system", "on", "off"] as const;
-    const themes = ["system", "night", "day"] as const;
+    const themes = ["system", "night", "day", "forest", "ember"] as const;
     for (const motion of motions) {
       for (const theme of themes) {
         for (const crt of [true, false]) {

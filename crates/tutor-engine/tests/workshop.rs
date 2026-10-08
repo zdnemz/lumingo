@@ -1,580 +1,685 @@
-//! S4-12 writing workshop end to end: a `writing` session stores drafts as
-//! turns, the first layer (rule findings) needs no provider, the second layer
-//! (T2 errors) runs on the draft's text, a revision is classified against the
-//! first draft as fixed / remaining / new, the drafts' attempts carry
-//! `origin = free_mode` and are invisible to the level estimate, and a draft
-//! with no provider comes back as a pending payload for the queue.
-//!
-//! A scripted `LlmClient` exists only here, in test code (AGENTS.md). The
-//! rubric bands (T3) are S5-03's and are not part of this walk; ADR-051 records
-//! that gap.
-#![allow(clippy::unwrap_used)] // test helpers; clippy.toml only exempts #[test] functions
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 mod common;
 
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Mutex;
+use std::sync::Arc;
 
-use assessment_engine::{
-    Attempt as EstimateAttempt, Estimation, Level as EstimateLevel, Origin as EstimateOrigin,
-    Skill as EstimateSkill, Status as EstimateStatus, estimate,
-};
-use common::TempDir;
-use llm_client::{LlmError, StructuredOutput, StructuredRequest, TextRequest};
+use assessment_engine::Level;
+use common::{FakeLlm, make_profile, temp_db, test_clock};
+use curriculum::validate::GrammarCheck;
+use llm_client::{LlmError, TimeoutKind, TransportKind};
+use serde_json::{Value, json};
 use storage::{
-    AttemptOrigin, AttemptStatus, Database, EvidenceKind, InputMode, L1HelpMode, Level, NewAttempt,
-    NewEvidence, NewProfile, NewSession, NewTurn, Scorer, SessionKind, SessionStatus, Skill,
-    TurnRole, UiLanguage,
+    AttemptOrigin, AttemptStatus, Database, LlmCallType, Scorer, SessionStatus, TurnRole,
 };
 use tokio_util::sync::CancellationToken;
 use tutor_engine::{
-    DRAFT_PENDING_VERSION, DraftError, DraftRun, DraftSource, LlmClient, Resolution, RuleChecker,
-    TextStream, WORKSHOP_ATTEMPT_SCORER_VERSION, Workshop, WorkshopConfig, compare_drafts,
+    Dimension, DraftStatus, Resolution, RubricDimension, Workshop, WorkshopConfig, WorkshopEnv,
+    WorkshopRubric, WorkshopTask, process_pending_drafts,
 };
 
-const NOW: &str = "2026-10-08T08:00:00.000Z";
+/// A checker that flags two fixed mistakes. The real one is Harper, wired later.
+struct FakeGrammar;
 
-/// A scripted client: structured answers from a queue; streamed replies are not
-/// part of the workshop, so `stream_text` always fails loudly.
-struct Scripted {
-    analyses: Mutex<Vec<Result<serde_json::Value, LlmError>>>,
-    sent_structured: Mutex<Vec<StructuredRequest>>,
-}
-
-impl Scripted {
-    fn new(analyses: Vec<Result<serde_json::Value, LlmError>>) -> Self {
-        Self {
-            analyses: Mutex::new(analyses),
-            sent_structured: Mutex::new(Vec::new()),
+impl GrammarCheck for FakeGrammar {
+    fn findings(&self, text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        if text.contains("teh") {
+            out.push("Spelling: 'teh' may be 'the'".to_owned());
         }
+        if text.contains("I has") {
+            out.push("Grammar: use 'I have'".to_owned());
+        }
+        out
     }
 }
 
-impl LlmClient for Scripted {
-    fn stream_text(
-        &self,
-        _request: TextRequest,
-        _cancel: CancellationToken,
-    ) -> Pin<Box<dyn Future<Output = Result<TextStream, LlmError>> + Send + '_>> {
-        Box::pin(async {
-            Err(LlmError::Transport(
-                "the workshop does not stream".to_owned(),
-            ))
-        })
-    }
-
-    fn structured(
-        &self,
-        request: StructuredRequest,
-        _cancel: CancellationToken,
-    ) -> Pin<Box<dyn Future<Output = Result<StructuredOutput, LlmError>> + Send + '_>> {
-        self.sent_structured.lock().unwrap().push(request);
-        let answer = self.analyses.lock().unwrap().remove(0);
-        Box::pin(async move {
-            answer.map(|value| StructuredOutput {
-                value,
-                level: llm_client::Level::NativeSchema,
-                repaired: false,
-            })
-        })
-    }
+struct Fixture {
+    _dir: tempfile::TempDir,
+    db: Database,
+    llm: Arc<FakeLlm>,
+    env: WorkshopEnv,
+    workshop: Workshop,
 }
 
-/// One T2 answer for one draft: a fixed set of errors, in the contract's shape.
-fn analysis(seq: i64, errors: &[(&str, &str, &str)]) -> serde_json::Value {
-    let errors: Vec<serde_json::Value> = errors
-        .iter()
-        .map(|(quote, correction, category)| {
-            serde_json::json!({
-                "category": category,
-                "quote": quote,
-                "correction": correction,
-                "severity": "major",
-                "addressed_in_reply": false
-            })
-        })
-        .collect();
-    serde_json::json!({
-        "turns": [{
-            "turn_seq": seq,
-            "errors": errors,
-            "objective_evidence": [],
-            "understood_tutor": "not_applicable",
-            "note_for_next_turn": ""
-        }]
-    })
-}
-
-fn no_events(_event: tutor_engine::UiEvent) {}
-
-fn workshop() -> Workshop {
-    Workshop::start(WorkshopConfig {
-        level: curriculum::Level::A1,
-        first_language: "Indonesian".to_owned(),
-        source: DraftSource::Topic("My weekend".to_owned()),
-    })
-    .unwrap()
-}
-
-/// The storage level of a curriculum level, at the call site (S4-02 split).
-fn storage_level(level: curriculum::Level) -> Level {
-    match level {
-        curriculum::Level::A1 => Level::A1,
-        curriculum::Level::A2 => Level::A2,
-        curriculum::Level::B1 => Level::B1,
-        curriculum::Level::B2 => Level::B2,
-        curriculum::Level::C1 => Level::C1,
-        curriculum::Level::C2 => Level::C2,
-    }
-}
-
-#[tokio::test]
-async fn two_drafts_are_stored_compared_and_never_count_toward_estimates() {
-    let first_errors = [
-        (
-            "I has a book yesterday",
-            "I had a book yesterday",
-            "subject_verb_agreement",
-        ),
-        ("I see many fish", "I saw many fish", "verb_tense"),
-        ("It was very happy", "I was very happy", "pronoun"),
+fn rubric() -> WorkshopRubric {
+    let dims = [
+        Dimension::TaskAchievement,
+        Dimension::Range,
+        Dimension::Accuracy,
     ];
-    let second_errors = [
-        ("I see many fish", "I saw many fish", "verb_tense"),
-        ("The water was cold", "The water was cold.", "punctuation"),
-    ];
-    let client = Scripted::new(vec![
-        Ok(analysis(1, &first_errors)),
-        Ok(analysis(2, &second_errors)),
-    ]);
-    let mut workshop = workshop();
-    let cancel = CancellationToken::new();
-
-    // The database and the stored `writing` session.
-    let dir = TempDir::new();
-    let db = Database::open(dir.db_path()).await.unwrap();
-    let profile = db
-        .create_profile(NewProfile {
-            display_name: "Learner".to_owned(),
-            ui_language: UiLanguage::Id,
-            l1: "id".to_owned(),
-            l1_help_mode: L1HelpMode::Auto,
-            created_at: NOW.to_owned(),
-        })
-        .await
-        .unwrap();
-    let session = db
-        .create_session(NewSession {
-            profile_id: profile.id,
-            kind: SessionKind::Writing,
-            unit_id: None,
-            activity_id: None,
-            mode: None,
-            provider_profile_id: None,
-            app_version: "0.0.0".to_owned(),
-            started_at: NOW.to_owned(),
-        })
-        .await
-        .unwrap();
-
-    // The first draft: submit and the first feedback layer (the rule-based
-    // findings) comes back at once, before any provider call; then the turn
-    // and the attempt are stored, and the T2 analysis runs.
-    let first_text = "I has a book yesterday. I see many fish. It was very happy.";
-    let mut checker = RuleChecker::new();
-    let submitted = workshop
-        .submit_draft(first_text, &mut checker, &mut no_events)
-        .unwrap();
-    assert_eq!(submitted.learner_seq, 1);
-    assert_eq!(submitted.words, 13);
-    assert_eq!(submitted.rule.checked, cfg!(feature = "grammar"));
-    if cfg!(feature = "grammar") {
-        assert!(
-            !submitted.rule.findings.is_empty(),
-            "the checker flags the draft: {:?}",
-            submitted.rule.findings
-        );
+    WorkshopRubric {
+        id: "w-a2".into(),
+        version: 2,
+        dimensions: dims
+            .into_iter()
+            .map(|dimension| RubricDimension {
+                dimension,
+                bands: ["nothing", "little", "some", "enough", "more"].map(String::from),
+            })
+            .collect(),
     }
-    let turn = db
-        .add_turn(NewTurn {
-            session_id: session.id,
-            seq: submitted.learner_seq,
-            role: TurnRole::Learner,
-            input_mode: InputMode::Text,
-            text: first_text.to_owned(),
-            stt_text: None,
-            edited_by_learner: false,
-            speech_ms: None,
-            pause_ms: None,
-            word_count: Some(submitted.words as i64),
-            created_at: NOW.to_owned(),
-        })
-        .await
-        .unwrap();
-    let described = workshop.attempt_for(session.id, turn.seq, submitted.words as i64);
-    let attempt = db
-        .add_attempt(NewAttempt {
-            profile_id: profile.id,
-            session_id: Some(session.id),
-            unit_id: None,
-            activity_id: described.activity_id,
-            activity_type: described.activity_type,
-            response_id: described.response_id,
-            origin: AttemptOrigin::FreeMode,
-            level: storage_level(curriculum::Level::A1),
-            skill: Skill::Writing,
-            dimension: described.dimension,
-            scorer: Scorer::Deterministic,
-            scorer_version: described.scorer_version,
-            raw_score: None,
-            max_score: None,
-            normalized: None,
-            confidence: None,
-            status: AttemptStatus::Insufficient,
-            counts_toward_estimate: false,
-            created_at: NOW.to_owned(),
-        })
-        .await
-        .unwrap();
-    db.add_evidence(NewEvidence {
-        attempt_id: attempt.id,
-        kind: EvidenceKind::Metric,
-        content: None,
-        data_json: Some(serde_json::json!({ "words": described.words }).to_string()),
-        created_at: NOW.to_owned(),
-    })
-    .await
-    .unwrap();
+}
 
-    let run = workshop
-        .analyse(&client, &cancel, &mut no_events)
-        .await
-        .unwrap();
-    let DraftRun::Analysed {
-        outcome,
-        comparison,
-    } = run
-    else {
-        panic!("the scripted client answers");
+fn task() -> WorkshopTask {
+    WorkshopTask {
+        prompt: "Write a note to a friend about the weekend.".into(),
+        content_points: vec!["say when".into(), "say where".into()],
+        min_words: Some(8),
+    }
+}
+
+async fn fixture_with(rubric: Option<WorkshopRubric>) -> Fixture {
+    let (dir, db) = temp_db().await;
+    let profile = make_profile(&db).await;
+    let llm = FakeLlm::new();
+    let env = WorkshopEnv {
+        client: llm.clone(),
+        db: db.clone(),
+        clock: test_clock(),
+        model: "test-model".into(),
+        provider_profile_id: None,
+        grammar: Some(Arc::new(FakeGrammar)),
+        word_levels: None,
+        provider_qualified: true,
     };
-    assert_eq!(outcome.filtered.turns[0].errors.len(), 3);
-    assert!(
-        comparison.is_none(),
-        "the first draft has nothing to compare"
-    );
-    assert_eq!(outcome.filtered.counts.produced, 3);
-    assert_eq!(outcome.filtered.counts.dropped, 0);
-
-    // Store the analysis, as the chat path does.
-    db.save_analysis_bundle(
-        &storage::TurnAnalysis {
-            turn_id: turn.id,
-            analysis_json: outcome.filtered.analysis_json().unwrap(),
-            contract_version: tutor_engine::TURN_ANALYSIS_VERSION.to_owned(),
-            ladder_level: i64::from(outcome.ladder_level),
-            model: "scripted-model".to_owned(),
-            created_at: NOW.to_owned(),
+    let workshop = Workshop::start(
+        env.clone(),
+        WorkshopConfig {
+            profile_id: profile.id,
+            level: Level::A2,
+            first_language: "Indonesian".into(),
+            app_version: "0.0.0-test".into(),
+            prompt_id: Some("note-friend".into()),
+            rubric,
+            task: task(),
         },
-        &outcome.filtered.turns[0]
-            .errors
-            .iter()
-            .map(|error| storage::NewErrorEvent {
-                turn_id: turn.id,
-                profile_id: profile.id,
-                category: error.category.clone(),
-                quote: error.quote.clone(),
-                correction: error.correction.clone(),
-                severity: match error.severity.as_str() {
-                    "minor" => storage::Severity::Minor,
-                    "major" => storage::Severity::Major,
-                    _ => storage::Severity::Blocking,
-                },
-                addressed: error.addressed_in_reply,
-                created_at: NOW.to_owned(),
-            })
-            .collect::<Vec<_>>(),
     )
     .await
     .unwrap();
-
-    // The revision: a second draft at the next seq, stored the same way.
-    let second_text = "I had a book yesterday. I see many fish. The water was cold.";
-    let submitted = workshop
-        .submit_draft(second_text, &mut checker, &mut no_events)
-        .unwrap();
-    assert_eq!(submitted.learner_seq, 2);
-    if cfg!(feature = "grammar") {
-        assert!(
-            submitted.rule.findings.is_empty(),
-            "the revision fixed the agreement mistake: {:?}",
-            submitted.rule.findings
-        );
+    Fixture {
+        _dir: dir,
+        db,
+        llm,
+        env,
+        workshop,
     }
-    db.add_turn(NewTurn {
-        session_id: session.id,
-        seq: submitted.learner_seq,
-        role: TurnRole::Learner,
-        input_mode: InputMode::Text,
-        text: second_text.to_owned(),
-        stt_text: None,
-        edited_by_learner: false,
-        speech_ms: None,
-        pause_ms: None,
-        word_count: Some(submitted.words as i64),
-        created_at: NOW.to_owned(),
-    })
-    .await
-    .unwrap();
-    let described = workshop.attempt_for(session.id, submitted.learner_seq, submitted.words as i64);
-    db.add_attempt(NewAttempt {
-        profile_id: profile.id,
-        session_id: Some(session.id),
-        unit_id: None,
-        activity_id: described.activity_id,
-        activity_type: described.activity_type,
-        response_id: described.response_id,
-        origin: AttemptOrigin::FreeMode,
-        level: storage_level(curriculum::Level::A1),
-        skill: Skill::Writing,
-        dimension: described.dimension,
-        scorer: Scorer::Deterministic,
-        scorer_version: described.scorer_version,
-        raw_score: None,
-        max_score: None,
-        normalized: None,
-        confidence: None,
-        status: AttemptStatus::Insufficient,
-        counts_toward_estimate: false,
-        created_at: NOW.to_owned(),
-    })
-    .await
-    .unwrap();
+}
 
-    let run = workshop
-        .analyse(&client, &cancel, &mut no_events)
-        .await
-        .unwrap();
-    let DraftRun::Analysed {
-        outcome,
-        comparison,
-    } = run
-    else {
-        panic!("the scripted client answers");
-    };
-    let comparison = comparison.expect("the second draft is compared with the first");
-    // "I has a book yesterday" and "It was very happy" are gone and not
-    // reported again: fixed. "I see many fish" is reported again on words still
-    // in the draft: remaining. The punctuation report is new.
-    assert_eq!(comparison.fixed(), 2);
-    assert_eq!(comparison.remaining(), 1);
-    assert_eq!(comparison.new.len(), 1);
-    assert_eq!(comparison.new[0].category, "punctuation");
-    assert_eq!(
-        comparison.earlier[1].error,
-        DraftError {
-            quote: "I see many fish".to_owned(),
-            category: "verb_tense".to_owned(),
-        }
-    );
-    assert_eq!(comparison.earlier[1].resolution, Resolution::Remaining);
-    assert_eq!(outcome.filtered.turns[0].errors.len(), 2);
+async fn fixture() -> Fixture {
+    fixture_with(Some(rubric())).await
+}
 
-    // Both drafts are stored as turns; both attempts are free_mode and never
-    // count, exactly as the chat path proves for its messages.
-    let turns = db.turns_for_session(session.id).await.unwrap();
-    assert_eq!(turns.len(), 2);
-    assert!(turns.iter().all(|t| t.role == TurnRole::Learner));
-    assert_eq!(turns[0].text, first_text);
-    assert_eq!(turns[1].text, second_text);
-    let rows = db
-        .attempts_for_skill(profile.id, Skill::Writing)
-        .await
-        .unwrap();
-    assert_eq!(rows.len(), 2);
-    assert!(rows.iter().all(|row| row.origin == AttemptOrigin::FreeMode));
-    assert!(rows.iter().all(|row| !row.counts_toward_estimate));
+fn cancel() -> CancellationToken {
+    CancellationToken::new()
+}
+
+fn error(category: &str, quote: &str, correction: &str) -> Value {
+    json!({ "category": category, "quote": quote, "correction": correction,
+            "severity": "major", "addressed_in_reply": false })
+}
+
+fn t2(seq: i64, errors: Vec<Value>) -> Value {
+    json!({ "turns": [{ "turn_seq": seq, "errors": errors, "objective_evidence": [],
+        "understood_tutor": "not_applicable", "note_for_next_turn": "" }] })
+}
+
+fn t3(quote: &str) -> Value {
+    json!({
+        "dimension_scores": [
+            { "dimension": "task_achievement", "band": "3", "evidence_quotes": [quote], "reason": "Covers the task." },
+            { "dimension": "range", "band": "2", "evidence_quotes": [quote], "reason": "Simple words." },
+            { "dimension": "accuracy", "band": "3", "evidence_quotes": [quote], "reason": "Mostly right." }
+        ],
+        "content_points": [
+            { "point": "say when", "covered": true, "quote": quote },
+            { "point": "say where", "covered": true, "quote": quote }
+        ],
+        "on_task": true,
+        "feedback_en": "You gave clear plans. Add a reason next time.",
+        "feedback_l1": "Rencanamu jelas. Tambahkan alasan lain kali."
+    })
+}
+
+const DRAFT: &str =
+    "Hi Sari, I has a plan for Saturday at the lake. We go to teh lake and swim together.";
+
+#[tokio::test]
+async fn rule_findings_come_at_once_with_no_provider_call_and_the_draft_is_stored() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    assert_eq!(f.llm.structured_calls(), 0);
+    assert!(submission.rule_checked);
+    assert_eq!(submission.rule_findings.len(), 2);
     assert!(
-        rows.iter()
-            .all(|row| row.scorer_version == WORKSHOP_ATTEMPT_SCORER_VERSION)
+        submission.rule_findings[0].contains("teh") || submission.rule_findings[1].contains("teh")
     );
-    let estimator_rows: Vec<EstimateAttempt> = rows
-        .iter()
-        .map(|row| EstimateAttempt {
-            response_id: 1,
-            skill: EstimateSkill::Writing,
-            level: EstimateLevel::A1,
-            activity_id: 1,
-            session_id: 1,
-            scorer: assessment_engine::Scorer::Deterministic,
-            normalized: 1.0,
-            confidence: 1.0,
-            status: EstimateStatus::Scored,
-            origin: EstimateOrigin::FreeMode,
-            counts_toward_estimate: row.counts_toward_estimate,
-            created_at: 0,
-        })
-        .collect();
-    let estimation: Estimation = estimate(&estimator_rows, &Default::default(), 0);
-    let writing = estimation
-        .estimates
-        .iter()
-        .find(|e| e.skill == EstimateSkill::Writing)
-        .unwrap();
-    assert_eq!(
-        writing.status,
-        assessment_engine::EstimateStatus::InsufficientEvidence
-    );
-    assert_eq!(writing.level, None);
+    assert_eq!(submission.words, 19);
+    assert!(!submission.below_minimum);
 
-    // The T2 calls were the draft's shape: text mode, empty tutor fields.
-    let requests = client.sent_structured.lock().unwrap().clone();
-    assert_eq!(requests.len(), 2);
-    let body: serde_json::Value = serde_json::from_str(&requests[0].messages[0].content).unwrap();
-    assert_eq!(body["input_mode"], "text");
-    assert_eq!(body["turns"][0]["tutor_before"], "");
-    assert_eq!(body["turns"][0]["tutor_reply"], "");
-    assert_eq!(body["turns"][0]["learner_text"], first_text);
-    // The draft cap of 20 errors is in the system prompt (T2).
-    let system = requests[0].system.as_deref().unwrap();
-    assert!(system.contains("At most 20 errors per turn"), "{system}");
+    let turns = f.db.turns().list(f.workshop.session_id()).await.unwrap();
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].role, TurnRole::Learner);
+    assert_eq!(turns[0].text, DRAFT);
+    assert_eq!(turns[0].input_mode, storage::InputMode::Text);
 
-    // Ending the session keeps every stored row.
-    db.end_session(session.id, SessionStatus::Completed, NOW)
-        .await
-        .unwrap();
-    assert_eq!(db.turns_for_session(session.id).await.unwrap().len(), 2);
+    let short = f.workshop.submit_draft("Too short.").await.unwrap();
+    assert!(short.below_minimum);
+    assert!(f.workshop.submit_draft("  ").await.is_err());
 }
 
 #[tokio::test]
-async fn a_draft_with_no_provider_waits_in_the_pending_queue() {
-    let client = Scripted::new(vec![Err(LlmError::Transport("offline".to_owned()))]);
-    let mut workshop = workshop();
-    let cancel = CancellationToken::new();
-
-    let dir = TempDir::new();
-    let db = Database::open(dir.db_path()).await.unwrap();
-    let profile = db
-        .create_profile(NewProfile {
-            display_name: "Learner".to_owned(),
-            ui_language: UiLanguage::Id,
-            l1: "id".to_owned(),
-            l1_help_mode: L1HelpMode::Auto,
-            created_at: NOW.to_owned(),
-        })
-        .await
-        .unwrap();
-    let session = db
-        .create_session(NewSession {
-            profile_id: profile.id,
-            kind: SessionKind::Writing,
-            unit_id: None,
-            activity_id: None,
-            mode: None,
-            provider_profile_id: None,
-            app_version: "0.0.0".to_owned(),
-            started_at: NOW.to_owned(),
-        })
+async fn a_reachable_provider_gives_errors_bands_and_stored_free_mode_attempts() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm.queue_structured(Ok(t2(
+        submission.turn_seq,
+        vec![
+            error("subject_verb_agreement", "I has", "I have"),
+            error("spelling", "teh lake", "the lake"),
+        ],
+    )));
+    f.llm.queue_structured(Ok(t3("Saturday at the lake")));
+    let feedback = f
+        .workshop
+        .analyse_draft(&submission, &cancel())
         .await
         .unwrap();
 
-    let text = "I go to school yesterday.";
-    let mut checker = RuleChecker::new();
-    let submitted = workshop
-        .submit_draft(text, &mut checker, &mut no_events)
-        .unwrap();
-    let turn = db
-        .add_turn(NewTurn {
-            session_id: session.id,
-            seq: submitted.learner_seq,
-            role: TurnRole::Learner,
-            input_mode: InputMode::Text,
-            text: text.to_owned(),
-            stt_text: None,
-            edited_by_learner: false,
-            speech_ms: None,
-            pause_ms: None,
-            word_count: Some(submitted.words as i64),
-            created_at: NOW.to_owned(),
-        })
-        .await
-        .unwrap();
-    let described = workshop.attempt_for(session.id, turn.seq, submitted.words as i64);
-    let attempt = db
-        .add_attempt(NewAttempt {
-            profile_id: profile.id,
-            session_id: Some(session.id),
-            unit_id: None,
-            activity_id: described.activity_id,
-            activity_type: described.activity_type,
-            response_id: described.response_id,
-            origin: AttemptOrigin::FreeMode,
-            level: storage_level(curriculum::Level::A1),
-            skill: Skill::Writing,
-            dimension: described.dimension,
-            scorer: Scorer::RubricLlm,
-            scorer_version: described.scorer_version,
-            raw_score: None,
-            max_score: None,
-            normalized: None,
-            confidence: None,
-            status: AttemptStatus::PendingLlm,
-            counts_toward_estimate: false,
-            created_at: NOW.to_owned(),
-        })
-        .await
-        .unwrap();
+    assert_eq!(feedback.status, DraftStatus::Analysed);
+    let analysis = feedback.analysis.expect("layer two");
+    assert_eq!(analysis.analysis.errors.len(), 2);
+    assert!(feedback.comparison.is_none(), "there is no earlier draft");
+    let rubric = feedback.rubric.expect("layer three");
+    assert_eq!(rubric.dimensions.len(), 3);
+    assert!(rubric.feedback_en.starts_with("You gave clear plans"));
+    assert!(rubric.on_task);
 
-    // The provider is unreachable: the draft comes back as a payload, the
-    // session returns to waiting, and the caller queues the attempt (FR-W6).
-    let run = workshop
-        .analyse(&client, &cancel, &mut no_events)
-        .await
-        .unwrap();
-    let DraftRun::Pending { payload, failure } = run else {
-        panic!("the provider is unreachable");
-    };
-    assert!(matches!(
-        failure,
-        tutor_engine::AnalysisFailure::Provider(_)
-    ));
-    assert_eq!(payload.version, DRAFT_PENDING_VERSION);
-    assert_eq!(payload.turn_seq, turn.seq);
-    assert_eq!(payload.text, text);
-    assert_eq!(payload.prompt.as_deref(), Some("My weekend"));
-    assert!(payload.prompt_id.is_none());
-    assert!(matches!(
-        workshop.session().turn(),
-        Some(tutor_engine::TurnState::Waiting)
-    ));
-    // The learner can keep revising while the feedback waits.
-    let next = workshop.submit_draft("I went to school yesterday.", &mut checker, &mut no_events);
-    assert!(next.is_ok());
+    // T3 saw the rubric, the text input mode and the response.
+    let seen = f.llm.structured_requests();
+    assert_eq!(seen[0].contract, llm_client::Contract::TurnAnalysis);
+    assert!(seen[0].system.contains("At most 20 errors per turn"));
+    assert_eq!(seen[1].contract, llm_client::Contract::RubricScore);
+    assert!(
+        seen[1]
+            .system
+            .contains("Never state a CEFR level or a percentage.")
+    );
+    let body: Value = serde_json::from_str(&seen[1].messages[0].content).unwrap();
+    assert_eq!(body["input_mode"], "text");
+    assert_eq!(body["response"], DRAFT);
+    assert_eq!(body["rubric"].as_array().unwrap().len(), 3);
+    drop(seen);
 
-    db.enqueue_pending_scoring(storage::NewPendingScoring {
-        attempt_id: attempt.id,
-        payload_json: serde_json::to_string(&payload).unwrap(),
-        created_at: NOW.to_owned(),
-    })
-    .await
-    .unwrap();
-    let queue = db.pending_scoring(10).await.unwrap();
-    assert_eq!(queue.len(), 1);
-    let stored: serde_json::Value = serde_json::from_str(&queue[0].payload_json).unwrap();
-    assert_eq!(stored["version"], "draft_pending/1");
-    assert_eq!(stored["text"], text);
+    let attempts =
+        f.db.attempts()
+            .by_response(&format!("workshop-{}-1", f.workshop.session_id()))
+            .await
+            .unwrap();
+    assert_eq!(attempts.len(), 3);
+    let mut bands: Vec<(String, Option<f64>)> = attempts
+        .iter()
+        .map(|a| (a.dimension.clone(), a.normalized))
+        .collect();
+    bands.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        bands,
+        [
+            ("accuracy".to_owned(), Some(0.75)),
+            ("range".to_owned(), Some(0.5)),
+            ("task_achievement".to_owned(), Some(0.75))
+        ]
+    );
+    for attempt in &attempts {
+        assert_eq!(attempt.origin, AttemptOrigin::FreeMode);
+        assert!(!attempt.counts_toward_estimate);
+        assert_eq!(attempt.status, AttemptStatus::Scored);
+        assert_eq!(attempt.scorer, Scorer::RubricLlm);
+        assert_eq!(attempt.scorer_version, "w-a2/2+rubric_score/1+test-model");
+        assert_eq!(attempt.confidence, Some(0.8));
+        assert_eq!(attempt.skill, "writing");
+    }
+    let evidence = f.db.evidence().for_attempt(attempts[0].id).await.unwrap();
+    assert!(
+        evidence.iter().any(|e| e.content.as_deref() == Some(DRAFT)),
+        "response text"
+    );
+    assert!(
+        evidence
+            .iter()
+            .any(|e| e.content.as_deref() == Some("Saturday at the lake")),
+        "quote"
+    );
+
+    let calls = f.db.diagnostics().recent_llm_calls(5).await.unwrap();
+    let types: Vec<LlmCallType> = calls.iter().map(|c| c.call_type).collect();
+    assert!(types.contains(&LlmCallType::TurnAnalysis));
+    assert!(types.contains(&LlmCallType::RubricScore));
 }
 
-#[test]
-fn the_comparison_helper_is_shared_with_the_module() {
-    // The public helper and the module's own tests agree: one earlier error,
-    // gone and not re-reported, is fixed.
-    let first = [DraftError {
-        quote: "I go".to_owned(),
-        category: "verb_tense".to_owned(),
-    }];
-    let comparison = compare_drafts(&first, "I went.", &[]);
-    assert_eq!(comparison.fixed(), 1);
-    assert_eq!(comparison.remaining(), 0);
-    assert!(comparison.new.is_empty());
+#[tokio::test]
+async fn a_second_draft_is_classified_as_fixed_remaining_and_new() {
+    let f = fixture().await;
+    let first = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm.queue_structured(Ok(t2(
+        first.turn_seq,
+        vec![
+            error("subject_verb_agreement", "I has", "I have"),
+            error("spelling", "teh lake", "the lake"),
+        ],
+    )));
+    f.llm.queue_structured(Ok(t3("Saturday at the lake")));
+    f.workshop.analyse_draft(&first, &cancel()).await.unwrap();
+
+    let revised =
+        "Hi Sari, I has a plan for Saturday at the lake. We goes to the lake and swim together.";
+    let second = f.workshop.submit_draft(revised).await.unwrap();
+    f.llm.queue_structured(Ok(t2(
+        second.turn_seq,
+        vec![
+            error("subject_verb_agreement", "I has", "I have"),
+            error("subject_verb_agreement", "We goes", "We go"),
+        ],
+    )));
+    f.llm.queue_structured(Ok(t3("Saturday at the lake")));
+    let feedback = f.workshop.analyse_draft(&second, &cancel()).await.unwrap();
+
+    let comparison = feedback.comparison.expect("an earlier draft exists");
+    let resolutions: Vec<(&str, Resolution)> = comparison
+        .earlier
+        .iter()
+        .map(|e| (e.error.quote.as_str(), e.resolution))
+        .collect();
+    assert_eq!(
+        resolutions,
+        [
+            ("I has", Resolution::Remaining),
+            ("teh lake", Resolution::Fixed)
+        ]
+    );
+    assert_eq!(comparison.new.len(), 1);
+    assert_eq!(comparison.new[0].quote, "We goes");
+}
+
+#[tokio::test]
+async fn with_no_provider_the_draft_waits_in_the_pending_queue() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm
+        .queue_structured(Err(LlmError::Transport(TransportKind::Connect)));
+    let feedback = f
+        .workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+
+    assert_eq!(feedback.status, DraftStatus::Pending);
+    assert!(feedback.analysis.is_none() && feedback.rubric.is_none());
+    assert!(
+        f.db.turns()
+            .get(submission.turn_id)
+            .await
+            .unwrap()
+            .is_some(),
+        "the draft is saved"
+    );
+    assert!(
+        f.db.analysis()
+            .get(submission.turn_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let queue = f.db.pending_scoring().oldest(10).await.unwrap();
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue[0].payload["kind"], "writing_draft");
+    assert_eq!(queue[0].payload["text"], DRAFT);
+    let attempts =
+        f.db.attempts()
+            .for_session(f.workshop.session_id())
+            .await
+            .unwrap();
+    assert_eq!(attempts.len(), 3);
+    assert!(
+        attempts
+            .iter()
+            .all(|a| a.status == AttemptStatus::PendingLlm && !a.counts_toward_estimate)
+    );
+    assert!(attempts.iter().all(|a| a.origin == AttemptOrigin::FreeMode));
+}
+
+#[tokio::test]
+async fn a_pending_draft_is_finished_when_a_provider_is_back() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm
+        .queue_structured(Err(LlmError::Timeout(TimeoutKind::Total)));
+    f.workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+
+    f.llm.queue_structured(Ok(t2(
+        submission.turn_seq,
+        vec![error("subject_verb_agreement", "I has", "I have")],
+    )));
+    f.llm.queue_structured(Ok(t3("Saturday at the lake")));
+    let report = process_pending_drafts(&f.env, &cancel()).await.unwrap();
+
+    assert_eq!(report.completed.len(), 1);
+    assert_eq!(report.remaining, 0);
+    let done = &report.completed[0];
+    assert_eq!(done.session_id, f.workshop.session_id());
+    assert_eq!(
+        done.feedback
+            .analysis
+            .as_ref()
+            .map(|a| a.analysis.errors.len()),
+        Some(1)
+    );
+    assert!(done.feedback.rubric.is_some());
+    assert!(f.db.pending_scoring().oldest(10).await.unwrap().is_empty());
+    assert!(
+        f.db.analysis()
+            .get(submission.turn_id)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    let attempts =
+        f.db.attempts()
+            .for_session(f.workshop.session_id())
+            .await
+            .unwrap();
+    assert_eq!(
+        attempts.len(),
+        3,
+        "the placeholders were updated, not duplicated"
+    );
+    assert!(
+        attempts
+            .iter()
+            .all(|a| a.status == AttemptStatus::Scored && a.normalized.is_some())
+    );
+    assert!(attempts.iter().all(|a| !a.counts_toward_estimate));
+}
+
+#[tokio::test]
+async fn a_provider_that_is_still_away_is_asked_once_and_the_draft_stays_queued() {
+    let f = fixture().await;
+    for text in [
+        DRAFT,
+        "I like to swim in the lake with my friends on Sunday.",
+    ] {
+        let s = f.workshop.submit_draft(text).await.unwrap();
+        f.llm
+            .queue_structured(Err(LlmError::Transport(TransportKind::Connect)));
+        f.workshop.analyse_draft(&s, &cancel()).await.unwrap();
+    }
+    f.llm
+        .queue_structured(Err(LlmError::Transport(TransportKind::Connect)));
+    let before = f.llm.structured_calls();
+    let report = process_pending_drafts(&f.env, &cancel()).await.unwrap();
+    assert!(report.completed.is_empty());
+    assert_eq!(report.remaining, 2);
+    assert_eq!(
+        f.llm.structured_calls(),
+        before + 1,
+        "no second call against a failing provider"
+    );
+    let queue = f.db.pending_scoring().oldest(10).await.unwrap();
+    assert_eq!(queue[0].tries, 1);
+    assert_eq!(queue[1].tries, 0);
+}
+
+#[tokio::test]
+async fn when_only_the_rubric_fails_the_errors_are_kept_and_only_the_rubric_is_retried() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm.queue_structured(Ok(t2(
+        submission.turn_seq,
+        vec![error("subject_verb_agreement", "I has", "I have")],
+    )));
+    f.llm
+        .queue_structured(Err(LlmError::Timeout(TimeoutKind::Total)));
+    let feedback = f
+        .workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    assert_eq!(feedback.status, DraftStatus::RubricPending);
+    assert!(feedback.analysis.is_some());
+    assert!(feedback.rubric.is_none());
+    assert!(
+        f.db.analysis()
+            .get(submission.turn_id)
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    f.llm.queue_structured(Ok(t3("Saturday at the lake")));
+    let calls_before = f.llm.structured_calls();
+    let report = process_pending_drafts(&f.env, &cancel()).await.unwrap();
+    assert_eq!(
+        f.llm.structured_calls(),
+        calls_before + 1,
+        "T2 is not run again"
+    );
+    assert_eq!(report.completed.len(), 1);
+    assert!(
+        report.completed[0].feedback.analysis.is_none(),
+        "already stored earlier"
+    );
+    assert!(report.completed[0].feedback.rubric.is_some());
+    assert_eq!(
+        f.db.analysis()
+            .error_events(submission.turn_id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn evidence_that_does_not_hold_causes_one_rerun_of_the_rubric() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm.queue_structured(Ok(t2(submission.turn_seq, vec![])));
+    let mut bad = t3("Saturday at the lake");
+    bad["dimension_scores"][1]["evidence_quotes"] = json!(["words the learner never wrote"]);
+    f.llm.queue_structured(Ok(bad));
+    f.llm.queue_structured(Ok(t3("Saturday at the lake")));
+    let feedback = f
+        .workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    let rubric = feedback.rubric.unwrap();
+    assert_eq!(f.llm.structured_calls(), 3);
+    assert!(rubric.rejected.is_empty());
+    assert!(rubric.dimensions.iter().all(|d| d.band.is_some()));
+}
+
+#[tokio::test]
+async fn evidence_that_fails_twice_leaves_the_dimension_for_review() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm.queue_structured(Ok(t2(submission.turn_seq, vec![])));
+    for _ in 0..2 {
+        let mut bad = t3("Saturday at the lake");
+        bad["dimension_scores"][1]["evidence_quotes"] = json!(["words the learner never wrote"]);
+        f.llm.queue_structured(Ok(bad));
+    }
+    f.workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    assert_eq!(f.llm.structured_calls(), 3, "one rerun, not more");
+    let attempts =
+        f.db.attempts()
+            .for_session(f.workshop.session_id())
+            .await
+            .unwrap();
+    let range = attempts.iter().find(|a| a.dimension == "range").unwrap();
+    assert_eq!(range.status, AttemptStatus::NeedsReview);
+    assert_eq!(range.normalized, None);
+}
+
+#[tokio::test]
+async fn an_off_task_draft_gets_band_zero_in_every_dimension() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm.queue_structured(Ok(t2(submission.turn_seq, vec![])));
+    let mut off = t3("Saturday at the lake");
+    off["on_task"] = json!(false);
+    f.llm.queue_structured(Ok(off));
+    let feedback = f
+        .workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    let rubric = feedback.rubric.unwrap();
+    assert!(!rubric.on_task);
+    assert!(rubric.dimensions.iter().all(|d| d.band == Some(0)));
+}
+
+#[tokio::test]
+async fn without_a_rubric_the_workshop_gives_layers_one_and_two_only() {
+    let f = fixture_with(None).await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm.queue_structured(Ok(t2(
+        submission.turn_seq,
+        vec![error("spelling", "teh lake", "the lake")],
+    )));
+    let feedback = f
+        .workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    assert_eq!(feedback.status, DraftStatus::Analysed);
+    assert!(feedback.rubric.is_none());
+    assert_eq!(f.llm.structured_calls(), 1);
+    assert!(
+        f.db.attempts()
+            .for_session(f.workshop.session_id())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn without_a_rubric_a_queued_draft_finishes_with_errors_and_an_unscored_placeholder() {
+    let f = fixture_with(None).await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm
+        .queue_structured(Err(LlmError::Transport(TransportKind::Connect)));
+    f.workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    f.llm.queue_structured(Ok(t2(
+        submission.turn_seq,
+        vec![error("spelling", "teh lake", "the lake")],
+    )));
+    let report = process_pending_drafts(&f.env, &cancel()).await.unwrap();
+    assert_eq!(report.completed.len(), 1);
+    let attempts =
+        f.db.attempts()
+            .for_session(f.workshop.session_id())
+            .await
+            .unwrap();
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].status, AttemptStatus::Insufficient);
+    assert!(!attempts[0].counts_toward_estimate);
+}
+
+#[tokio::test]
+async fn a_cancelled_analysis_is_an_error_and_the_draft_is_not_lost() {
+    let f = fixture().await;
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm.queue_structured(Ok(t2(submission.turn_seq, vec![])));
+    f.llm.queue_structured(Err(LlmError::Cancelled));
+    let result = f.workshop.analyse_draft(&submission, &cancel()).await;
+    assert!(matches!(
+        result,
+        Err(tutor_engine::EngineError::Llm(LlmError::Cancelled))
+    ));
+    assert_eq!(
+        f.db.pending_scoring().oldest(10).await.unwrap().len(),
+        1,
+        "queued for later"
+    );
+}
+
+#[tokio::test]
+async fn finishing_records_how_many_drafts_still_wait_for_feedback() {
+    let f = fixture().await;
+    let s = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm
+        .queue_structured(Err(LlmError::Transport(TransportKind::Connect)));
+    f.workshop.analyse_draft(&s, &cancel()).await.unwrap();
+    f.workshop.finish(false).await.unwrap();
+    let session =
+        f.db.sessions()
+            .get(f.workshop.session_id())
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(session.status, SessionStatus::Completed);
+    let summary = session.summary.unwrap();
+    assert_eq!(summary["drafts"], 1);
+    assert_eq!(summary["awaiting_feedback"], 1);
+    assert_eq!(session.activity_id.as_deref(), Some("note-friend"));
+}
+
+#[tokio::test]
+async fn deleting_the_session_removes_drafts_analysis_and_the_queue() {
+    let f = fixture().await;
+    let s = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm
+        .queue_structured(Err(LlmError::Transport(TransportKind::Connect)));
+    f.workshop.analyse_draft(&s, &cancel()).await.unwrap();
+    f.db.sessions()
+        .delete(f.workshop.session_id())
+        .await
+        .unwrap();
+    assert!(f.db.pending_scoring().oldest(10).await.unwrap().is_empty());
+    assert!(f.db.turns().get(s.turn_id).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn without_a_checker_the_first_layer_says_it_did_not_check_and_x5_is_not_evaluated() {
+    let f = fixture().await;
+    let mut env = f.env.clone();
+    env.grammar = None;
+    let workshop = Workshop::start(
+        env,
+        WorkshopConfig {
+            profile_id: 1,
+            level: Level::A2,
+            first_language: "Indonesian".into(),
+            app_version: "0.0.0-test".into(),
+            prompt_id: None,
+            rubric: Some(rubric()),
+            task: task(),
+        },
+    )
+    .await
+    .unwrap();
+    let submission = workshop.submit_draft(DRAFT).await.unwrap();
+    assert!(!submission.rule_checked, "nothing was checked");
+    assert!(submission.rule_findings.is_empty());
+    f.llm.queue_structured(Ok(t2(submission.turn_seq, vec![])));
+    let mut reply = t3("Saturday at the lake");
+    reply["dimension_scores"][2]["band"] = json!("4");
+    f.llm.queue_structured(Ok(reply));
+    let feedback = workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    let rubric = feedback.rubric.expect("layer three");
+    assert!(rubric.alarms.is_empty(), "no checker, no X5 alarm");
 }

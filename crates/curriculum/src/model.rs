@@ -1,13 +1,17 @@
-//! Rust types that mirror `curriculum/schema/unit.schema.json` (schema_version 1.0).
-//! The schema is the authority: a unit is validated against it before it is
-//! turned into these types, so deserialising here only ever sees valid shapes.
+//! Rust types that mirror `curriculum/schema/unit.schema.json` field for field.
+//!
+//! Every object the schema closes with `additionalProperties: false` or
+//! `unevaluatedProperties: false` carries `deny_unknown_fields` here, so a field the
+//! schema does not know cannot slip in through serde either. Value limits (lengths,
+//! ranges, patterns) stay in the schema: the loader runs the schema first and only
+//! deserialises a document that passed it.
 
 use serde::{Deserialize, Serialize};
 
-pub type UnitId = String;
-pub type LocalId = String;
-
+/// CEFR level of a unit. The order is the learning order, so `A1 < C2`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum Level {
     A1,
     A2,
@@ -17,8 +21,103 @@ pub enum Level {
     C2,
 }
 
+impl Level {
+    /// Every level in learning order.
+    pub const ALL: [Level; 6] = [
+        Level::A1,
+        Level::A2,
+        Level::B1,
+        Level::B2,
+        Level::C1,
+        Level::C2,
+    ];
+
+    /// Upper-case name as written in unit files, for example `A1`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Level::A1 => "A1",
+            Level::A2 => "A2",
+            Level::B1 => "B1",
+            Level::B2 => "B2",
+            Level::C1 => "C1",
+            Level::C2 => "C2",
+        }
+    }
+
+    /// Lower-case name as used in unit ids and folder names, for example `a1`.
+    pub fn lowercase(self) -> &'static str {
+        match self {
+            Level::A1 => "a1",
+            Level::A2 => "a2",
+            Level::B1 => "b1",
+            Level::B2 => "b2",
+            Level::C1 => "c1",
+            Level::C2 => "c2",
+        }
+    }
+
+    /// Parses `A1` to `C2`, in either case.
+    pub fn parse(text: &str) -> Option<Level> {
+        Level::ALL
+            .into_iter()
+            .find(|level| level.as_str().eq_ignore_ascii_case(text))
+    }
+}
+
+impl std::fmt::Display for Level {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Word-list level of a vocabulary item. `Unlisted` means no word list has the word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub enum LevelTag {
+    A1,
+    A2,
+    B1,
+    B2,
+    C1,
+    C2,
+    #[serde(rename = "unlisted")]
+    Unlisted,
+}
+
+impl LevelTag {
+    /// The CEFR level, or `None` for an unlisted word.
+    pub fn level(self) -> Option<Level> {
+        match self {
+            LevelTag::A1 => Some(Level::A1),
+            LevelTag::A2 => Some(Level::A2),
+            LevelTag::B1 => Some(Level::B1),
+            LevelTag::B2 => Some(Level::B2),
+            LevelTag::C1 => Some(Level::C1),
+            LevelTag::C2 => Some(Level::C2),
+            LevelTag::Unlisted => None,
+        }
+    }
+}
+
+impl From<Level> for LevelTag {
+    fn from(level: Level) -> Self {
+        match level {
+            Level::A1 => LevelTag::A1,
+            Level::A2 => LevelTag::A2,
+            Level::B1 => LevelTag::B1,
+            Level::B2 => LevelTag::B2,
+            Level::C1 => LevelTag::C1,
+            Level::C2 => LevelTag::C2,
+        }
+    }
+}
+
+/// Skill an objective or an activity trains.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum Skill {
     Listening,
     Reading,
@@ -31,41 +130,74 @@ pub enum Skill {
     Pronunciation,
 }
 
-impl Skill {
-    /// The exact text the JSON form uses, and what the database index stores.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Listening => "listening",
-            Self::Reading => "reading",
-            Self::SpeakingProduction => "speaking_production",
-            Self::SpeakingInteraction => "speaking_interaction",
-            Self::Writing => "writing",
-            Self::Mediation => "mediation",
-            Self::Grammar => "grammar",
-            Self::Vocabulary => "vocabulary",
-            Self::Pronunciation => "pronunciation",
-        }
-    }
-}
-
-/// English is always present. Indonesian is required for A1 to B1 by the validators.
+/// English text plus optional Indonesian. The validators require `id` for levels A1 to B1.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Localized {
     pub en: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub id: Option<String>,
 }
 
+/// One authored unit of about 60 learning minutes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub struct Unit {
+    /// Always `1.0` for this schema.
+    pub schema_version: String,
+    pub id: String,
+    pub level: Level,
+    /// Position inside the level, 1 to 30.
+    pub sequence: u8,
+    pub title: Localized,
+    pub theme: String,
+    pub estimated_minutes: u32,
+    pub prerequisites: Vec<String>,
+    pub objectives: Vec<Objective>,
+    pub targets: Targets,
+    pub presentation: Vec<PresentationBlock>,
+    pub dialogues: Vec<Dialogue>,
+    pub activities: Vec<Activity>,
+    pub checkpoint: Checkpoint,
+    pub generation_policy: GenerationPolicy,
+    pub review_items: Vec<ReviewItem>,
+    pub provenance: Provenance,
+}
+
+/// An observable can-do statement tied to a skill.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Objective {
-    pub id: LocalId,
+    pub id: String,
     pub skill: Skill,
     pub can_do: Localized,
+    /// Name of a CEFR scale. A reference only, never descriptor text.
     pub cefr_scale_ref: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// What the unit teaches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub struct Targets {
+    pub vocabulary: Vec<VocabItem>,
+    pub grammar: Vec<GrammarPoint>,
+    pub functions: Vec<String>,
+    pub pronunciation: Vec<PronFocus>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum PartOfSpeech {
     Noun,
     Verb,
@@ -79,59 +211,55 @@ pub enum PartOfSpeech {
     Phrase,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LevelTag {
-    A1,
-    A2,
-    B1,
-    B2,
-    C1,
-    C2,
-    #[serde(rename = "unlisted")]
-    Unlisted,
-}
-
+/// Indonesian gloss of a vocabulary item. The schema has no English field here.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IdGloss {
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub struct Gloss {
     pub id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct VocabItem {
-    pub id: LocalId,
+    pub id: String,
     pub lemma: String,
     pub pos: PartOfSpeech,
     pub level_tag: LevelTag,
-    pub gloss: IdGloss,
+    pub gloss: Gloss,
     pub example: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct GrammarPoint {
-    pub id: LocalId,
+    pub id: String,
     pub name: String,
     pub pattern: String,
     pub note: Localized,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct PronFocus {
-    pub id: LocalId,
+    pub id: String,
     pub focus: String,
+    /// ARPAbet symbols without stress digits, for example `TH`.
     pub phonemes: Vec<String>,
     pub examples: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Targets {
-    pub vocabulary: Vec<VocabItem>,
-    pub grammar: Vec<GrammarPoint>,
-    pub functions: Vec<String>,
-    pub pronunciation: Vec<PronFocus>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum PresentationKind {
     Explanation,
     Tip,
@@ -139,30 +267,44 @@ pub enum PresentationKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct PresentationBlock {
-    pub id: LocalId,
+    pub id: String,
     pub kind: PresentationKind,
     pub text: Localized,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub examples: Vec<Localized>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub examples: Option<Vec<Localized>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct DialogueTurn {
     pub speaker: String,
     pub text: String,
 }
 
+/// A model dialogue, used for listening and shadowing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Dialogue {
-    pub id: LocalId,
+    pub id: String,
     pub title: String,
     pub context: Localized,
     pub turns: Vec<DialogueTurn>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// How an activity is scored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum Scoring {
     Deterministic,
     Rubric,
@@ -170,33 +312,31 @@ pub enum Scoring {
     None,
 }
 
-/// Fields every activity carries.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Common {
-    pub id: LocalId,
-    pub skill: Skill,
-    pub objective_ids: Vec<LocalId>,
-    pub instructions: Localized,
-    /// Optional in the schema: each type fixes its own default.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scoring: Option<Scoring>,
-}
-
+/// Quality band of a model answer. The three bands double as rubric scorer anchors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ModelBand {
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub enum Band {
     Below,
     At,
     Above,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct ModelAnswer {
-    pub band: ModelBand,
+    pub band: Band,
     pub text: String,
 }
 
+/// A multiple-choice question inside a `reading_set` or `listening_set`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Question {
     pub stem: String,
     pub options: Vec<String>,
@@ -205,284 +345,401 @@ pub struct Question {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct MatchPair {
     pub left: String,
     pub right: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct MinimalPair {
     pub a: String,
     pub b: String,
     pub focus: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum MinimalPairsMode {
     ListenChoose,
     SayBoth,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum RoleplayMode {
     Fluency,
     Accuracy,
 }
 
-/// The fields of `act_guided_production`, shared by its two wire names.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GuidedProduction {
-    #[serde(flatten)]
-    pub common: Common,
-    pub prompt: Localized,
-    pub content_points: Vec<String>,
-    pub rubric_id: LocalId,
-    pub model_answers: Vec<ModelAnswer>,
-    pub min_words: u32,
-    pub max_words: u32,
+// The schema builds every activity from `activity_common` plus its own properties and
+// closes it with `unevaluatedProperties: false`. serde cannot combine `flatten` with
+// `deny_unknown_fields`, so this macro writes the common fields into each struct.
+macro_rules! activity_struct {
+    (
+        $(#[$meta:meta])*
+        $name:ident {
+            $( $(#[$field_meta:meta])* $field:ident : $ty:ty ),* $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+        #[serde(deny_unknown_fields)]
+        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+        #[cfg_attr(feature = "ts", ts(export))]
+        pub struct $name {
+            pub id: String,
+            pub skill: Skill,
+            pub objective_ids: Vec<String>,
+            pub instructions: Localized,
+            pub scoring: Scoring,
+            $( $(#[$field_meta])* pub $field: $ty, )*
+        }
+    };
 }
 
-/// One activity. `type` selects the variant, as in the schema.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum Activity {
+activity_struct! {
+    /// Multiple choice with exactly one correct option.
+    /// A `passage` makes it a reading item and an `audio_text` makes it a listening item.
     Mcq {
-        #[serde(flatten)]
-        common: Common,
+        /// Reading text shown above the stem.
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
         passage: Option<String>,
+        /// Text spoken by TTS and not shown.
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
         audio_text: Option<String>,
         stem: String,
         options: Vec<String>,
         answer_index: u8,
         explanation: Localized,
-    },
+    }
+}
+
+activity_struct! {
+    /// A text with `___` gaps and the accepted answers of each gap.
     GapFill {
-        #[serde(flatten)]
-        common: Common,
         text: String,
+        /// One inner list of accepted answers per gap, in order.
         answers: Vec<Vec<String>>,
         explanation: Localized,
-    },
+    }
+}
+
+activity_struct! {
+    /// Tokens to put in order.
     Reorder {
-        #[serde(flatten)]
-        common: Common,
         tokens: Vec<String>,
         answer: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
         explanation: Option<Localized>,
-    },
+    }
+}
+
+activity_struct! {
+    /// Pairs to match.
     Match {
-        #[serde(flatten)]
-        common: Common,
         pairs: Vec<MatchPair>,
-    },
+    }
+}
+
+activity_struct! {
+    /// Listen and type what was said.
     Dictation {
-        #[serde(flatten)]
-        common: Common,
         audio_text: String,
         accepted_answers: Vec<String>,
-    },
+    }
+}
+
+activity_struct! {
+    /// Read a known text aloud. Scored by the pronunciation engine.
     ReadAloud {
-        #[serde(flatten)]
-        common: Common,
         text: String,
         focus_phonemes: Vec<String>,
-    },
+    }
+}
+
+activity_struct! {
+    /// Minimal pairs, heard or said.
     MinimalPairs {
-        #[serde(flatten)]
-        common: Common,
         mode: MinimalPairsMode,
         pairs: Vec<MinimalPair>,
-    },
+    }
+}
+
+activity_struct! {
+    /// Listen to each line of a dialogue and repeat it.
     Shadowing {
-        #[serde(flatten)]
-        common: Common,
-        dialogue_id: LocalId,
-    },
-    GuidedSpeaking(GuidedProduction),
-    GuidedWriting(GuidedProduction),
+        dialogue_id: String,
+    }
+}
+
+activity_struct! {
+    /// A prompted spoken or written production with three model answers.
+    /// `guided_speaking` and `guided_writing` share this shape.
+    GuidedProduction {
+        prompt: Localized,
+        content_points: Vec<String>,
+        rubric_id: String,
+        /// Exactly one answer per band.
+        model_answers: Vec<ModelAnswer>,
+        min_words: u32,
+        max_words: u32,
+    }
+}
+
+activity_struct! {
+    /// A conversation with the tutor in a role.
     Roleplay {
-        #[serde(flatten)]
-        common: Common,
         scenario: Localized,
         tutor_role: String,
         learner_role: String,
         goals: Vec<String>,
-        target_grammar_ids: Vec<LocalId>,
-        target_vocab_ids: Vec<LocalId>,
-        max_turns: u32,
+        target_grammar_ids: Vec<String>,
+        target_vocab_ids: Vec<String>,
+        max_turns: u8,
         mode: RoleplayMode,
-    },
+    }
+}
+
+activity_struct! {
+    /// Relay or reshape a source text for a purpose.
     Mediation {
-        #[serde(flatten)]
-        common: Common,
         source_text: String,
         task: Localized,
-        rubric_id: LocalId,
+        rubric_id: String,
         model_answers: Vec<ModelAnswer>,
-    },
+    }
+}
+
+activity_struct! {
+    /// A passage with several questions.
     ReadingSet {
-        #[serde(flatten)]
-        common: Common,
         passage: String,
         questions: Vec<Question>,
-    },
+    }
+}
+
+activity_struct! {
+    /// TTS audio with several questions. Exactly one of `audio_text` and `dialogue_id` is present.
     ListeningSet {
-        #[serde(flatten)]
-        common: Common,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
         audio_text: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        dialogue_id: Option<LocalId>,
-        replays_allowed: u32,
+        #[cfg_attr(feature = "ts", ts(optional))]
+        dialogue_id: Option<String>,
+        replays_allowed: u8,
         questions: Vec<Question>,
-    },
+    }
+}
+
+activity_struct! {
+    /// Rewrite a sentence that has exactly one mistake.
     ErrorCorrection {
-        #[serde(flatten)]
-        common: Common,
         sentence: String,
         accepted_answers: Vec<String>,
         error_category: String,
         explanation: Localized,
-    },
+    }
+}
+
+/// Every activity type of the schema, tagged by `type`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub enum Activity {
+    Mcq(Mcq),
+    GapFill(GapFill),
+    Reorder(Reorder),
+    Match(Match),
+    Dictation(Dictation),
+    ReadAloud(ReadAloud),
+    MinimalPairs(MinimalPairs),
+    Shadowing(Shadowing),
+    GuidedSpeaking(GuidedProduction),
+    GuidedWriting(GuidedProduction),
+    Roleplay(Roleplay),
+    Mediation(Mediation),
+    ReadingSet(ReadingSet),
+    ListeningSet(ListeningSet),
+    ErrorCorrection(ErrorCorrection),
+}
+
+/// The activity type names as they appear in the `type` field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub enum ActivityType {
+    Mcq,
+    GapFill,
+    Reorder,
+    Match,
+    Dictation,
+    ReadAloud,
+    MinimalPairs,
+    Shadowing,
+    GuidedSpeaking,
+    GuidedWriting,
+    Roleplay,
+    Mediation,
+    ReadingSet,
+    ListeningSet,
+    ErrorCorrection,
+}
+
+impl ActivityType {
+    /// The value of the `type` field.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ActivityType::Mcq => "mcq",
+            ActivityType::GapFill => "gap_fill",
+            ActivityType::Reorder => "reorder",
+            ActivityType::Match => "match",
+            ActivityType::Dictation => "dictation",
+            ActivityType::ReadAloud => "read_aloud",
+            ActivityType::MinimalPairs => "minimal_pairs",
+            ActivityType::Shadowing => "shadowing",
+            ActivityType::GuidedSpeaking => "guided_speaking",
+            ActivityType::GuidedWriting => "guided_writing",
+            ActivityType::Roleplay => "roleplay",
+            ActivityType::Mediation => "mediation",
+            ActivityType::ReadingSet => "reading_set",
+            ActivityType::ListeningSet => "listening_set",
+            ActivityType::ErrorCorrection => "error_correction",
+        }
+    }
+}
+
+/// The fields every activity has, borrowed from whichever variant it is.
+#[derive(Debug, Clone, Copy)]
+pub struct ActivityCommon<'a> {
+    pub id: &'a str,
+    pub activity_type: ActivityType,
+    pub skill: Skill,
+    pub objective_ids: &'a [String],
+    pub instructions: &'a Localized,
+    pub scoring: Scoring,
 }
 
 impl Activity {
-    pub fn common(&self) -> &Common {
+    /// The common fields, whatever the variant.
+    pub fn common(&self) -> ActivityCommon<'_> {
+        macro_rules! common {
+            ($a:expr, $t:expr) => {
+                ActivityCommon {
+                    id: &$a.id,
+                    activity_type: $t,
+                    skill: $a.skill,
+                    objective_ids: &$a.objective_ids,
+                    instructions: &$a.instructions,
+                    scoring: $a.scoring,
+                }
+            };
+        }
         match self {
-            Self::GuidedSpeaking(g) | Self::GuidedWriting(g) => &g.common,
-            Self::Mcq { common, .. }
-            | Self::GapFill { common, .. }
-            | Self::Reorder { common, .. }
-            | Self::Match { common, .. }
-            | Self::Dictation { common, .. }
-            | Self::ReadAloud { common, .. }
-            | Self::MinimalPairs { common, .. }
-            | Self::Shadowing { common, .. }
-            | Self::Roleplay { common, .. }
-            | Self::Mediation { common, .. }
-            | Self::ReadingSet { common, .. }
-            | Self::ListeningSet { common, .. }
-            | Self::ErrorCorrection { common, .. } => common,
+            Activity::Mcq(a) => common!(a, ActivityType::Mcq),
+            Activity::GapFill(a) => common!(a, ActivityType::GapFill),
+            Activity::Reorder(a) => common!(a, ActivityType::Reorder),
+            Activity::Match(a) => common!(a, ActivityType::Match),
+            Activity::Dictation(a) => common!(a, ActivityType::Dictation),
+            Activity::ReadAloud(a) => common!(a, ActivityType::ReadAloud),
+            Activity::MinimalPairs(a) => common!(a, ActivityType::MinimalPairs),
+            Activity::Shadowing(a) => common!(a, ActivityType::Shadowing),
+            Activity::GuidedSpeaking(a) => common!(a, ActivityType::GuidedSpeaking),
+            Activity::GuidedWriting(a) => common!(a, ActivityType::GuidedWriting),
+            Activity::Roleplay(a) => common!(a, ActivityType::Roleplay),
+            Activity::Mediation(a) => common!(a, ActivityType::Mediation),
+            Activity::ReadingSet(a) => common!(a, ActivityType::ReadingSet),
+            Activity::ListeningSet(a) => common!(a, ActivityType::ListeningSet),
+            Activity::ErrorCorrection(a) => common!(a, ActivityType::ErrorCorrection),
         }
     }
 
-    /// The `type` text of the unit format, exactly as the schema writes it.
-    /// The attempt rows store this as `activity_type`.
-    pub const fn type_str(&self) -> &'static str {
-        match self {
-            Self::Mcq { .. } => "mcq",
-            Self::GapFill { .. } => "gap_fill",
-            Self::Reorder { .. } => "reorder",
-            Self::Match { .. } => "match",
-            Self::Dictation { .. } => "dictation",
-            Self::ReadAloud { .. } => "read_aloud",
-            Self::MinimalPairs { .. } => "minimal_pairs",
-            Self::Shadowing { .. } => "shadowing",
-            Self::GuidedSpeaking(_) => "guided_speaking",
-            Self::GuidedWriting(_) => "guided_writing",
-            Self::Roleplay { .. } => "roleplay",
-            Self::Mediation { .. } => "mediation",
-            Self::ReadingSet { .. } => "reading_set",
-            Self::ListeningSet { .. } => "listening_set",
-            Self::ErrorCorrection { .. } => "error_correction",
-        }
+    pub fn id(&self) -> &str {
+        self.common().id
     }
 
-    /// The dimension an attempt for this activity is filed under
-    /// (ASSESSMENT_SPEC section 2). An `mcq` counts by what it exercises: audio
-    /// makes it listening, a passage makes it reading, and otherwise the
-    /// authored skill decides between listening, reading, vocabulary and
-    /// grammar. `spoken` tells a `mediation` how it was answered; every other
-    /// type ignores it. Grammar, vocabulary and pronunciation are the
-    /// supporting dimensions: they are shown as mastery and never with a CEFR
-    /// label.
-    pub fn evidence_skill(&self, spoken: bool) -> &'static str {
-        match self {
-            Self::Mcq {
-                audio_text,
-                passage,
-                common,
-                ..
-            } => {
-                if audio_text.is_some() {
-                    "listening"
-                } else if passage.is_some() {
-                    "reading"
-                } else {
-                    match common.skill {
-                        Skill::Listening => "listening",
-                        Skill::Reading => "reading",
-                        Skill::Vocabulary => "vocabulary",
-                        _ => "grammar",
-                    }
-                }
-            }
-            Self::GapFill { .. } | Self::Reorder { .. } => "grammar",
-            Self::Match { .. } => "vocabulary",
-            Self::Dictation { .. } | Self::ListeningSet { .. } => "listening",
-            Self::MinimalPairs { mode, .. } => match mode {
-                MinimalPairsMode::ListenChoose => "listening",
-                MinimalPairsMode::SayBoth => "pronunciation",
-            },
-            Self::ReadingSet { .. } => "reading",
-            Self::ErrorCorrection { .. } | Self::GuidedWriting(_) => "writing",
-            Self::GuidedSpeaking(_) | Self::Roleplay { .. } => "speaking",
-            Self::Mediation { .. } => {
-                if spoken {
-                    "speaking"
-                } else {
-                    "writing"
-                }
-            }
-            Self::ReadAloud { .. } | Self::Shadowing { .. } => "pronunciation",
-        }
+    pub fn activity_type(&self) -> ActivityType {
+        self.common().activity_type
+    }
+
+    pub fn skill(&self) -> Skill {
+        self.common().skill
     }
 }
 
+/// The scored subset of activities that decides whether the unit is passed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Checkpoint {
     pub pass_score: f64,
-    pub activity_ids: Vec<LocalId>,
+    pub activity_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Item types the runtime model may generate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum GeneratedType {
     Mcq,
     GapFill,
     Reorder,
 }
 
+/// Limits for extra practice generated at run time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct GenerationPolicy {
     pub allowed_types: Vec<GeneratedType>,
-    pub max_items_per_session: u32,
+    pub max_items_per_session: u8,
     pub max_level: Level,
-    pub allowed_grammar_ids: Vec<LocalId>,
+    pub allowed_grammar_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum ReviewKind {
     Vocab,
     Grammar,
     Pron,
 }
 
+/// A target that enters spaced repetition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ReviewItemRef {
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub struct ReviewItem {
     pub kind: ReviewKind,
-    #[serde(rename = "ref")]
-    pub target: LocalId,
+    pub r#ref: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// How far a unit was checked. Only the owner sets the two human values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum ReviewStatus {
     Unreviewed,
     CriticPassed,
@@ -491,211 +748,19 @@ pub enum ReviewStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Provenance {
     pub authored_by: String,
     pub authoring_model: String,
     pub review_status: ReviewStatus,
+    /// Semantic version of this unit's content.
     pub content_version: String,
     pub sources: Vec<String>,
+    /// Date of the last change, `YYYY-MM-DD`.
     pub updated: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub notes: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Unit {
-    pub schema_version: String,
-    pub id: UnitId,
-    pub level: Level,
-    pub sequence: u32,
-    pub title: Localized,
-    pub theme: String,
-    pub estimated_minutes: u32,
-    pub prerequisites: Vec<UnitId>,
-    pub objectives: Vec<Objective>,
-    pub targets: Targets,
-    pub presentation: Vec<PresentationBlock>,
-    pub dialogues: Vec<Dialogue>,
-    pub activities: Vec<Activity>,
-    pub checkpoint: Checkpoint,
-    pub generation_policy: GenerationPolicy,
-    pub review_items: Vec<ReviewItemRef>,
-    pub provenance: Provenance,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::UnitLoader;
-
-    const EXAMPLE: &str = include_str!("../../../curriculum/examples/a1-u01.example.json");
-
-    // Helper for the tests below; clippy.toml only exempts `#[test]` bodies.
-    #[allow(clippy::unwrap_used)]
-    fn example() -> Unit {
-        UnitLoader::new().load_str(EXAMPLE).unwrap()
-    }
-
-    #[allow(clippy::unwrap_used)]
-    fn activity(id: &str) -> Activity {
-        example()
-            .activities
-            .into_iter()
-            .find(|a| a.common().id == id)
-            .unwrap()
-    }
-
-    #[test]
-    fn every_activity_type_of_the_example_unit_names_its_schema_text() {
-        let unit = example();
-        let named: Vec<&str> = unit.activities.iter().map(Activity::type_str).collect();
-        // The fifteen schema types, as the example unit uses them.
-        assert_eq!(
-            named,
-            [
-                "mcq",
-                "mcq",
-                "gap_fill",
-                "reorder",
-                "match",
-                "dictation",
-                "read_aloud",
-                "minimal_pairs",
-                "shadowing",
-                "guided_speaking",
-                "roleplay",
-                "guided_writing",
-                "mcq",
-                "reading_set",
-                "listening_set",
-                "error_correction",
-                "error_correction",
-            ]
-        );
-        // The two wire names of guided production are distinct.
-        assert_ne!(
-            Activity::GuidedSpeaking(GuidedProduction {
-                common: Common {
-                    id: "x".to_owned(),
-                    skill: Skill::SpeakingProduction,
-                    objective_ids: Vec::new(),
-                    instructions: Localized {
-                        en: String::new(),
-                        id: None,
-                    },
-                    scoring: Some(Scoring::Rubric),
-                },
-                prompt: Localized {
-                    en: String::new(),
-                    id: None,
-                },
-                content_points: Vec::new(),
-                rubric_id: "r".to_owned(),
-                model_answers: Vec::new(),
-                min_words: 1,
-                max_words: 2,
-            })
-            .type_str(),
-            "guided_writing"
-        );
-    }
-
-    #[test]
-    fn the_evidence_dimension_follows_the_spec_table() {
-        // An mcq counts by what it exercises.
-        assert_eq!(
-            activity("a01-listen-question").evidence_skill(false),
-            "listening"
-        );
-        assert_eq!(activity("a13-read-budi").evidence_skill(false), "reading");
-        assert_eq!(
-            activity("a02-greeting-by-time").evidence_skill(false),
-            "vocabulary"
-        );
-        // The spec's table, one row each.
-        assert_eq!(activity("a03-gap-am").evidence_skill(false), "grammar");
-        assert_eq!(
-            activity("a04-reorder-name").evidence_skill(false),
-            "grammar"
-        );
-        assert_eq!(
-            activity("a05-match-phrases").evidence_skill(false),
-            "vocabulary"
-        );
-        assert_eq!(
-            activity("a06-dictation-from").evidence_skill(false),
-            "listening"
-        );
-        assert_eq!(activity("a08-pairs-th").evidence_skill(false), "listening");
-        assert_eq!(
-            activity("a14-read-set-class-chat").evidence_skill(false),
-            "reading"
-        );
-        assert_eq!(
-            activity("a15-listen-set-putu").evidence_skill(false),
-            "listening"
-        );
-        assert_eq!(
-            activity("a16-fix-missing-am").evidence_skill(false),
-            "writing"
-        );
-        assert_eq!(
-            activity("a10-speak-introduce").evidence_skill(false),
-            "speaking"
-        );
-        assert_eq!(
-            activity("a11-roleplay-classmate").evidence_skill(false),
-            "speaking"
-        );
-        assert_eq!(
-            activity("a12-write-introduce").evidence_skill(false),
-            "writing"
-        );
-        assert_eq!(
-            activity("a07-read-aloud-thanks").evidence_skill(false),
-            "pronunciation"
-        );
-        assert_eq!(
-            activity("a09-shadow-dialogue").evidence_skill(false),
-            "pronunciation"
-        );
-    }
-
-    #[test]
-    fn a_mediation_takes_the_skill_of_the_way_it_was_answered() {
-        // A mediation is built directly: the example unit has none.
-        let common = Common {
-            id: "m1".to_owned(),
-            skill: Skill::Mediation,
-            objective_ids: Vec::new(),
-            instructions: Localized {
-                en: String::new(),
-                id: None,
-            },
-            scoring: Some(Scoring::Rubric),
-        };
-        let mediation = Activity::Mediation {
-            common,
-            source_text: String::new(),
-            task: Localized {
-                en: String::new(),
-                id: None,
-            },
-            rubric_id: "r".to_owned(),
-            model_answers: Vec::new(),
-        };
-        assert_eq!(mediation.evidence_skill(true), "speaking");
-        assert_eq!(mediation.evidence_skill(false), "writing");
-    }
-
-    #[test]
-    fn a_minimal_pairs_drill_in_say_mode_is_pronunciation_evidence() {
-        let mut say = activity("a08-pairs-th");
-        if let Activity::MinimalPairs { mode, .. } = &mut say {
-            *mode = MinimalPairsMode::SayBoth;
-        } else {
-            panic!("a08 is minimal pairs");
-        }
-        assert_eq!(say.evidence_skill(false), "pronunciation");
-    }
 }

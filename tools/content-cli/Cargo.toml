@@ -5,14 +5,22 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Validates Lumingo curriculum units and prints a report"
+description = "Validates Lumingo curriculum units and catalogs"
+
+[[bin]]
+name = "content-cli"
+path = "src/main.rs"
+
+[lib]
+name = "content_cli"
+path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1"
-# The real W03 checker (harper-core through its `grammar` feature, default on).
-# An internal path dependency; harper-core itself is already in the register.
-assessment-engine = { path = "../../crates/assessment-engine" }
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
 curriculum = { path = "../../crates/curriculum" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 
 [lints]
 workspace = true

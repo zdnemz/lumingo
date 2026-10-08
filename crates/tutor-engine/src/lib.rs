@@ -1,58 +1,62 @@
-//! Tutoring logic: the session state machine, the events for the UI, the
-//! streamed tutor reply, the T1 prompt and the free modes (`context_pack.md`
-//! section 9, `PROMPT_CONTRACTS.md` call type T1).
-//!
-//! The crate is pure logic plus one streamed call. It owns no engines, no
-//! database and no HTTP: the caller applies learner-side events to the
-//! [`Session`], builds a request from a [`TutorContext`], and drives one reply
-//! with [`run_reply`]. Tests drive the same paths with a scripted
-//! [`LlmClient`]; a fake engine never exists in a release build.
+//! Tutoring logic. Handlers in `apps/server` call into this crate and never
+//! contain tutoring, scoring or prompt logic themselves.
 #![forbid(unsafe_code)]
 
+mod activity;
 mod analysis;
 mod chat;
 mod chunker;
-mod event;
-mod llm;
+mod drafts;
+mod error;
+mod evidence;
+mod no_provider;
+mod practice;
 mod prompt;
+mod reading;
+mod review;
+mod rubric;
 mod session;
+mod support;
 mod topics;
-mod turn;
-mod unit;
 mod workshop;
 
-pub use analysis::{
-    ActivityError, AnalysisCadence, AnalysisFailure, AnalysisInput, AnalysisOutcome, AnalysisTurn,
-    BATCH_SIZE, CONVERSATION_ERROR_CAP, DRAFT_ERROR_CAP, DropCounts, ErrorFinding,
-    FilteredAnalysis, InputMode, NotesForNextTurn, ObjectiveEvidence, ObjectivePair,
-    ReliabilityWindow, TURN_ANALYSIS_VERSION, TurnAnalysisEntry, analysis_request,
-    analysis_system_prompt, filter_output, run_analysis,
-};
+pub use activity::*;
+pub use analysis::*;
 pub use chat::{
-    CHAT_ATTEMPT_SCORER_VERSION, Chat, ChatAttempt, ChatConfig, ChatError, ChatSummary, ChatTopic,
-    ChatTurn, ErrorPattern, MAX_TOPIC_CHARS, SummarisedTurn, clean_topic, session_summary,
+    ChatConfig, ChatDeps, ChatObserver, ChatReply, ChatSummary, ChatTopic, ErrorPattern,
+    MAX_TOPIC_CHARS, ReplyOutcome, TextChat, UnitRoleplay, clean_topic, session_summary,
 };
 pub use chunker::SentenceChunker;
-pub use event::UiEvent;
-pub use llm::{LlmClient, TextStream};
+pub use drafts::{DraftComparison, DraftError, EarlierError, Resolution, compare_drafts};
+pub use error::{EngineError, Result};
+pub use evidence::{
+    CONFIDENCE_FLOOR, DeterministicRecord, EngineRole, EngineStamp, EvidenceRecorder,
+    PRON_ALGORITHM_VERSION, PRON_CONFIDENCE_CAP, PronRecord, RECORDER_VERSION, Recorded,
+    RubricMeta, Subject, counts_toward_estimate, rubric_scorer_version,
+};
+pub use no_provider::NoProvider;
+pub use practice::*;
 pub use prompt::{
-    FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, MAX_NOTES, OPENING_INSTRUCTION,
-    PronFinding, ReplyLimits, ScenarioError, T1_TEMPERATURE, TUTOR_TURN_VERSION, TutorContext,
-    activity_target_language, bounded_history, opening_request, reply_limits, system_prompt,
-    text_request, user_message,
+    FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, MAX_NOTES, PronFinding, ReplyLimits,
+    TUTOR_TURN_VERSION, TutorContext, bounded_history, reply_limits, system_prompt, user_message,
+};
+pub use reading::*;
+pub use review::{Grade, ReviewState, due_order, update_mastery};
+pub use rubric::{
+    Alarm, BacklogReport, CatalogRubric, CheckedRun, ConfidenceInputs, CrossCheck, CurriculumWords,
+    Dimension, DimensionResult, DimensionStatus, InputMode as RubricInputMode, MAX_BAND_GAP,
+    MAX_FEEDBACK_WORDS, MAX_OUTPUT_TRIES, PENDING_KIND as RUBRIC_PENDING_KIND, PointResult,
+    RUBRIC_ALGORITHM_VERSION, RUBRIC_SCORE_VERSION, RawDimension, RawPoint, RawRubric,
+    RubricCatalog, RubricCatalogError, RubricDimension, RubricOutcome, RubricResult, RubricScorer,
+    Runs, ScoreRequest, ScoreResult, ScoredDimension, ScorerEnv, TaskFamily, WorkshopRubric,
+    WorkshopTask, cross_check, merge_rerun, rubric_confidence,
+    system_prompt as rubric_system_prompt, user_message as rubric_user_message,
 };
 pub use session::{
     Channel, EndReason, EngineFault, Event, Phase, Session, SessionKind, TransitionError, TurnState,
 };
-pub use topics::{ConversationTopic, LevelBank, ReadingTopic, TopicBank, WritingPrompt};
-pub use turn::{ReplyOutcome, ReplyReport, run_reply};
-pub use unit::{
-    CheckpointReport, CheckpointRow, PENDING_SCORER_VERSION, PRODUCTION_PENDING_VERSION,
-    PendingProduction, StoredAttempt, Submission, SubmissionOutcome, SubmitError,
-    checkpoint_report, submit,
+pub use support::{Clock, system_clock};
+pub use topics::{
+    ConversationTopic, LevelBank, LocalizedText, ReadingTopic, TopicBank, WritingPrompt,
 };
-pub use workshop::{
-    DRAFT_PENDING_VERSION, DraftAttempt, DraftComparison, DraftError, DraftPending, DraftRun,
-    DraftSource, DraftSubmission, EarlierError, Resolution, RuleChecker, RuleFinding, RuleReport,
-    WORKSHOP_ATTEMPT_SCORER_VERSION, Workshop, WorkshopConfig, WorkshopError, compare_drafts,
-};
+pub use workshop::*;

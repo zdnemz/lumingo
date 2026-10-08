@@ -1,207 +1,480 @@
-//! `openai_chat` (PROMPT_CONTRACTS 3.1).
+//! The `openai_chat` adapter (`docs/PROMPT_CONTRACTS.md` section 3.1).
+//!
+//! Compatibility quirks are handled here and remembered in the shared
+//! capabilities, so each one costs at most one failed request per profile:
+//! the token limit parameter name, a rejected `temperature`, a rejected
+//! `stream_options`, keep-alive comments, empty or null deltas, a missing
+//! `[DONE]`, and reasoning text in fields other than `content`.
 
-use crate::{FinishReason, ParseError, SseEvent, StreamEvent, TextRequest, Usage};
-use serde_json::{Value, json};
+use async_trait::async_trait;
+use futures_util::StreamExt;
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
+use serde_json::{Map, Value, json};
+use tokio_util::sync::CancellationToken;
 
-/// Servers disagree on the token-limit parameter name. The caller tries one and
-/// switches on an HTTP 400 that names it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum TokenParam {
-    #[default]
-    MaxTokens,
-    MaxCompletionTokens,
+use crate::adapter::{
+    AdapterConfig, Completion, CompletionRequest, Format, ProtocolAdapter, endpoint_url,
+};
+use crate::error::LlmError;
+use crate::http::map_reqwest_error;
+use crate::inspector::{PayloadLog, PayloadOutcome};
+use crate::profile::Protocol;
+use crate::redact::sanitize_message;
+use crate::sse::SseEvent;
+use crate::stream::{Decoded, EventDecoder, StreamGuards, sse_text_stream};
+use crate::transport::{CallBudget, Posted, Transport, rate_limit_from_headers, read_reply};
+use crate::types::{
+    ChatMessage, FinishReason, RateLimit, Role, TextRequest, TextStream, TokenLimitParam, Usage,
+};
+
+/// How many times one call may adjust itself to a server quirk before giving up.
+const MAX_ADJUSTMENTS: usize = 4;
+
+#[derive(Debug)]
+pub struct OpenAiChat {
+    config: AdapterConfig,
+    transport: Transport,
 }
 
-impl TokenParam {
-    pub(crate) fn key(self) -> &'static str {
-        match self {
-            Self::MaxTokens => "max_tokens",
-            Self::MaxCompletionTokens => "max_completion_tokens",
+#[derive(Debug, Clone, Copy)]
+struct Quirks {
+    token_param: TokenLimitParam,
+    temperature: bool,
+    stream_usage: bool,
+}
+
+impl OpenAiChat {
+    /// `config.base_url` is used as given; `/chat/completions` is appended.
+    pub fn new(config: AdapterConfig) -> Result<Self, LlmError> {
+        let url = endpoint_url(&config.base_url, "chat/completions")?;
+        let mut headers = HeaderMap::new();
+        if let Some(key) = &config.key {
+            let mut value =
+                HeaderValue::from_str(&format!("Bearer {}", key.expose())).map_err(|_| {
+                    LlmError::InvalidRequest("the key cannot be sent as an HTTP header".to_owned())
+                })?;
+            value.set_sensitive(true);
+            headers.insert(AUTHORIZATION, value);
+        }
+        let transport = Transport::new(
+            config.http.clone(),
+            url,
+            headers,
+            config.key.clone(),
+            config.options.retry,
+        );
+        Ok(Self { config, transport })
+    }
+
+    /// Records every request and response of this adapter in `log`, for the
+    /// payload inspector.
+    #[must_use]
+    pub fn with_payload_log(mut self, log: PayloadLog) -> Self {
+        self.transport = self.transport.with_log(log);
+        self
+    }
+
+    fn quirks(&self) -> Quirks {
+        let caps = self.config.caps.snapshot();
+        Quirks {
+            token_param: caps.token_limit_param,
+            temperature: caps.supports_temperature,
+            stream_usage: caps.supports_usage_in_stream,
         }
     }
 
-    pub fn other(self) -> Self {
-        match self {
-            Self::MaxTokens => Self::MaxCompletionTokens,
-            Self::MaxCompletionTokens => Self::MaxTokens,
+    /// Sends the request, adjusting to a quirk when the server answers HTTP 400 and
+    /// names the parameter. The adjustment is stored only after a request with it
+    /// succeeded, so a 400 about something else cannot corrupt the cached quirks.
+    async fn send(
+        &self,
+        request: &CompletionRequest<'_>,
+        stream: bool,
+        budget: &CallBudget,
+        cancel: &CancellationToken,
+    ) -> Result<Posted, LlmError> {
+        let before = self.quirks();
+        let mut quirks = before;
+        let mut flipped_token_param = false;
+        for _ in 0..MAX_ADJUSTMENTS {
+            let body = build_body(&self.config.model, request, stream, quirks);
+            match self.transport.post(&body, stream, budget, cancel).await {
+                Ok(response) => {
+                    self.remember(before, quirks);
+                    return Ok(response);
+                }
+                Err(LlmError::Rejected {
+                    status,
+                    message,
+                    param,
+                }) => {
+                    let named =
+                        |name: &str| message.contains(name) || param.as_deref() == Some(name);
+                    if request.temperature.is_some() && quirks.temperature && named("temperature") {
+                        quirks.temperature = false;
+                    } else if stream
+                        && quirks.stream_usage
+                        && (named("stream_options") || named("include_usage"))
+                    {
+                        quirks.stream_usage = false;
+                    } else if !flipped_token_param && named(quirks.token_param.wire_name()) {
+                        quirks.token_param = quirks.token_param.other();
+                        flipped_token_param = true;
+                    } else {
+                        return Err(LlmError::Rejected {
+                            status,
+                            message,
+                            param,
+                        });
+                    }
+                    tracing::debug!(
+                        target: "llm_client::openai",
+                        "the server rejected a request parameter; retrying with an adjusted request"
+                    );
+                }
+                Err(other) => return Err(other),
+            }
+        }
+        Err(LlmError::Protocol(
+            "the provider kept rejecting the adjusted request".to_owned(),
+        ))
+    }
+
+    fn remember(&self, before: Quirks, after: Quirks) {
+        if before.token_param == after.token_param
+            && before.temperature == after.temperature
+            && before.stream_usage == after.stream_usage
+        {
+            return;
+        }
+        self.config.caps.update(|caps| {
+            caps.token_limit_param = after.token_param;
+            caps.supports_temperature = after.temperature;
+            caps.supports_usage_in_stream = after.stream_usage;
+        });
+    }
+}
+
+fn role_name(role: Role) -> &'static str {
+    match role {
+        Role::User => "user",
+        Role::Assistant => "assistant",
+    }
+}
+
+/// `serde_json` would widen an `f32` such as 0.7 to 0.699999988079071. Going through
+/// the decimal text keeps the number the caller wrote.
+pub(crate) fn temperature_value(temperature: f32) -> Value {
+    temperature
+        .to_string()
+        .parse::<f64>()
+        .ok()
+        .and_then(serde_json::Number::from_f64)
+        .map_or(Value::Null, Value::Number)
+}
+
+fn build_body(model: &str, request: &CompletionRequest<'_>, stream: bool, quirks: Quirks) -> Value {
+    let mut messages: Vec<Value> = Vec::with_capacity(request.messages.len() + 1);
+    if !request.system.is_empty() {
+        messages.push(json!({ "role": "system", "content": request.system }));
+    }
+    messages.extend(request.messages.iter().map(
+        |ChatMessage { role, content }| json!({ "role": role_name(*role), "content": content }),
+    ));
+
+    let mut body = Map::new();
+    body.insert("model".to_owned(), json!(model));
+    body.insert("messages".to_owned(), Value::Array(messages));
+    body.insert("stream".to_owned(), json!(stream));
+    body.insert(
+        quirks.token_param.wire_name().to_owned(),
+        json!(request.max_tokens),
+    );
+    if let Some(temperature) = request.temperature.filter(|_| quirks.temperature) {
+        body.insert("temperature".to_owned(), temperature_value(temperature));
+    }
+    if stream && quirks.stream_usage {
+        body.insert(
+            "stream_options".to_owned(),
+            json!({ "include_usage": true }),
+        );
+    }
+    match request.format {
+        Format::Plain => {}
+        Format::JsonMode => {
+            body.insert(
+                "response_format".to_owned(),
+                json!({ "type": "json_object" }),
+            );
+        }
+        Format::NativeSchema(schema) => {
+            body.insert(
+                "response_format".to_owned(),
+                json!({
+                    "type": "json_schema",
+                    "json_schema": { "name": schema.name, "strict": true, "schema": schema.schema }
+                }),
+            );
+        }
+        Format::ForcedTool(schema) => {
+            body.insert(
+                "tools".to_owned(),
+                json!([{
+                    "type": "function",
+                    "function": { "name": schema.name, "parameters": schema.schema }
+                }]),
+            );
+            body.insert(
+                "tool_choice".to_owned(),
+                json!({ "type": "function", "function": { "name": schema.name } }),
+            );
         }
     }
+    Value::Object(body)
 }
 
-/// Body for `POST {base_url}/chat/completions`, streaming. `include_usage` asks for
-/// token counts and is dropped when the server rejects it.
-pub fn request_body(req: &TextRequest, token_param: TokenParam, include_usage: bool) -> Value {
-    let system = req
-        .system
-        .iter()
-        .map(|s| json!({ "role": "system", "content": s }));
-    let turns = req
-        .messages
-        .iter()
-        .map(|m| json!({ "role": m.role.as_str(), "content": m.content }));
-    let mut body = json!({
-        "model": req.model,
-        "messages": system.chain(turns).collect::<Vec<_>>(),
-        "stream": true,
-    });
-    body[token_param.key()] = json!(req.max_tokens);
-    if let Some(t) = req.temperature {
-        body["temperature"] = json!(t);
+fn map_finish(reason: &str) -> FinishReason {
+    match reason {
+        "stop" => FinishReason::Stop,
+        "length" => FinishReason::Length,
+        "content_filter" => FinishReason::Refusal,
+        "tool_calls" | "function_call" => FinishReason::ToolCalls,
+        other => FinishReason::Other(other.to_owned()),
     }
-    if include_usage {
-        body["stream_options"] = json!({ "include_usage": true });
-    }
-    body
 }
 
-/// Turns one SSE event into zero or more stream events. `[DONE]`, empty and null
-/// deltas, and every field other than `content` (reasoning text included) yield nothing.
-pub fn parse_event(event: &SseEvent) -> Result<Vec<StreamEvent>, ParseError> {
-    let data = event.data.trim();
-    if data == "[DONE]" {
-        return Ok(Vec::new());
+fn token_count(value: Option<&Value>) -> Option<u32> {
+    value
+        .and_then(Value::as_u64)
+        .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+}
+
+fn parse_usage(value: &Value) -> Option<Usage> {
+    let usage = value.as_object()?;
+    let parsed = Usage {
+        input_tokens: token_count(usage.get("prompt_tokens")),
+        output_tokens: token_count(usage.get("completion_tokens")),
+    };
+    (parsed.input_tokens.is_some() || parsed.output_tokens.is_some()).then_some(parsed)
+}
+
+/// `content` is a string on almost every server and an array of typed parts on a few.
+fn content_text(content: &Value) -> String {
+    match content {
+        Value::String(text) => text.clone(),
+        Value::Array(parts) => parts
+            .iter()
+            .filter_map(|part| part.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join(""),
+        _ => String::new(),
     }
-    let v: Value = serde_json::from_str(data).map_err(|_| ParseError::InvalidJson)?;
-    if let Some(err) = v.get("error") {
-        let msg = err
+}
+
+fn error_object_message(error: &Value) -> String {
+    match error {
+        Value::String(text) => text.clone(),
+        other => other
             .get("message")
             .and_then(Value::as_str)
-            .unwrap_or("provider error");
-        return Ok(vec![StreamEvent::Error(msg.to_owned())]);
+            .unwrap_or("unspecified error")
+            .to_owned(),
     }
-    let mut out = Vec::new();
-    if let Some(choice) = v.get("choices").and_then(|c| c.get(0)) {
-        if let Some(text) = choice
-            .pointer("/delta/content")
+}
+
+#[derive(Debug, Default)]
+struct OpenAiDecoder {
+    refusal: bool,
+}
+
+impl EventDecoder for OpenAiDecoder {
+    fn decode(&mut self, event: &SseEvent) -> Result<Vec<Decoded>, LlmError> {
+        let data = event.data.trim();
+        if data == "[DONE]" {
+            let mut out = Vec::new();
+            if self.refusal {
+                out.push(Decoded::Finish(FinishReason::Refusal));
+            }
+            out.push(Decoded::End);
+            return Ok(out);
+        }
+        let chunk: Value = serde_json::from_str(data)
+            .map_err(|_| LlmError::Protocol("a stream chunk was not valid JSON".to_owned()))?;
+        if let Some(error) = chunk.get("error").filter(|e| !e.is_null()) {
+            return Err(LlmError::Stream {
+                message: error_object_message(error),
+            });
+        }
+        let mut out = Vec::new();
+        if let Some(usage) = chunk.get("usage").and_then(parse_usage) {
+            out.push(Decoded::Usage(usage));
+        }
+        // `choices` is empty in usage-only chunks and in some providers' first chunk.
+        let Some(choice) = chunk.get("choices").and_then(|c| c.get(0)) else {
+            return Ok(out);
+        };
+        let delta = choice.get("delta");
+        if let Some(text) = delta.and_then(|d| d.get("content")).and_then(Value::as_str) {
+            out.push(Decoded::Delta(text.to_owned()));
+        }
+        if delta
+            .and_then(|d| d.get("refusal"))
             .and_then(Value::as_str)
-            .filter(|t| !t.is_empty())
+            .is_some_and(|text| !text.is_empty())
         {
-            out.push(StreamEvent::Text(text.to_owned()));
+            self.refusal = true;
         }
         if let Some(reason) = choice.get("finish_reason").and_then(Value::as_str) {
-            out.push(StreamEvent::Finished(match reason {
-                "stop" => FinishReason::Stop,
-                "length" => FinishReason::Length,
-                "content_filter" => FinishReason::Refusal,
-                other => FinishReason::Other(other.to_owned()),
-            }));
+            let finish = if self.refusal {
+                FinishReason::Refusal
+            } else {
+                map_finish(reason)
+            };
+            out.push(Decoded::Finish(finish));
         }
+        Ok(out)
     }
-    if let Some(u) = v.get("usage").filter(|u| !u.is_null()) {
-        out.push(StreamEvent::Usage(Usage {
-            input_tokens: u.get("prompt_tokens").and_then(Value::as_u64),
-            output_tokens: u.get("completion_tokens").and_then(Value::as_u64),
-        }));
+
+    fn on_close(&mut self, finish_seen: bool) -> Result<Option<FinishReason>, LlmError> {
+        // Closing without `[DONE]` is allowed by the contract; a refusal that never got
+        // a finish chunk is still a refusal.
+        Ok((self.refusal && !finish_seen).then_some(FinishReason::Refusal))
     }
-    Ok(out)
+}
+
+fn parse_completion(
+    body: &[u8],
+    format: &Format<'_>,
+    key: Option<&str>,
+) -> Result<Completion, LlmError> {
+    let reply: Value = serde_json::from_slice(body)
+        .map_err(|_| LlmError::Protocol("the reply was not valid JSON".to_owned()))?;
+    let Some(choice) = reply.get("choices").and_then(|c| c.get(0)) else {
+        return Err(match reply.get("error").filter(|e| !e.is_null()) {
+            Some(error) => LlmError::Protocol(format!(
+                "the provider answered HTTP 200 with an error: {}",
+                sanitize_message(&error_object_message(error), key)
+            )),
+            None => LlmError::Protocol("the reply has no choices".to_owned()),
+        });
+    };
+    let message = choice.get("message").unwrap_or(&Value::Null);
+    if message
+        .get("refusal")
+        .and_then(Value::as_str)
+        .is_some_and(|text| !text.is_empty())
+    {
+        return Err(LlmError::Refusal);
+    }
+    let finish = choice
+        .get("finish_reason")
+        .and_then(Value::as_str)
+        .map_or(FinishReason::Unspecified, map_finish);
+    if finish == FinishReason::Refusal {
+        return Err(LlmError::Refusal);
+    }
+    let tool_arguments = matches!(format, Format::ForcedTool(_))
+        .then(|| {
+            message
+                .get("tool_calls")
+                .and_then(|calls| calls.get(0))
+                .and_then(|call| call.get("function"))
+                .and_then(|function| function.get("arguments"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .flatten();
+    let text = tool_arguments
+        .unwrap_or_else(|| message.get("content").map(content_text).unwrap_or_default());
+    Ok(Completion {
+        text,
+        finish,
+        usage: reply.get("usage").and_then(parse_usage),
+        rate_limit: RateLimit::default(),
+    })
+}
+
+#[async_trait]
+impl ProtocolAdapter for OpenAiChat {
+    fn protocol(&self) -> Protocol {
+        Protocol::OpenAiChat
+    }
+
+    async fn stream_text(
+        &self,
+        request: &TextRequest,
+        cancel: &CancellationToken,
+    ) -> Result<TextStream, LlmError> {
+        let budget = CallBudget::start(&self.config.options.tutor);
+        let completion_request = CompletionRequest {
+            system: &request.system,
+            messages: &request.messages,
+            max_tokens: request.max_tokens,
+            temperature: request.temperature,
+            format: Format::Plain,
+        };
+        let Posted { response, capture } = self
+            .send(&completion_request, true, &budget, cancel)
+            .await?;
+        let bytes = response
+            .bytes_stream()
+            .map(|chunk| chunk.map_err(|e| map_reqwest_error(&e)))
+            .boxed();
+        Ok(sse_text_stream(
+            bytes,
+            OpenAiDecoder::default(),
+            StreamGuards {
+                cancel: cancel.clone(),
+                budget,
+                key: self.config.key.clone(),
+                capture,
+            },
+        ))
+    }
+
+    async fn complete(
+        &self,
+        request: &CompletionRequest<'_>,
+        cancel: &CancellationToken,
+    ) -> Result<Completion, LlmError> {
+        let budget = CallBudget::start(&self.config.options.background);
+        let Posted { response, capture } = self.send(request, false, &budget, cancel).await?;
+        let rate_limit = rate_limit_from_headers(response.headers());
+        let body = match read_reply(response, &budget, cancel).await {
+            Ok(body) => body,
+            Err(error) => {
+                if let Some(capture) = capture {
+                    capture.finish(PayloadOutcome::Failed);
+                }
+                return Err(error);
+            }
+        };
+        if let Some(capture) = capture {
+            capture.finish_with(PayloadOutcome::Ok, &body);
+        }
+        let mut completion = parse_completion(
+            &body,
+            &request.format,
+            self.config.key.as_ref().map(crate::key::ApiKey::expose),
+        )?;
+        completion.rate_limit = rate_limit;
+        Ok(completion)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Message, Role, SseDecoder};
-
-    fn stream(raw: &str) -> Vec<StreamEvent> {
-        let mut d = SseDecoder::default();
-        let mut events = d.push(raw.as_bytes());
-        events.extend(d.finish());
-        events
-            .iter()
-            .flat_map(|e| parse_event(e).unwrap())
-            .collect()
-    }
-
-    fn text(s: &str) -> StreamEvent {
-        StreamEvent::Text(s.to_owned())
-    }
 
     #[test]
-    fn a_normal_stream_yields_text_finish_and_usage() {
-        let raw = concat!(
-            ": keep-alive\n\n",
-            "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"\"}}]}\n\n",
-            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
-            "data: {\"choices\":[{\"delta\":{\"content\":\" there.\"}}]}\n\n",
-            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
-            "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}\n\n",
-            "data: [DONE]\n\n",
+    fn temperature_keeps_the_written_number() {
+        assert_eq!(
+            serde_json::to_string(&temperature_value(0.7)).expect("json"),
+            "0.7"
         );
         assert_eq!(
-            stream(raw),
-            [
-                text("Hello"),
-                text(" there."),
-                StreamEvent::Finished(FinishReason::Stop),
-                StreamEvent::Usage(Usage {
-                    input_tokens: Some(12),
-                    output_tokens: Some(3)
-                }),
-            ]
+            serde_json::to_string(&temperature_value(0.0)).expect("json"),
+            "0.0"
         );
-    }
-
-    #[test]
-    fn null_content_reasoning_fields_and_a_missing_done_are_tolerated() {
-        let raw = concat!(
-            "data: {\"choices\":[{\"delta\":{\"content\":null,\"reasoning_content\":\"thinking\"}}]}\n\n",
-            "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\n",
-            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}",
-        );
-        assert_eq!(
-            stream(raw),
-            [text("Hi"), StreamEvent::Finished(FinishReason::Length)]
-        );
-    }
-
-    #[test]
-    fn an_error_chunk_keeps_only_its_message() {
-        let raw = "data: {\"error\":{\"message\":\"rate limited\",\"type\":\"x\"}}\n\n";
-        assert_eq!(stream(raw), [StreamEvent::Error("rate limited".into())]);
-    }
-
-    #[test]
-    fn invalid_json_is_a_typed_error_that_does_not_echo_the_payload() {
-        let e = parse_event(&SseEvent {
-            event: None,
-            data: "sk-secret not json".into(),
-        })
-        .unwrap_err();
-        assert_eq!(e, ParseError::InvalidJson);
-        assert!(!e.to_string().contains("sk-secret"));
-    }
-
-    fn request() -> TextRequest {
-        TextRequest {
-            model: "m".into(),
-            system: Some("Be brief.".into()),
-            messages: vec![Message {
-                role: Role::User,
-                content: "Hi".into(),
-            }],
-            max_tokens: 200,
-            temperature: Some(0.5),
-        }
-    }
-
-    #[test]
-    fn body_uses_the_requested_token_parameter_name() {
-        let a = request_body(&request(), TokenParam::MaxTokens, true);
-        assert_eq!(a["max_tokens"], 200);
-        assert!(a.get("max_completion_tokens").is_none());
-        assert_eq!(a["stream_options"]["include_usage"], true);
-        assert_eq!(a["messages"][0]["role"], "system");
-        let b = request_body(&request(), TokenParam::MaxTokens.other(), false);
-        assert_eq!(b["max_completion_tokens"], 200);
-        assert!(b.get("max_tokens").is_none() && b.get("stream_options").is_none());
-    }
-
-    #[test]
-    fn temperature_and_system_are_left_out_when_absent() {
-        let mut r = request();
-        r.temperature = None;
-        r.system = None;
-        let b = request_body(&r, TokenParam::MaxTokens, false);
-        assert!(b.get("temperature").is_none());
-        assert_eq!(b["messages"].as_array().map(Vec::len), Some(1));
     }
 }

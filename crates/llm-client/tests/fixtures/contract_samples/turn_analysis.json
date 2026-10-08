@@ -1,0 +1,21 @@
+{
+  "turns": [
+    {
+      "turn_seq": 1,
+      "errors": [
+        {
+          "category": "article",
+          "quote": "a apple",
+          "correction": "an apple",
+          "severity": "minor",
+          "addressed_in_reply": false
+        }
+      ],
+      "objective_evidence": [
+        { "objective_id": "o1", "status": "partial", "quote": "a apple" }
+      ],
+      "understood_tutor": "yes",
+      "note_for_next_turn": "Practise a and an."
+    }
+  ]
+}

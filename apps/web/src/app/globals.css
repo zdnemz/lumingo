@@ -4,4 +4,7 @@
 @import "../styles/pixel.css";
 @import "../styles/sprites.css";
 @import "../styles/layout.css";
+@import "../styles/setup.css";
+@import "../styles/game.css";
+@import "../styles/progress.css";
 @import "../styles/motion.css";

@@ -1,0 +1,14 @@
+data: {"id":"chatcmpl-AbC123","object":"chat.completion.chunk","created":1760000000,"model":"gpt-test","choices":[{"index":0,"delta":{"role":"assistant","content":"","refusal":null},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-AbC123","object":"chat.completion.chunk","created":1760000000,"model":"gpt-test","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-AbC123","object":"chat.completion.chunk","created":1760000000,"model":"gpt-test","choices":[{"index":0,"delta":{"content":", nice"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-AbC123","object":"chat.completion.chunk","created":1760000000,"model":"gpt-test","choices":[{"index":0,"delta":{"content":" to meet you."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-AbC123","object":"chat.completion.chunk","created":1760000000,"model":"gpt-test","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-AbC123","object":"chat.completion.chunk","created":1760000000,"model":"gpt-test","choices":[],"usage":{"prompt_tokens":42,"completion_tokens":7,"total_tokens":49}}
+
+data: [DONE]
+

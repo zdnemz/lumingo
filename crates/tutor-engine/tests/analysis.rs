@@ -1,346 +1,571 @@
-//! T2 turn analysis: prompt shape, the semantic filters (one test per rule),
-//! the cadence, the notes buffer, and the reliability window. The live smoke
-//! test is `examples/analysis_live.rs`, owner-run.
-#![allow(clippy::unwrap_used)] // test helpers; clippy.toml only exempts #[test] functions
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use serde_json::json;
+mod common;
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use assessment_engine::Level;
+use common::{FakeLlm, make_profile, make_session, make_turn, temp_db, test_clock};
+use llm_client::{LlmError, TimeoutKind};
+use serde_json::{Value, json};
+use storage::{Database, LlmCallType, LlmOutcome, SessionKind, TurnRole};
+use tokio_util::sync::CancellationToken;
 use tutor_engine::{
-    AnalysisCadence, AnalysisInput, AnalysisTurn, BATCH_SIZE, CONVERSATION_ERROR_CAP, DropCounts,
-    InputMode, NotesForNextTurn, ObjectivePair, ReliabilityWindow, filter_output,
+    AnalysisFailure, AnalysisKind, AnalyzerConfig, BATCH_EVERY, Cadence, InputMode, ObjectiveRef,
+    TurnAnalyzer, TurnToAnalyse, analysis_unreliable,
 };
 
-fn turn(seq: i64, learner_text: &str) -> AnalysisTurn {
-    AnalysisTurn {
-        turn_seq: seq,
-        tutor_before: "Hello! What is your name?".to_owned(),
-        learner_text: learner_text.to_owned(),
-        tutor_reply: "Nice to meet you.".to_owned(),
+struct Fixture {
+    _dir: tempfile::TempDir,
+    db: Database,
+    llm: Arc<FakeLlm>,
+    analyzer: TurnAnalyzer,
+    profile_id: i64,
+    session_id: i64,
+}
+
+async fn fixture(kind: AnalysisKind) -> Fixture {
+    let (dir, db) = temp_db().await;
+    let profile = make_profile(&db).await;
+    let session = make_session(&db, profile.id, SessionKind::TextChat).await;
+    let llm = FakeLlm::new();
+    let analyzer = TurnAnalyzer::new(
+        AnalyzerConfig {
+            profile_id: profile.id,
+            session_id: session.id,
+            provider_profile_id: None,
+            model: "test-model".into(),
+            level: Level::A2,
+            first_language: "Indonesian".into(),
+            kind,
+            objectives: vec![ObjectiveRef {
+                id: "o1".into(),
+                can_do: "I can talk about my day.".into(),
+            }],
+            target_language: vec!["past simple".into()],
+        },
+        llm.clone(),
+        db.clone(),
+        test_clock(),
+    );
+    Fixture {
+        _dir: dir,
+        db,
+        llm,
+        analyzer,
+        profile_id: profile.id,
+        session_id: session.id,
     }
 }
 
-fn input(mode: InputMode, text: &str) -> AnalysisInput {
-    AnalysisInput {
-        level: curriculum::Level::A1,
-        l1: "Indonesian".to_owned(),
-        input_mode: mode,
-        objectives: vec![ObjectivePair {
-            id: "a1-u01/o1-greet".to_owned(),
-            can_do: "Greet someone".to_owned(),
-        }],
-        target_language: vec!["hello".to_owned()],
-        turns: vec![turn(1, text)],
+/// Stores a learner turn and returns the analysis input for it.
+async fn learner_turn(f: &Fixture, text: &str) -> TurnToAnalyse {
+    let turn = make_turn(&f.db, f.session_id, TurnRole::Learner, text).await;
+    TurnToAnalyse {
+        turn_id: turn.id,
+        turn_seq: turn.seq,
+        input_mode: InputMode::Text,
+        tutor_before: "What did you do?".into(),
+        learner_text: text.into(),
+        tutor_reply: "Nice! Tell me more.".into(),
     }
 }
 
-fn error(category: &str, quote: &str) -> serde_json::Value {
+fn error(category: &str, quote: &str, correction: &str, addressed: bool) -> Value {
     json!({
-        "category": category,
-        "quote": quote,
-        "correction": "x",
-        "severity": "major",
-        "addressed_in_reply": false
+        "category": category, "quote": quote, "correction": correction,
+        "severity": "major", "addressed_in_reply": addressed
     })
 }
 
-fn evidence(objective_id: &str, status: &str, quote: &str) -> serde_json::Value {
-    json!({ "objective_id": objective_id, "status": status, "quote": quote })
-}
-
-fn output(errors: Vec<serde_json::Value>, evidence: Vec<serde_json::Value>) -> serde_json::Value {
+fn turn_reply(seq: i64, errors: Vec<Value>, note: &str) -> Value {
     json!({
-        "turns": [{
-            "turn_seq": 1,
-            "errors": errors,
-            "objective_evidence": evidence,
-            "understood_tutor": "yes",
-            "note_for_next_turn": "Ask about their hometown."
-        }]
+        "turn_seq": seq, "errors": errors, "objective_evidence": [],
+        "understood_tutor": "yes", "note_for_next_turn": note
     })
 }
 
-#[test]
-fn an_error_whose_quote_is_not_in_the_text_is_dropped() {
-    let input = input(InputMode::Text, "I go to school yesterday.");
-    let value = output(
-        vec![error("verb_tense", "go"), error("article", "the school")],
-        vec![],
-    );
-    let filtered = filter_output(&value, &input, 5).unwrap();
-    assert_eq!(filtered.turns[0].errors.len(), 1);
-    assert_eq!(filtered.turns[0].errors[0].quote, "go");
+fn reply(turns: Vec<Value>) -> Value {
+    json!({ "turns": turns })
+}
+
+fn cancel() -> CancellationToken {
+    CancellationToken::new()
+}
+
+#[tokio::test]
+async fn an_analysis_is_stored_with_its_events_stats_notes_and_call_log() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let turn = learner_turn(&f, "Yesterday I go to a school and I eat a apple").await;
+    f.llm.queue_structured(Ok(reply(vec![turn_reply(
+        turn.turn_seq,
+        vec![
+            error("verb_tense", "I go to", "I went to", true),
+            error("article", "a apple", "an apple", false),
+            error("article", "invented words", "other words", false),
+        ],
+        "Practise a and an.",
+    )])));
+
+    let report = f
+        .analyzer
+        .turn_finished(turn.clone(), &cancel())
+        .await
+        .unwrap();
+
+    assert_eq!(report.analysed.len(), 1);
+    assert_eq!(report.failure, None);
+    assert_eq!(report.waiting, 0);
+    assert_eq!(report.analysed[0].dropped, 1);
+
+    let stored =
+        f.db.analysis()
+            .get(turn.turn_id)
+            .await
+            .unwrap()
+            .expect("analysis row");
+    assert_eq!(stored.contract_version, "turn_analysis/1");
+    assert_eq!(stored.model, "test-model");
+    assert_eq!(stored.ladder_level, 1);
     assert_eq!(
-        filtered.counts,
-        DropCounts {
-            produced: 2,
-            dropped: 1
-        }
+        stored.analysis["turns"][0]["errors"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
     );
-}
 
-#[test]
-fn the_quote_check_ignores_case_and_whitespace_runs() {
-    let input = input(InputMode::Text, "I   went  Home.");
-    let value = output(vec![error("verb_tense", "went home")], vec![]);
-    let filtered = filter_output(&value, &input, 5).unwrap();
-    assert_eq!(filtered.turns[0].errors.len(), 1);
-    assert_eq!(filtered.counts.dropped, 0);
-}
-
-#[test]
-fn an_empty_quote_never_matches() {
-    let input = input(InputMode::Text, "Anything at all.");
-    let value = output(vec![error("word_choice", "")], vec![]);
-    let filtered = filter_output(&value, &input, 5).unwrap();
-    assert!(filtered.turns[0].errors.is_empty());
-    assert_eq!(filtered.counts.dropped, 1);
-}
-
-#[test]
-fn voice_turns_drop_spelling_and_punctuation_errors() {
-    let input = input(InputMode::Voice, "I go too school.");
-    let value = output(
-        vec![
-            error("spelling", "too"),
-            error("punctuation", "school."),
-            error("preposition", "too school"),
-        ],
-        vec![],
+    let events = f.db.analysis().error_events(turn.turn_id).await.unwrap();
+    assert_eq!(events.len(), 2);
+    assert!(
+        events[0].addressed,
+        "the tense error was addressed in the reply"
     );
-    let filtered = filter_output(&value, &input, 5).unwrap();
-    let kept: Vec<&str> = filtered.turns[0]
-        .errors
+    assert!(!events[1].addressed);
+
+    let stats = f.db.error_stats().list(f.profile_id).await.unwrap();
+    let counts: Vec<(&str, i64)> = stats
         .iter()
-        .map(|e| e.category.as_str())
+        .map(|s| (s.category.as_str(), s.count))
         .collect();
-    assert_eq!(kept, ["preposition"]);
-    assert_eq!(filtered.counts.dropped, 2);
+    assert_eq!(counts, [("article", 1), ("verb_tense", 1)]);
+
+    assert_eq!(f.analyzer.notes(), ["Practise a and an."]);
+
+    let calls = f.db.diagnostics().recent_llm_calls(5).await.unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].call_type, LlmCallType::TurnAnalysis);
+    assert_eq!(calls[0].outcome, LlmOutcome::Ok);
+    assert_eq!(calls[0].model, "test-model");
 }
 
-#[test]
-fn text_turns_keep_spelling_and_punctuation_errors() {
-    let input = input(InputMode::Text, "I go too school.");
-    let value = output(
-        vec![error("spelling", "too"), error("punctuation", "school.")],
-        vec![],
-    );
-    let filtered = filter_output(&value, &input, 5).unwrap();
-    assert_eq!(filtered.turns[0].errors.len(), 2);
-    assert_eq!(filtered.counts.dropped, 0);
+#[tokio::test]
+async fn the_request_carries_the_stated_level_the_cap_and_no_level_from_a_model() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let turn = learner_turn(&f, "I go home").await;
+    f.llm
+        .queue_structured(Ok(reply(vec![turn_reply(turn.turn_seq, vec![], "")])));
+    f.analyzer.turn_finished(turn, &cancel()).await.unwrap();
+
+    let seen = f.llm.structured_requests();
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].contract, llm_client::Contract::TurnAnalysis);
+    assert_eq!(seen[0].temperature, Some(0.0));
+    assert!(seen[0].system.contains("At most 5 errors per turn"));
+    let body: Value = serde_json::from_str(&seen[0].messages[0].content).unwrap();
+    assert_eq!(body["level"], "A2");
+    assert_eq!(body["l1"], "Indonesian");
+    assert_eq!(body["input_mode"], "text");
+    assert_eq!(body["turns"][0]["learner_text"], "I go home");
 }
 
-#[test]
-fn the_error_cap_keeps_the_model_order() {
-    let input = input(InputMode::Text, "one two three four five six");
-    let value = output(
-        vec![
-            error("word_choice", "one"),
-            error("word_choice", "two"),
-            error("word_choice", "three"),
-            error("word_choice", "four"),
-            error("word_choice", "five"),
-            error("word_choice", "six"),
-        ],
-        vec![],
+#[tokio::test]
+async fn a_429_switches_to_batched_cadence_and_three_turns_go_in_one_call() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let first = learner_turn(&f, "I go to school yesterday").await;
+    f.llm
+        .queue_structured(Err(LlmError::RateLimited { retry_after: None }));
+    let report = f
+        .analyzer
+        .turn_finished(first.clone(), &cancel())
+        .await
+        .unwrap();
+    assert_eq!(report.failure, Some(AnalysisFailure::RateLimited));
+    assert_eq!(f.analyzer.cadence(), Cadence::Batched);
+    assert_eq!(f.analyzer.waiting(), 1);
+    assert!(f.db.analysis().get(first.turn_id).await.unwrap().is_none());
+    assert_eq!(f.analyzer.flagged_turn_ids(), [first.turn_id]);
+
+    let second = learner_turn(&f, "He go to market").await;
+    let report = f
+        .analyzer
+        .turn_finished(second.clone(), &cancel())
+        .await
+        .unwrap();
+    assert!(
+        report.analysed.is_empty(),
+        "two waiting turns are below the batch size"
     );
-    let filtered = filter_output(&value, &input, CONVERSATION_ERROR_CAP as usize).unwrap();
-    let quotes: Vec<&str> = filtered.turns[0]
-        .errors
-        .iter()
-        .map(|e| e.quote.as_str())
-        .collect();
-    assert_eq!(quotes, ["one", "two", "three", "four", "five"]);
-    assert_eq!(filtered.counts.dropped, 1);
+    assert_eq!(f.llm.structured_calls(), 1);
+
+    let third = learner_turn(&f, "She like cats").await;
+    f.llm.queue_structured(Ok(reply(vec![
+        turn_reply(
+            first.turn_seq,
+            vec![error(
+                "verb_tense",
+                "I go to school",
+                "I went to school",
+                false,
+            )],
+            "",
+        ),
+        turn_reply(
+            second.turn_seq,
+            vec![error("subject_verb_agreement", "He go", "He goes", false)],
+            "",
+        ),
+        turn_reply(
+            third.turn_seq,
+            vec![error(
+                "subject_verb_agreement",
+                "She like",
+                "She likes",
+                false,
+            )],
+            "Watch the -s.",
+        ),
+    ])));
+    let report = f
+        .analyzer
+        .turn_finished(third.clone(), &cancel())
+        .await
+        .unwrap();
+
+    assert_eq!(BATCH_EVERY, 3);
+    assert_eq!(report.analysed.len(), 3);
+    assert_eq!(f.llm.structured_calls(), 2, "one call for the three turns");
+    assert_eq!(f.analyzer.waiting(), 0);
+    assert!(f.analyzer.flagged_turn_ids().is_empty());
+    let seen = f.llm.structured_requests();
+    let body: Value = serde_json::from_str(&seen[1].messages[0].content).unwrap();
+    assert_eq!(body["turns"].as_array().unwrap().len(), 3);
+
+    let calls = f.db.diagnostics().recent_llm_calls(5).await.unwrap();
+    assert!(calls.iter().any(|c| c.outcome == LlmOutcome::RateLimited));
 }
 
-#[test]
-fn evidence_for_an_unknown_objective_is_dropped() {
-    let input = input(InputMode::Text, "Hello!");
-    let value = output(
-        vec![],
-        vec![
-            evidence("a1-u01/o1-greet", "demonstrated", "Hello"),
-            evidence("a1-u01/o9-nope", "demonstrated", "Hello"),
-        ],
-    );
-    let filtered = filter_output(&value, &input, 5).unwrap();
-    assert_eq!(filtered.turns[0].objective_evidence.len(), 1);
+#[tokio::test]
+async fn flush_analyses_what_is_waiting_when_the_session_ends() {
+    let f = fixture(AnalysisKind::Turn).await;
+    f.llm.queue_structured(Err(LlmError::RateLimited {
+        retry_after: Some(Duration::from_secs(2)),
+    }));
+    let a = learner_turn(&f, "I has a dog").await;
+    f.analyzer
+        .turn_finished(a.clone(), &cancel())
+        .await
+        .unwrap();
+    let b = learner_turn(&f, "It are big").await;
+    f.analyzer
+        .turn_finished(b.clone(), &cancel())
+        .await
+        .unwrap();
+    assert_eq!(f.analyzer.waiting(), 2);
+
+    f.llm.queue_structured(Ok(reply(vec![
+        turn_reply(
+            a.turn_seq,
+            vec![error("subject_verb_agreement", "I has", "I have", false)],
+            "",
+        ),
+        turn_reply(
+            b.turn_seq,
+            vec![error("subject_verb_agreement", "It are", "It is", false)],
+            "",
+        ),
+    ])));
+    let report = f.analyzer.flush(&cancel()).await.unwrap();
+    assert_eq!(report.analysed.len(), 2);
+    assert_eq!(report.waiting, 0);
+    assert!(f.db.analysis().get(a.turn_id).await.unwrap().is_some());
+    assert!(f.db.analysis().get(b.turn_id).await.unwrap().is_some());
+    assert!(f.analyzer.flagged_turn_ids().is_empty());
+}
+
+#[tokio::test]
+async fn invalid_output_leaves_the_turn_stored_flagged_and_in_the_next_batch() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let a = learner_turn(&f, "I has a dog").await;
+    f.llm
+        .queue_structured(Err(LlmError::InvalidOutput(llm_client::InvalidOutput {
+            reason: llm_client::InvalidReason::SchemaMismatch,
+            paths: vec![],
+            ladder_level: llm_client::LadderLevel::NativeSchema,
+            repaired: true,
+        })));
+    let report = f
+        .analyzer
+        .turn_finished(a.clone(), &cancel())
+        .await
+        .unwrap();
+    assert_eq!(report.failure, Some(AnalysisFailure::InvalidOutput));
     assert_eq!(
-        filtered.turns[0].objective_evidence[0].objective_id,
-        "a1-u01/o1-greet"
+        f.analyzer.cadence(),
+        Cadence::Every,
+        "bad output is not a 429"
     );
-    assert_eq!(filtered.counts.dropped, 1);
-}
-
-#[test]
-fn evidence_with_an_empty_quote_survives_the_substring_filter() {
-    let input = input(InputMode::Text, "Hello!");
-    let value = output(
-        vec![],
-        vec![
-            evidence("a1-u01/o1-greet", "not_demonstrated", ""),
-            evidence("a1-u01/o1-greet", "partial", ""),
-            evidence("a1-u01/o1-greet", "demonstrated", "Not in the text"),
-        ],
+    assert!(
+        f.db.turns().get(a.turn_id).await.unwrap().is_some(),
+        "the turn is still stored"
     );
-    // T2's filter drops evidence only when a *non-empty* quote is not a
-    // substring; the prompt asks for an empty quote on not_demonstrated only,
-    // and this filter is deliberately not stricter than the contract.
-    let filtered = filter_output(&value, &input, 5).unwrap();
-    let kept: Vec<&str> = filtered.turns[0]
-        .objective_evidence
-        .iter()
-        .map(|e| e.status.as_str())
-        .collect();
-    assert_eq!(kept, ["not_demonstrated", "partial"]);
-    assert_eq!(filtered.counts.dropped, 1);
+    assert!(f.db.analysis().get(a.turn_id).await.unwrap().is_none());
+    assert_eq!(f.analyzer.flagged_turn_ids(), [a.turn_id]);
+
+    let b = learner_turn(&f, "It are big").await;
+    f.llm.queue_structured(Ok(reply(vec![
+        turn_reply(
+            a.turn_seq,
+            vec![error("subject_verb_agreement", "I has", "I have", false)],
+            "",
+        ),
+        turn_reply(b.turn_seq, vec![], ""),
+    ])));
+    let report = f.analyzer.turn_finished(b, &cancel()).await.unwrap();
+    assert_eq!(report.analysed.len(), 2, "the flagged turn rode along");
+    assert!(f.analyzer.flagged_turn_ids().is_empty());
+    assert!(f.db.analysis().get(a.turn_id).await.unwrap().is_some());
 }
 
-#[test]
-fn entries_for_unknown_turns_are_dropped_and_a_repeat_is_not_analysed_twice() {
-    let input = input(InputMode::Text, "Hello!");
-    let value = json!({
-        "turns": [
-            { "turn_seq": 1, "errors": [error("word_choice", "Hello")],
-              "objective_evidence": [], "understood_tutor": "yes", "note_for_next_turn": "" },
-            { "turn_seq": 7, "errors": [error("word_choice", "Hello")],
-              "objective_evidence": [], "understood_tutor": "yes", "note_for_next_turn": "" },
-            { "turn_seq": 1, "errors": [error("word_choice", "Hello")],
-              "objective_evidence": [], "understood_tutor": "yes", "note_for_next_turn": "" }
-        ]
-    });
-    let filtered = filter_output(&value, &input, 5).unwrap();
-    assert_eq!(filtered.turns.len(), 1);
-    assert_eq!(filtered.counts.produced, 3);
-    assert_eq!(filtered.counts.dropped, 2);
-}
-
-#[test]
-fn notes_skip_empty_ones_and_the_buffer_keeps_the_newest_three() {
-    let one = input(InputMode::Text, "Hello!");
-    let value = json!({
-        "turns": [
-            { "turn_seq": 1, "errors": [], "objective_evidence": [],
-              "understood_tutor": "yes", "note_for_next_turn": "  " },
-        ]
-    });
-    let filtered = filter_output(&value, &one, 5).unwrap();
-    assert!(filtered.notes().is_empty());
-
-    let turns: Vec<serde_json::Value> = [1, 2, 3, 4]
-        .iter()
-        .map(|seq| {
-            json!({
-                "turn_seq": seq, "errors": [], "objective_evidence": [],
-                "understood_tutor": "yes", "note_for_next_turn": format!("note {seq}")
-            })
-        })
-        .collect();
-    let four = json!({ "turns": turns });
-    let mut wide = input(InputMode::Text, "Hello!");
-    wide.turns = vec![turn(1, "a"), turn(2, "b"), turn(3, "c"), turn(4, "d")];
-    let filtered = filter_output(&four, &wide, 5).unwrap();
-    assert_eq!(filtered.notes(), ["note 1", "note 2", "note 3", "note 4"]);
-
-    let mut buffer = NotesForNextTurn::new();
-    buffer.update(&filtered);
-    assert_eq!(buffer.notes(), ["note 2", "note 3", "note 4"]);
-}
-
-#[test]
-fn normal_cadence_analyses_every_turn() {
-    let mut cadence = AnalysisCadence::new();
-    assert!(!cadence.is_batched());
-    cadence.enqueue(1);
-    assert_eq!(cadence.due(), [1]);
-    cadence.mark_analysed(&[1]);
-    assert_eq!(cadence.pending(), 0);
-    cadence.enqueue(2);
-    cadence.enqueue(3);
-    assert_eq!(cadence.due(), [2, 3]);
-}
-
-#[test]
-fn after_a_rate_limit_one_call_carries_three_turns() {
-    let mut cadence = AnalysisCadence::new();
-    cadence.note_rate_limited();
-    assert!(cadence.is_batched());
-
-    cadence.enqueue(1);
-    assert!(cadence.due().is_empty(), "one turn is not a batch yet");
-    cadence.enqueue(2);
-    assert!(cadence.due().is_empty(), "two turns are not a batch yet");
-    cadence.enqueue(3);
-    assert_eq!(cadence.due(), [1, 2, 3]);
-    assert_eq!(BATCH_SIZE, 3);
-
-    cadence.mark_analysed(&[1, 2, 3]);
-    cadence.enqueue(4);
-    cadence.enqueue(5);
-    assert!(cadence.due().is_empty(), "the batch restarts empty");
-    cadence.enqueue(6);
-    assert_eq!(cadence.due(), [4, 5, 6]);
-}
-
-#[test]
-fn a_session_end_flush_carries_everything_left_and_nothing_is_dropped() {
-    let mut cadence = AnalysisCadence::new();
-    cadence.note_rate_limited();
-    cadence.enqueue(1);
-    cadence.enqueue(2);
-    cadence.enqueue(1); // a repeated number is kept once
-    assert_eq!(cadence.flush(), [1, 2]);
-    cadence.mark_analysed(&[1]);
-    assert_eq!(cadence.flush(), [2]);
-    cadence.mark_analysed(&[2]);
-    assert!(cadence.flush().is_empty());
-}
-
-#[test]
-fn the_reliability_window_flags_more_than_a_third_dropped() {
-    let mut window = ReliabilityWindow::new();
-    // Four analyses are below the floor even with everything dropped.
-    for _ in 0..4 {
-        window.record(DropCounts {
-            produced: 4,
-            dropped: 4,
-        });
+#[tokio::test]
+async fn a_turn_that_keeps_causing_bad_output_is_given_up_but_stays_flagged() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let a = learner_turn(&f, "I has a dog").await;
+    let b = learner_turn(&f, "It are big").await;
+    let c = learner_turn(&f, "We is happy").await;
+    for _ in 0..3 {
+        f.llm
+            .queue_structured(Err(LlmError::Protocol("garbled".into())));
     }
-    assert!(!window.unreliable());
-    // A fifth tips the window over the floor and the share over a third.
-    window.record(DropCounts {
-        produced: 4,
-        dropped: 4,
-    });
-    assert_eq!(window.analyses(), 5);
-    assert!((window.dropped_share() - 1.0).abs() < f64::EPSILON);
-    assert!(window.unreliable());
+    // Each failed call re-sends the older turns, so `a` is in three batches.
+    f.analyzer
+        .turn_finished(a.clone(), &cancel())
+        .await
+        .unwrap();
+    f.analyzer
+        .turn_finished(b.clone(), &cancel())
+        .await
+        .unwrap();
+    f.analyzer
+        .turn_finished(c.clone(), &cancel())
+        .await
+        .unwrap();
+
+    assert_eq!(f.analyzer.waiting(), 2, "a was given up");
+    let flagged = f.analyzer.flagged_turn_ids();
+    assert!(
+        flagged.contains(&a.turn_id),
+        "a given-up turn stays flagged"
+    );
+    assert!(f.db.analysis().get(a.turn_id).await.unwrap().is_none());
+    assert!(f.db.turns().get(a.turn_id).await.unwrap().is_some());
+
+    f.llm.queue_structured(Ok(reply(vec![
+        turn_reply(b.turn_seq, vec![], ""),
+        turn_reply(c.turn_seq, vec![], ""),
+    ])));
+    let report = f.analyzer.flush(&cancel()).await.unwrap();
+    assert_eq!(report.analysed.len(), 2);
+    assert_eq!(f.analyzer.flagged_turn_ids(), [a.turn_id]);
 }
 
-#[test]
-fn the_reliability_window_keeps_only_the_last_twenty() {
-    let mut window = ReliabilityWindow::new();
-    for _ in 0..20 {
-        window.record(DropCounts {
-            produced: 10,
-            dropped: 0,
-        });
-    }
-    for _ in 0..20 {
-        window.record(DropCounts {
-            produced: 10,
-            dropped: 10,
-        });
-    }
-    assert_eq!(window.analyses(), 20);
-    assert!((window.dropped_share() - 1.0).abs() < f64::EPSILON);
-    assert!(window.unreliable());
-    // An exactly one-third share is not "more than a third".
-    let mut window = ReliabilityWindow::new();
+#[tokio::test]
+async fn an_outage_keeps_the_turn_queued_without_counting_against_it() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let a = learner_turn(&f, "I has a dog").await;
     for _ in 0..5 {
-        window.record(DropCounts {
-            produced: 9,
-            dropped: 3,
-        });
+        f.llm
+            .queue_structured(Err(LlmError::Timeout(TimeoutKind::Total)));
     }
-    assert!(!window.unreliable());
+    let report = f
+        .analyzer
+        .turn_finished(a.clone(), &cancel())
+        .await
+        .unwrap();
+    assert_eq!(report.failure, Some(AnalysisFailure::ProviderUnavailable));
+    for _ in 0..4 {
+        f.analyzer.flush(&cancel()).await.unwrap();
+    }
+    assert_eq!(f.analyzer.waiting(), 1, "outages never give a turn up");
+    assert_eq!(f.analyzer.cadence(), Cadence::Every);
+
+    f.llm
+        .queue_structured(Ok(reply(vec![turn_reply(a.turn_seq, vec![], "")])));
+    let report = f.analyzer.flush(&cancel()).await.unwrap();
+    assert_eq!(report.analysed.len(), 1);
+}
+
+#[tokio::test]
+async fn a_reply_that_leaves_a_turn_out_flags_it() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let a = learner_turn(&f, "I has a dog").await;
+    let b = learner_turn(&f, "It are big").await;
+    f.llm
+        .queue_structured(Err(LlmError::RateLimited { retry_after: None }));
+    f.analyzer
+        .turn_finished(a.clone(), &cancel())
+        .await
+        .unwrap();
+    f.analyzer
+        .turn_finished(b.clone(), &cancel())
+        .await
+        .unwrap();
+    f.llm
+        .queue_structured(Ok(reply(vec![turn_reply(a.turn_seq, vec![], "")])));
+    let report = f.analyzer.flush(&cancel()).await.unwrap();
+    assert_eq!(report.analysed.len(), 1);
+    assert!(f.analyzer.flagged_turn_ids().contains(&b.turn_id));
+    assert!(!f.analyzer.flagged_turn_ids().contains(&a.turn_id));
+}
+
+#[tokio::test]
+async fn a_turn_seq_that_was_not_sent_is_ignored() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let a = learner_turn(&f, "I has a dog").await;
+    f.llm.queue_structured(Ok(reply(vec![
+        turn_reply(a.turn_seq, vec![], ""),
+        turn_reply(999, vec![error("article", "a dog", "the dog", false)], ""),
+    ])));
+    let report = f.analyzer.turn_finished(a, &cancel()).await.unwrap();
+    assert_eq!(report.analysed.len(), 1);
+    assert!(
+        f.db.error_stats()
+            .list(f.profile_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn notes_are_the_latest_three_newest_first() {
+    let f = fixture(AnalysisKind::Turn).await;
+    for (i, note) in ["one", "two", "three", "four"].into_iter().enumerate() {
+        let t = learner_turn(&f, &format!("text number {i}")).await;
+        f.llm
+            .queue_structured(Ok(reply(vec![turn_reply(t.turn_seq, vec![], note)])));
+        f.analyzer.turn_finished(t, &cancel()).await.unwrap();
+    }
+    assert_eq!(f.analyzer.notes(), ["four", "three", "two"]);
+}
+
+#[tokio::test]
+async fn a_note_that_names_a_level_never_reaches_the_tutor() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let t = learner_turn(&f, "I go home").await;
+    f.llm.queue_structured(Ok(reply(vec![turn_reply(
+        t.turn_seq,
+        vec![],
+        "This is B2 work.",
+    )])));
+    f.analyzer
+        .turn_finished(t.clone(), &cancel())
+        .await
+        .unwrap();
+    assert!(f.analyzer.notes().is_empty());
+    let stored = f.db.analysis().get(t.turn_id).await.unwrap().unwrap();
+    assert_eq!(stored.analysis["turns"][0]["note_for_next_turn"], "");
+}
+
+#[tokio::test]
+async fn a_profile_whose_entries_keep_being_dropped_is_marked_unreliable() {
+    let f = fixture(AnalysisKind::Turn).await;
+    assert!(!analysis_unreliable(&f.db, None).await.unwrap());
+    for i in 0..5 {
+        let t = learner_turn(&f, &format!("plain text {i}")).await;
+        f.llm.queue_structured(Ok(reply(vec![turn_reply(
+            t.turn_seq,
+            vec![error("article", "words that are not there", "other", false)],
+            "",
+        )])));
+        f.analyzer.turn_finished(t, &cancel()).await.unwrap();
+    }
+    assert!(f.analyzer.unreliable());
+    assert!(analysis_unreliable(&f.db, None).await.unwrap());
+}
+
+#[tokio::test]
+async fn a_draft_is_analysed_at_once_with_the_draft_cap_and_text_mode() {
+    let f = fixture(AnalysisKind::Draft).await;
+    let words: Vec<String> = (0..25).map(|n| format!("wrd{n}")).collect();
+    let text = words.join(" ");
+    let turn = learner_turn(&f, &text).await;
+    let turn = TurnToAnalyse {
+        input_mode: InputMode::Voice,
+        tutor_before: String::new(),
+        tutor_reply: String::new(),
+        ..turn
+    };
+    let errors: Vec<Value> = words
+        .iter()
+        .map(|w| error("word_choice", w, "other", false))
+        .collect();
+    f.llm
+        .queue_structured(Ok(reply(vec![turn_reply(turn.turn_seq, errors, "")])));
+    let record = f
+        .analyzer
+        .analyse_now(turn.clone(), &cancel())
+        .await
+        .unwrap();
+    assert_eq!(record.analysis.errors.len(), 20);
+    let seen = f.llm.structured_requests();
+    assert!(seen[0].system.contains("At most 20 errors per turn"));
+    let body: Value = serde_json::from_str(&seen[0].messages[0].content).unwrap();
+    assert_eq!(body["input_mode"], "text", "a draft is always text");
+    drop(seen);
+    assert_eq!(
+        f.db.analysis()
+            .error_events(turn.turn_id)
+            .await
+            .unwrap()
+            .len(),
+        20
+    );
+}
+
+#[tokio::test]
+async fn analyse_now_reports_a_provider_failure_and_queues_nothing() {
+    let f = fixture(AnalysisKind::Draft).await;
+    let turn = learner_turn(&f, "Some draft text").await;
+    f.llm
+        .queue_structured(Err(LlmError::Transport(llm_client::TransportKind::Connect)));
+    let result = f.analyzer.analyse_now(turn, &cancel()).await;
+    assert!(matches!(result, Err(tutor_engine::EngineError::Llm(_))));
+    assert_eq!(f.analyzer.waiting(), 0);
+}
+
+#[tokio::test]
+async fn voice_turns_drop_spelling_errors_before_they_are_stored() {
+    let f = fixture(AnalysisKind::Turn).await;
+    let turn = learner_turn(&f, "my freind he go").await;
+    let turn = TurnToAnalyse {
+        input_mode: InputMode::Voice,
+        ..turn
+    };
+    f.llm.queue_structured(Ok(reply(vec![turn_reply(
+        turn.turn_seq,
+        vec![
+            error("spelling", "freind", "friend", false),
+            error("verb_form", "he go", "he goes", false),
+        ],
+        "",
+    )])));
+    f.analyzer
+        .turn_finished(turn.clone(), &cancel())
+        .await
+        .unwrap();
+    let events = f.db.analysis().error_events(turn.turn_id).await.unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].category, "verb_form");
 }

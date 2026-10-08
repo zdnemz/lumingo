@@ -1,12 +1,14 @@
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
+use app_core::engines::{EngineOptions, Engines};
+use app_core::{AppCore, CoreConfig, SessionManager, default_curriculum_dir, default_data_dir};
 use clap::Parser;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
-use tutor_server::events::EventHub;
 use tutor_server::security::Guard;
 use tutor_server::{AppState, build_router, run_heartbeat};
 
@@ -28,6 +30,23 @@ struct Args {
     /// The one origin allowed in development mode.
     #[arg(long, default_value = "http://localhost:3000", requires = "dev")]
     dev_origin: String,
+    /// Folder for the database, `providers.toml` and recordings. Default: the
+    /// per-user data folder (`%LOCALAPPDATA%\Lumingo` on Windows).
+    #[arg(long)]
+    data_dir: Option<PathBuf>,
+    /// Folder of unit files. Default: `curriculum/units` next to the executable,
+    /// otherwise in the working directory.
+    #[arg(long)]
+    curriculum_dir: Option<PathBuf>,
+    /// The engines file that names the speech model files. Default:
+    /// `engines.toml` in the data folder. Relative paths in it are read from the
+    /// `models` folder of the data folder.
+    #[arg(long)]
+    engines_file: Option<PathBuf>,
+    /// The model manifest. Default: `models/manifest.toml` next to the
+    /// executable, otherwise in the working directory.
+    #[arg(long)]
+    models_manifest: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -42,15 +61,38 @@ async fn main() -> Result<()> {
     let guard = Arc::new(
         Guard::new(port, dev_origin.clone()).context("could not create the session secret")?,
     );
-    let shutdown = CancellationToken::new();
-    let state = Arc::new(AppState {
-        hub: EventHub::new(args.dev),
-        guard,
-        shutdown: shutdown.clone(),
-        dev_mode: args.dev,
-    });
-
     let address = format!("http://127.0.0.1:{port}");
+    let data_dir = match args.data_dir {
+        Some(dir) => dir,
+        None => default_data_dir().context("no per-user data folder was found; pass --data-dir")?,
+    };
+    let mut config = CoreConfig::new(
+        data_dir.clone(),
+        args.curriculum_dir.unwrap_or_else(default_curriculum_dir),
+    );
+    if let Some(manifest) = args.models_manifest {
+        config.models_manifest = manifest;
+    }
+    config.dev_mode = args.dev;
+    config.server_address = Some(address.clone());
+    let core = AppCore::open(config)
+        .await
+        .context("the application core could not start")?;
+    // What the cargo features and the files on disk allow. A build with every
+    // feature off finds no audio and no speech and says why; text chat, lessons,
+    // writing and reading work without them.
+    let options = EngineOptions {
+        data_dir,
+        engines_file: args.engines_file,
+    };
+    let engines = tokio::task::spawn_blocking(move || Engines::detect(&options))
+        .await
+        .context("looking for the audio and speech engines did not finish")?;
+    SessionManager::attach(&core, engines)
+        .await
+        .context("the session manager could not start")?;
+    let state = Arc::new(AppState::new(Arc::clone(&core), guard));
+
     println!("Lumingo is running at {address}");
     if let Some(origin) = &dev_origin {
         println!("Development mode: requests from {origin} are allowed.");
@@ -61,10 +103,13 @@ async fn main() -> Result<()> {
 
     tokio::spawn(run_heartbeat(Arc::clone(&state)));
     let app = build_router(state);
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal(shutdown))
-        .await
-        .context("the server stopped with an error")?;
+    let served = axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(core.shutdown_token()))
+        .await;
+    // Close the database even when the server stopped with an error.
+    let closed = core.close().await;
+    served.context("the server stopped with an error")?;
+    closed.context("the database did not close cleanly")?;
     tracing::info!("server stopped");
     Ok(())
 }

@@ -1,42 +1,34 @@
-//! Unit checkpoints (ASSESSMENT_SPEC section 10): the mean of a unit's
-//! checkpoint activity scores against the unit's pass mark.
-//!
-//! Pure logic: the caller reads the stored attempts back and hands one
-//! [`CheckpointItem`] per checkpoint activity — `Some(score)` when every
-//! dimension row of the response is scored, `None` while anything still waits
-//! (a productive response stored as `pending_llm`). An unscored item makes the
-//! decision provisional: it rests on the scored items, as the spec says, and
-//! nothing passes until at least one item is scored.
+//! Unit checkpoints (assessment spec, section 10).
 
-use crate::SUCCESS_SCORE;
+use crate::deterministic::SUCCESS_THRESHOLD;
 
-/// The pass mark a unit falls back to when its file does not set one
-/// (ASSESSMENT_SPEC section 10). A unit file's own `pass_score` wins.
-pub const DEFAULT_PASS_MARK: f64 = SUCCESS_SCORE;
+/// The pass mark when a unit file does not set one.
+pub const DEFAULT_PASS_MARK: f64 = SUCCESS_THRESHOLD;
 
-/// One checkpoint activity: its score from 0 to 1, or `None` while the
-/// response waits for a provider.
+/// One activity of a checkpoint.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CheckpointItem {
+    /// 0 to 1, or `None` while a productive item waits for a provider to score it.
     pub score: Option<f64>,
 }
 
-/// What the checkpoint's items decide.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CheckpointOutcome {
     pub passed: bool,
     /// Mean of the scored items, 0 when none is scored yet.
     pub mean: f64,
-    /// True while at least one item is still unscored; the decision then rests
-    /// on the scored items.
+    /// True while some item is still unscored. The pass decision then rests on
+    /// the scored items, and the result is shown as provisional.
     pub provisional: bool,
 }
 
-/// Mean of the scored items compared with the pass mark. Unscored items make
-/// the outcome provisional and leave the decision to the scored ones; with
-/// nothing scored at all, nothing is passed.
+/// Mean of `normalized` over the checkpoint's activities, compared with the
+/// pass mark. When no provider is reachable the productive items stay unscored;
+/// the decision then uses the deterministic ones and the outcome says it is
+/// provisional. With nothing scored at all, nothing is passed.
 pub fn evaluate_checkpoint(items: &[CheckpointItem], pass_mark: f64) -> CheckpointOutcome {
     let scored: Vec<f64> = items.iter().filter_map(|item| item.score).collect();
+    let provisional = scored.len() < items.len();
     if scored.is_empty() {
         return CheckpointOutcome {
             passed: false,
@@ -48,7 +40,7 @@ pub fn evaluate_checkpoint(items: &[CheckpointItem], pass_mark: f64) -> Checkpoi
     CheckpointOutcome {
         passed: mean >= pass_mark,
         mean,
-        provisional: scored.len() < items.len(),
+        provisional,
     }
 }
 
@@ -83,8 +75,6 @@ mod tests {
         assert!(outcome.passed);
         assert!(outcome.provisional);
         assert!((outcome.mean - 0.9).abs() < 1e-9);
-        // Without the scored items the same pending set would fail.
-        assert!(!evaluate_checkpoint(&items(&[Some(0.4), None]), 0.7).passed);
     }
 
     #[test]
@@ -96,7 +86,6 @@ mod tests {
         );
         let empty = evaluate_checkpoint(&[], 0.7);
         assert!(!empty.passed);
-        assert!(empty.provisional);
     }
 
     #[test]

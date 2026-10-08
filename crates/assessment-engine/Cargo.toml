@@ -5,18 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Level estimation from stored attempts for Lumingo (est/1)"
-
-[features]
-default = ["grammar"]
-# Rule-based grammar findings through harper-core: a large dependency tree (see
-# docs/LICENSE_REGISTER.md). Crates that only need scoring can turn it off.
-grammar = ["dep:harper-core"]
+description = "Scoring, evidence and level estimation for Lumingo"
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1"
-harper-core = { version = "2.11.0", default-features = false, optional = true }
+thiserror = "2.0.21"
 
 [lints]
 workspace = true

@@ -32,26 +32,49 @@ Licenses were read from the crate metadata of the versions in `Cargo.lock`, and
 
 | Crate | Use | License | Status |
 |---|---|---|---|
-| axum | HTTP API and WebSocket in `apps/server` | MIT | ok |
-| toml 1.1.6 | Read and write `providers.toml` | MIT OR Apache-2.0, read from crate metadata 2026-10-07 | ok |
-| jsonschema 0.58.6, default features off | Local validation of structured LLM output and units | MIT, read from crate metadata 2026-10-07. Default features are off so it cannot fetch a remote `$ref` over HTTP. | ok |
-| borrow-or-share 0.2.4 (through jsonschema) | URI parsing helper | MIT-0, permissive and attribution-free. Allowed by a per-crate exception in `deny.toml`. | ok |
-| reqwest 0.13.5 | HTTP client for `llm-client` (rustls with aws-lc-rs) | MIT OR Apache-2.0, read from crate metadata 2026-10-07 | ok |
-| webpki-root-certs 1.0.9 (through reqwest) | Mozilla CA certificate list | CDLA-Permissive-2.0, permissive data license (attribution, no copyleft). Allowed by a per-crate exception in `deny.toml`. Attribution line in `NOTICE`. | ok |
-| aws-lc-sys 0.45.0 (through reqwest) | Native crypto for rustls | ISC, MIT, MIT-0, BSD-3-Clause and Apache-2.0 terms; passes `cargo deny`. Building it needs cmake and a C compiler, so the Windows build machine needs both (note for `docs/ENVIRONMENT.md`). | ok |
-| tokio, tokio-util | Async runtime and cancellation | MIT | ok |
+| axum | HTTP API and WebSocket in `apps/server`; scripted provider server in the `llm-client` tests | MIT | ok |
+| tokio, tokio-util | Async runtime and cancellation. `storage` also uses its file functions for the pre-upgrade backup. | MIT | ok |
 | tower, http-body-util, tokio-tungstenite, futures-util | Server tests | MIT | ok |
-| sqlx 0.8.6, sqlx-core, sqlx-sqlite | SQLite access, connection pools and migrations in `crates/storage`. Runtime query functions only, no compile-time query macros, so no database is needed at build time. Bundled SQLite (libsqlite3-sys 0.30.1, MIT) is built from source, so the Windows build machine needs a C toolchain (same requirement as `aws-lc-sys`). Owner approved 0.8.6 on 2026-10-07 after the license check at the source: LICENSE-MIT (LaunchBadge, LLC) and LICENSE-APACHE are both in the crate files. | MIT OR Apache-2.0, read from the crate files 2026-10-07 | ok |
-| hashlink, flume, futures-intrusive, crossbeam-queue, dotenvy, atoi, crc, hex, tokio-stream and other small transitive crates of sqlx | Hashing, channels, URL parsing, CRC and hex helpers | MIT OR Apache-2.0 (Zlib for foldhash) | ok |
 | rust-embed | Embeds the exported UI in the executable | MIT | ok |
-| ts-rs | Generates TypeScript types from Rust API types | MIT | ok |
+| ts-rs | Generates TypeScript types from Rust API types, and from the unit types behind the `ts` feature of `curriculum` | MIT | ok |
+| jsonschema | Checks unit files and catalogs against their JSON Schema in `crates/curriculum`. Default features are off, so it has no HTTP or file reference resolver and no TLS stack. Checked 2026-10-05, version 0.58.5. | MIT | ok |
+| referencing, jsonschema-regex, jsonschema-value, fluent-uri, fancy-regex, email_address, uuid-simd, vsimd, outref, data-encoding, micromap, fraction, num-cmp, bytecount, ahash, strum, unicode-general-category | Dependencies of jsonschema. Checked 2026-10-05. | MIT, or MIT OR Apache-2.0, or Apache-2.0 (unicode-general-category) | ok |
+| borrow-or-share | Dependency of fluent-uri, which jsonschema uses for references. Its LICENSE file is MIT No Attribution, which asks for less than MIT. It is allowed through a per-crate exception in `deny.toml`. Checked 2026-10-05, version 0.2.4. | MIT-0 | ok |
 | serde, serde_json | Serialisation | MIT OR Apache-2.0 | ok |
-| clap | Command-line options | MIT OR Apache-2.0 | ok |
+| clap | Command-line options of `apps/server`, `tools/content-cli` and `tools/tutor-cli` | MIT OR Apache-2.0 | ok |
 | anyhow, thiserror | Errors | MIT OR Apache-2.0 | ok |
 | tracing, tracing-subscriber | Logging | MIT | ok |
-| sha2, base64 | Content-Security-Policy script hashes; SHA-256 checksums of unit files and of the unit manifest in `curriculum` (index rows in the database) | MIT OR Apache-2.0 | ok |
+| sha2, base64 | Content-Security-Policy script hashes. sha2 also gives the SHA-256 checksum of each unit file in `crates/curriculum`, and the checksums of the downloaded model files in `crates/model-manager`. A development dependency of `crates/app-core`, for the model download tests. | MIT OR Apache-2.0 | ok |
 | getrandom | Session secret | MIT OR Apache-2.0 | ok |
 | webbrowser | Opens the default browser | MIT OR Apache-2.0 | ok |
+| sqlx (sqlx-core, sqlx-sqlite) | SQLite access, connection pools and migrations in `crates/storage`. Runtime query functions only, no compile-time query macros. | MIT OR Apache-2.0 | ok |
+| libsqlite3-sys 0.37.0 and the bundled SQLite 3.51.3 | Builds SQLite from source inside `crates/storage` so no system library is needed | MIT (the crate). The bundled SQLite source states "The author disclaims copyright to this source code", which is public domain. | ok |
+| chrono | `Timestamp` and `LocalDate` in `crates/storage`, built without the clock and time-zone features | MIT OR Apache-2.0 | ok |
+| tempfile | One temporary database file per test in `crates/storage` (dev only) | MIT OR Apache-2.0 | ok |
+| foldhash, ICU crates (`icu_*`, `idna`, `url`) and other small transitive crates of sqlx | Hashing, URL parsing | Zlib, Unicode-3.0, MIT OR Apache-2.0 | ok |
+| futures-util | Streams in `llm-client` and the server tests | MIT OR Apache-2.0 | ok |
+| async-trait | Async trait methods of `LlmClient` | MIT OR Apache-2.0 | ok |
+| url | URL and host parsing for the allowlist | MIT OR Apache-2.0 | ok |
+| reqwest | HTTP client for LLM calls in `llm-client`; built without default features, so no bundled TLS provider and no system proxy | MIT OR Apache-2.0 | ok |
+| hyper, hyper-util, tokio-native-tls | Transport under reqwest | MIT | ok |
+| hyper-tls | TLS connector under reqwest | MIT/Apache-2.0 | ok |
+| native-tls | TLS backend choice: Schannel on Windows (no library to install), Security framework on macOS, OpenSSL on Linux | MIT OR Apache-2.0 | ok |
+| schannel | Windows binding used by native-tls | MIT | ok |
+| openssl, openssl-sys, openssl-probe | Linux binding used by native-tls. They link the system OpenSSL library and do not bundle it; building needs its headers | Apache-2.0, MIT, MIT OR Apache-2.0 | ok |
+| toml (with toml_parser, toml_writer, toml_datetime, serde_spanned, winnow) | Reads and writes `providers.toml` in `llm-client`; reads the engines file (which model files the speech engines load) in `crates/app-core`, and the sherpa engines file of `tools/tutor-cli` (`sherpa` feature, off by default) | MIT OR Apache-2.0; winnow MIT | ok |
+| tempfile (with fastrand) | Temporary directories in `llm-client` tests | MIT OR Apache-2.0 | ok |
+| sysinfo | Installed memory in the hardware profile of `crates/app-core` (only the `system` feature; the same crate version as `tools/bench`). Checked 2026-10-05, version 0.36.1. | MIT | ok |
+| iana-time-zone, iana-time-zone-haiku, android_system_properties | Pulled in by the `clock` feature of chrono, which `crates/app-core` uses to read the learner's local calendar day for streaks (unix targets only; Windows uses `windows-link`). Checked 2026-10-05. | MIT OR Apache-2.0 | ok |
+| rtrb | Lock-free single-producer single-consumer ring buffer in `audio-io` (0.4.0). Its `unsafe` is inside the crate, audited by its authors; `audio-io` itself forbids unsafe. | MIT OR Apache-2.0 | ok |
+| rubato 5.0.1 and its dependencies (audioadapter, audioadapter-buffers, audioadapter-sample, realfft, rustfft, windowfunctions, num-complex, num-integer, num-traits, primal-check, strength_reduce, transpose, visibility) | Sample-rate conversion to 16 kHz and to the playback device rate in `audio-io`. Licenses read from each crate's `Cargo.toml` in the registry source. | MIT OR Apache-2.0 for rubato; realfft and windowfunctions MIT; visibility Zlib OR MIT OR Apache-2.0; the rest MIT OR Apache-2.0 | ok |
+| audio-codec-algorithms 0.8.1 | Sample-format conversion pulled in by audioadapter-sample | 0BSD OR Apache-2.0 (used under Apache-2.0) | ok |
+| cpal 0.18.2 and its platform dependencies (windows, windows-core and siblings, alsa, alsa-sys, coreaudio-rs, objc2 family, jni, ndk, wasm-bindgen family, dasp_sample, and others) | Audio capture and playback in `audio-io`, behind the off-by-default `cpal-backend` feature. Licenses read from `cargo metadata --all-features` on 2026-10-05, every platform's dependencies included. UNVERIFIED on hardware. | cpal Apache-2.0; dependencies MIT, Apache-2.0, Zlib or BSD choices (all offer MIT or Apache-2.0) | ok |
+| toml | Reads the phone map and the calibration file in `pron-engine` | MIT OR Apache-2.0 | ok |
+| hound | Reads WAV files in the `pron` program (`ort-backend` feature, off by default) | Apache-2.0 | ok |
+| ort, ort-sys 2.0.0-rc.13 | ONNX Runtime bindings for the phoneme model (`ort-backend` feature, off by default). Built with `load-dynamic`, so no runtime is downloaded or linked at build time. | MIT OR Apache-2.0 | ok. Read from the crate metadata and the `LICENSE-MIT` and `LICENSE-APACHE` files in the published package. The ONNX Runtime library the program loads is a separate item (section 6). |
+| libloading | Loads the ONNX Runtime library (dependency of `ort`) | ISC | ok |
+| ndarray, matrixmultiply, rawpointer, num-complex, num-integer, num-traits | Dependencies of `ort` | MIT OR Apache-2.0 | ok |
+| webpki-roots | CA root data, pulled in only by the build script of `sherpa-onnx-sys` when the optional `sherpa` feature of `speech` is on. Not in the default build. | CDLA-Permissive-2.0 | review: per-crate exception in `deny.toml` for this reason only |
 
 ## 4. JavaScript packages
 
@@ -93,17 +116,14 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 
 | Item | Planned use | Expected license | Status |
 |---|---|---|---|
-| sherpa-onnx (Rust crate and native library) | VAD, STT, TTS runtime | Apache-2.0 | verify |
-| ONNX Runtime, `ort` | Phoneme model inference | MIT, MIT OR Apache-2.0 | verify |
-| CPAL | Audio capture and playback | Apache-2.0 | verify |
-| Rubato, a ring-buffer crate | Resampling, audio buffers | MIT | verify |
-| harper-core 2.11.0, default features off | Rule-based grammar findings in `assessment-engine`, the writing workshop's first layer in `tutor-engine` (S4-12), and W03 in `content-cli` (S4-03, ADR-052) | Crate: Apache-2.0, read from crate metadata 2026-10-07. Owner approved adding it on 2026-10-07 after seeing its tree: 254 crates (about 240 more than before), including the `burn` ML framework through its tagger and `ammonia`. | ok (owner decision). Weigh its memory and build cost in stage 1 and 7 measurements. |
-| colored 3.1.1, cssparser 0.38.0, dtoa-short 0.3.5 (through harper-core) | Terminal colours, CSS parsing, number formatting | MPL-2.0: file-level copyleft. Used unmodified as crates.io dependencies, which MPL-2.0 allows inside an Apache-2.0 program. Their source stays available from crates.io. Allowed by per-crate exceptions in `deny.toml`. Attribution and source note in `NOTICE`. | review: conditions are that they stay unmodified and are never vendored or patched. |
+| sherpa-onnx 1.13.8 (Rust crate and native library) | VAD, STT, TTS runtime, optional `sherpa` feature of `speech` | Apache-2.0 (crate metadata) | review: the build script of `sherpa-onnx-sys` 1.13.8 links the static libraries `espeak-ng` and `piper_phonemize` into every static build. espeak-ng is GPL-3.0 (section 7). Read the licence of the prebuilt archive and decide before the feature is enabled in a release. The shared-library mode was not inspected. |
+| ONNX Runtime (the native library; the `ort` crate is in section 3) | Phoneme model inference. `pron-engine` loads it at run time from `ORT_DYLIB_PATH`; nothing in the repository bundles it. | MIT | verify |
+| harper-core 0.54.0 (with harper-brill, harper-pos-utils, ammonia 4.2.1, cssparser 0.38.0, dtoa-short 0.3.5) | Rule-based grammar findings behind the `GrammarCheck` seam (assessment spec 5.3, X5; writing workshop first layer; warning W03). Read on 2026-10-06 from the `Cargo.toml` of each crate in the registry source: harper-core, harper-brill and harper-pos-utils say `Apache-2.0`, ammonia says `MIT OR Apache-2.0`, **cssparser and dtoa-short say `MPL-2.0`**. harper-core needs ammonia (to clean markdown), ammonia needs cssparser, and cssparser needs dtoa-short, (ammonia is a dependency of harper-core 0.50.0, 0.54.0 and 2.11.0, the three whose manifests were read; `cargo deny` was run on 0.54.0 only). The package of harper-core holds no license file, and the upstream repository could not be reached to read one. The package also carries `dictionary.dict`, whose own terms the package does not state. 0.54.0 is the newest version that builds in this workspace without a heavy machine-learning dependency: from 0.55 `harper-pos-utils` depends on `burn`, and from 0.73 `burn` pulls in a second native `lzma` link that conflicts with `sherpa-onnx-sys`. `cargo deny check licenses` rejects exactly the two MPL-2.0 crates. **Not a dependency of the workspace.** Decision for the owner: accept MPL-2.0 for those two crates (a per-crate exception in `deny.toml`), find another checker, or ship without X5 and the first layer. `docs/GRAMMAR_CHECK.md` has the adapter that was built and run against 0.54.0 outside the workspace. | Apache-2.0 for harper-core; MPL-2.0 for cssparser and dtoa-short | review: stop and ask the owner |
 | Silero VAD, Whisper, Moonshine (English), Parakeet | VAD and STT candidates | MIT, MIT, MIT, CC BY 4.0 | verify |
 | Supertonic 3 | TTS candidate | Model: OpenRAIL-M. Code: MIT. | review: read the use restrictions in full and show them before download |
 | Kokoro, Kitten TTS | TTS candidates | Apache-2.0 | verify |
 | wav2vec2 phoneme model, ZIPA | Phoneme model candidates | Apache-2.0, unknown | verify |
-| CMUdict | Canonical pronunciations | BSD-style | verify |
+| CMUdict | Canonical pronunciations. `pron-engine` ships no dictionary: it reads a `cmudict.dict` file the user supplies. Crates.io was checked on 2026-10-05: `cmudict-fast` 0.8.0 and `mora-cmudict` 0.0.1 carry a copy of the data with its terms in `LICENSE-CMUDICT` (copyright 1993-2015 Carnegie Mellon University, redistribution allowed if the notice is kept), but the data is not covered by the crates' own `MIT OR Apache-2.0` metadata and the original source could not be reached to compare, so neither is a dependency. Shipping the data would need a `NOTICE` line. | BSD-style | verify |
 | CEFR-J vocabulary profile | Checking word levels | Free with citation, not an open license | review |
 | Octanove vocabulary profile C1/C2 | Word levels above B2 | CC BY-SA 4.0 | verify |
 | speechocean762 | Evaluation only | CC BY 4.0 | verify |

@@ -1,72 +1,131 @@
-/// One server-sent event.
+//! Incremental server-sent-events parser.
+//!
+//! Handles what real servers do: events split across network chunks at any byte,
+//! `\n`, `\r\n` and bare `\r` line ends, comment lines that start with `:` (used
+//! as keep-alives), multi-line `data:` fields, and a final event that is not
+//! followed by a blank line.
+
+use crate::error::LlmError;
+
+/// A single line or event longer than this is a protocol error, not a reason to
+/// grow memory without bound.
+const MAX_PENDING_BYTES: usize = 1024 * 1024;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SseEvent {
+pub(crate) struct SseEvent {
     pub event: Option<String>,
     pub data: String,
 }
 
-/// Incremental decoder for `text/event-stream`. Bytes may arrive split anywhere,
-/// including inside a line or a multi-byte character. Comment lines (keep-alives
-/// that start with `:`) are dropped.
 #[derive(Debug, Default)]
-pub struct SseDecoder {
-    line: Vec<u8>,
+pub(crate) struct SseParser {
+    buf: Vec<u8>,
     event: Option<String>,
     data: Vec<String>,
+    started: bool,
 }
 
-impl SseDecoder {
-    pub fn push(&mut self, bytes: &[u8]) -> Vec<SseEvent> {
-        let mut out = Vec::new();
-        for &b in bytes {
-            if b == b'\n' {
-                self.end_of_line(&mut out);
-            } else {
-                self.line.push(b);
+impl SseParser {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Feeds raw bytes and returns every event completed by them.
+    pub(crate) fn push(&mut self, bytes: &[u8]) -> Result<Vec<SseEvent>, LlmError> {
+        self.buf.extend_from_slice(bytes);
+        if !self.started {
+            // Strip a UTF-8 byte order mark once, at the very start.
+            if self.buf.len() >= 3 {
+                if self.buf.starts_with(&[0xEF, 0xBB, 0xBF]) {
+                    self.buf.drain(..3);
+                }
+                self.started = true;
+            } else if !b"\xEF\xBB\xBF".starts_with(&self.buf) {
+                self.started = true;
             }
         }
-        out
-    }
 
-    /// Call when the connection closes. A stream that ends without a blank line
-    /// (or without `[DONE]`) still delivers its last event.
-    pub fn finish(&mut self) -> Vec<SseEvent> {
-        let mut out = Vec::new();
-        if !self.line.is_empty() {
-            self.end_of_line(&mut out);
+        let mut events = Vec::new();
+        let mut consumed = 0;
+        loop {
+            let rest = &self.buf[consumed..];
+            let Some((line_end, next)) = find_line_end(rest) else {
+                break;
+            };
+            let line = String::from_utf8_lossy(&rest[..line_end]).into_owned();
+            consumed += next;
+            if let Some(event) = self.handle_line(&line) {
+                events.push(event);
+            }
         }
-        self.dispatch(&mut out);
-        out
+        self.buf.drain(..consumed);
+
+        let pending = self.buf.len() + self.data.iter().map(String::len).sum::<usize>();
+        if pending > MAX_PENDING_BYTES {
+            return Err(LlmError::Protocol(
+                "a server-sent event was larger than 1 MiB".to_owned(),
+            ));
+        }
+        Ok(events)
     }
 
-    fn end_of_line(&mut self, out: &mut Vec<SseEvent>) {
-        let raw = std::mem::take(&mut self.line);
-        let line = String::from_utf8_lossy(&raw);
-        let line = line.strip_suffix('\r').unwrap_or(&line);
+    /// Call when the connection closes. A last event without its blank line is
+    /// delivered rather than dropped, because some servers close right after the
+    /// final `data:` line.
+    pub(crate) fn finish(&mut self) -> Option<SseEvent> {
+        if !self.buf.is_empty() {
+            let line = String::from_utf8_lossy(&self.buf).into_owned();
+            self.buf.clear();
+            if let Some(event) = self.handle_line(line.trim_end_matches(['\r', '\n'])) {
+                return Some(event);
+            }
+        }
+        self.dispatch()
+    }
+
+    fn handle_line(&mut self, line: &str) -> Option<SseEvent> {
         if line.is_empty() {
-            self.dispatch(out);
-        } else if line.starts_with(':') {
-            // keep-alive
-        } else {
-            let (field, value) = line.split_once(':').unwrap_or((line, ""));
-            let value = value.strip_prefix(' ').unwrap_or(value);
-            match field {
-                "event" => self.event = Some(value.to_owned()),
-                "data" => self.data.push(value.to_owned()),
-                _ => {}
-            }
+            return self.dispatch();
         }
+        if line.starts_with(':') {
+            return None;
+        }
+        let (field, value) = match line.split_once(':') {
+            Some((field, value)) => (field, value.strip_prefix(' ').unwrap_or(value)),
+            None => (line, ""),
+        };
+        match field {
+            "event" => self.event = Some(value.to_owned()),
+            "data" => self.data.push(value.to_owned()),
+            // `id` and `retry` are reconnection hints; this client never reconnects a stream.
+            _ => {}
+        }
+        None
     }
 
-    fn dispatch(&mut self, out: &mut Vec<SseEvent>) {
+    fn dispatch(&mut self) -> Option<SseEvent> {
+        let event = self.event.take();
         if self.data.is_empty() {
-            self.event = None;
-            return;
+            return None;
         }
-        out.push(SseEvent {
-            event: self.event.take(),
-            data: self.data.drain(..).collect::<Vec<_>>().join("\n"),
-        });
+        let data = self.data.join("\n");
+        self.data.clear();
+        Some(SseEvent { event, data })
+    }
+}
+
+/// Finds the end of the first line. Returns the length of the line without its
+/// terminator and the offset of the next line. A trailing `\r` is held back because
+/// the `\n` of a `\r\n` pair may arrive in the next chunk.
+fn find_line_end(bytes: &[u8]) -> Option<(usize, usize)> {
+    let position = bytes.iter().position(|b| *b == b'\n' || *b == b'\r')?;
+    if bytes[position] == b'\n' {
+        return Some((position, position + 1));
+    }
+    match bytes.get(position + 1) {
+        Some(b'\n') => Some((position, position + 2)),
+        Some(_) => Some((position, position + 1)),
+        None => None,
     }
 }
 
@@ -74,46 +133,78 @@ impl SseDecoder {
 mod tests {
     use super::*;
 
-    fn decode(parts: &[&[u8]]) -> Vec<SseEvent> {
-        let mut d = SseDecoder::default();
-        let mut out: Vec<SseEvent> = parts.iter().flat_map(|p| d.push(p)).collect();
-        out.extend(d.finish());
-        out
+    fn parse_all(chunks: &[&[u8]]) -> Vec<SseEvent> {
+        let mut parser = SseParser::new();
+        let mut events = Vec::new();
+        for chunk in chunks {
+            events.extend(parser.push(chunk).expect("push"));
+        }
+        events.extend(parser.finish());
+        events
     }
 
-    fn ev(event: Option<&str>, data: &str) -> SseEvent {
-        SseEvent {
-            event: event.map(str::to_owned),
-            data: data.to_owned(),
+    #[test]
+    fn parses_named_events_and_comments() {
+        let events = parse_all(&[b": keep-alive\n\nevent: ping\ndata: {\"a\":1}\n\ndata: x\n\n"]);
+        assert_eq!(
+            events,
+            vec![
+                SseEvent {
+                    event: Some("ping".into()),
+                    data: "{\"a\":1}".into()
+                },
+                SseEvent {
+                    event: None,
+                    data: "x".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn same_result_for_every_split_point() {
+        let stream = b": hi\r\ndata: one\r\n\r\nevent: e\r\ndata: a\r\ndata: b\r\n\r\ndata: tail";
+        let whole = parse_all(&[stream]);
+        assert_eq!(whole.len(), 3);
+        assert_eq!(whole[1].data, "a\nb");
+        for split in 0..stream.len() {
+            let (a, b) = stream.split_at(split);
+            assert_eq!(parse_all(&[a, b]), whole, "split at {split}");
         }
     }
 
     #[test]
-    fn parses_data_and_named_events_and_skips_keep_alives() {
-        let out = decode(&[b": ping\n\ndata: one\n\nevent: x\ndata: two\n\n"]);
-        assert_eq!(out, [ev(None, "one"), ev(Some("x"), "two")]);
+    fn bare_carriage_return_ends_a_line() {
+        let events = parse_all(&[b"data: a\r\rdata: b\r\r"]);
+        assert_eq!(
+            events.iter().map(|e| e.data.as_str()).collect::<Vec<_>>(),
+            ["a", "b"]
+        );
     }
 
     #[test]
-    fn handles_crlf_and_multi_line_data() {
-        assert_eq!(decode(&[b"data: a\r\ndata: b\r\n\r\n"]), [ev(None, "a\nb")]);
+    fn a_multibyte_character_split_across_chunks_survives() {
+        let text = "data: caf\u{e9}\n\n".as_bytes();
+        let split = text.iter().position(|b| *b == 0xC3).expect("multibyte") + 1;
+        let events = parse_all(&[&text[..split], &text[split..]]);
+        assert_eq!(events[0].data, "caf\u{e9}");
     }
 
     #[test]
-    fn splits_anywhere_including_inside_a_utf8_character() {
-        let whole = "data: caf\u{e9} \u{1f600}\n\n".as_bytes();
-        let one_by_one: Vec<&[u8]> = whole.chunks(1).collect();
-        assert_eq!(decode(&one_by_one), [ev(None, "caf\u{e9} \u{1f600}")]);
+    fn strips_a_byte_order_mark_and_one_space_only() {
+        let events = parse_all(&[b"\xEF\xBB\xBFdata:  two spaces\n\n"]);
+        assert_eq!(events[0].data, " two spaces");
     }
 
     #[test]
-    fn a_stream_that_closes_without_a_blank_line_still_delivers_its_last_event() {
-        assert_eq!(decode(&[b"data: last"]), [ev(None, "last")]);
-        assert_eq!(decode(&[b"data: last\n"]), [ev(None, "last")]);
+    fn an_event_without_data_is_not_delivered() {
+        assert!(parse_all(&[b"event: ping\n\n"]).is_empty());
     }
 
     #[test]
-    fn an_event_name_without_data_does_not_leak_into_the_next_event() {
-        assert_eq!(decode(&[b"event: lonely\n\ndata: x\n\n"]), [ev(None, "x")]);
+    fn oversized_input_is_a_protocol_error() {
+        let mut parser = SseParser::new();
+        let big = vec![b'a'; MAX_PENDING_BYTES + 1];
+        assert!(matches!(parser.push(&big), Err(LlmError::Protocol(_))));
     }
 }

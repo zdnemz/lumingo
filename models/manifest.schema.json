@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lumingo model manifest",
+  "description": "Schema of models/manifest.toml, checked against the TOML converted to JSON. The Rust parser in crates/model-manager is the authority: it also rejects duplicate ids, unsafe file paths and entries that cannot be downloaded. A candidate entry may have an empty sha256 or no files, and then it cannot be downloaded.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "model": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/model" }
+    }
+  },
+  "$defs": {
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "engine", "version", "license", "license_url", "source"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]{1,64}$",
+          "description": "Unique. Names the install folder."
+        },
+        "role": { "enum": ["vad", "stt", "tts", "pron"] },
+        "engine": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "license": {
+          "type": "string",
+          "description": "SPDX identifier or the licence name. The word unknown keeps the entry from downloading."
+        },
+        "license_url": { "type": "string", "description": "Where the licence text is read. Empty keeps the entry from downloading." },
+        "source": {
+          "type": "string",
+          "description": "Upstream location, never a project-owned mirror. A directory URL: files without their own url are fetched from source plus path."
+        },
+        "size_bytes": { "type": "integer", "minimum": 0, "description": "Total size, 0 until measured." },
+        "files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/file" }
+        },
+        "license_text": { "type": "string", "description": "Licence text or use restrictions shown before download." },
+        "license_review": { "type": "boolean", "description": "The licence has use restrictions that must be read in full." },
+        "notes": { "type": "string", "description": "What is still unverified about this entry." }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[^/\\\\:][^\\\\:]*$",
+          "description": "Relative path inside the model folder, with / separators. No .. segments (the Rust parser checks that)."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{64})?$",
+          "description": "64 hexadecimal characters. Empty means not verified yet and makes the entry undownloadable."
+        },
+        "url": { "type": "string", "description": "Full https URL of this file. Loopback may use http." },
+        "size_bytes": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

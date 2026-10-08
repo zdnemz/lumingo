@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = "1.0.104"
+app-core = { version = "0.0.0", path = "../../crates/app-core" }
 axum = { version = "0.8.9", features = ["ws"] }
 base64 = "0.22.1"
 clap = { version = "4.6.7", features = ["derive"] }
@@ -21,14 +22,26 @@ tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "net", "s
 tokio-util = "0.7.19"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-ts-rs = "12.0.1"
 webbrowser = "1.2.4"
+
+[features]
+# Real microphone and speakers through cpal. Off by default; UNVERIFIED on
+# hardware, see crates/app-core/README.md.
+cpal-backend = ["app-core/cpal-backend"]
+# Real VAD, speech recognition and speech synthesis through sherpa-onnx. Off by
+# default; UNVERIFIED, the native library cannot be built in the container.
+sherpa = ["app-core/sherpa"]
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+# The fakes of the session tests; no release build enables this feature.
+app-core = { version = "0.0.0", path = "../../crates/app-core", features = ["test-support"] }
 futures-util = "0.3.34"
 http-body-util = "0.1.5"
+llm-client = { version = "0.0.0", path = "../../crates/llm-client" }
+storage = { version = "0.0.0", path = "../../crates/storage" }
+tempfile = "3.27.0"
 tokio-tungstenite = "0.29.0"
 tower = { version = "0.5.3", features = ["util"] }

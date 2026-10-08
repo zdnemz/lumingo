@@ -5,15 +5,22 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Unit types and a schema-validating loader for the Lumingo curriculum"
+description = "Curriculum unit types, schema-checked loader, checksums and content validators for Lumingo"
+
+[features]
+default = []
+# Derives ts_rs::TS for every public unit type so app-core can export them to the UI.
+ts = ["dep:ts-rs"]
 
 [dependencies]
-assessment-engine = { path = "../assessment-engine", default-features = false }
-jsonschema = { version = "0.58.6", default-features = false }
+# default-features = false drops the HTTP and file reference resolvers and the TLS stack.
+# The unit schema only uses local references, and the content tools must not open a network destination.
+jsonschema = { version = "0.58.5", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1"
+serde_json = "1.0.151"
 sha2 = "0.10.9"
 thiserror = "2.0.21"
+ts-rs = { version = "12.0.1", optional = true }
 
 [lints]
 workspace = true

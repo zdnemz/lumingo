@@ -1,23 +1,26 @@
-//! The curriculum model and its loader. `load_unit` checks a unit against
-//! `curriculum/schema/unit.schema.json` first and only then builds the typed
-//! `Unit`, so a broken file is reported with the path of the first problems, not
-//! as a vague deserialisation error. The content rules that a schema cannot
-//! express (CURRICULUM_SPEC section 6) are validators in a later task.
+//! Curriculum units for Lumingo: typed model, schema-checked loader and content checksum.
+//!
+//! The unit format is defined by `curriculum/schema/unit.schema.json` and explained in
+//! `docs/CURRICULUM_SPEC.md`. [`model`] mirrors the schema, [`load`] checks a file against
+//! the schema before it deserialises it, and [`index`] holds the plain row that
+//! `app-core` writes to the database index. This crate does not depend on `storage`.
+//!
+//! The optional `ts` feature derives `ts_rs::TS` for every public unit type so the UI can
+//! reuse the types. It is off by default.
+
 #![forbid(unsafe_code)]
 
 pub mod index;
-mod load;
-mod model;
-mod playable;
-mod validate;
+pub mod load;
+pub mod model;
+pub mod schema;
+pub mod syllabus;
+pub mod validate;
 
-pub use index::{
-    UnitIndexEntry, UnitObjective, content_version_for, manifest_checksum, sha256_hex,
+pub use index::{SkillCounts, UnitIndexEntry};
+pub use load::{
+    LoadError, LoadedUnit, UnitFile, load_unit_bytes, load_unit_dir, load_unit_file, sha256_hex,
+    unit_from_value,
 };
-pub use load::{LoadError, LoadedFile, SchemaIssue, UnitLoader, load_dir};
 pub use model::*;
-pub use playable::NotPlayable;
-pub use validate::{
-    Diagnostic, GrammarCheck, SetOptions, Severity, UnitOptions, validate_set, validate_unit,
-    validate_unit_with,
-};
+pub use schema::{SchemaChecker, SchemaIssue, SchemaLoadError};

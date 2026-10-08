@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useMotionEnabled } from "@/state/PreferencesProvider";
-import type { LumiMood } from "./data";
+import type { AccessoryId, LumiMood } from "./data";
 import { Sprite } from "./Sprite";
 
 export interface MascotProps {
   mood?: LumiMood;
+  /** Something Lumi wears. Cosmetic only. */
+  accessory?: AccessoryId;
   scale?: number;
   /** Accessible name. Leave out when the mascot is only decoration. */
   label?: string;
@@ -22,7 +24,7 @@ const BLINK_MS = 140;
  * and then. With motion off Lumi is a still picture and the mood is the only
  * thing that changes.
  */
-export function Mascot({ mood = "idle", scale = 6, label, className }: MascotProps) {
+export function Mascot({ mood = "idle", accessory, scale = 6, label, className }: MascotProps) {
   const motion = useMotionEnabled();
   const canBlink = motion && mood === "idle";
   const [blinking, setBlinking] = useState(false);
@@ -50,12 +52,9 @@ export function Mascot({ mood = "idle", scale = 6, label, className }: MascotPro
 
   const shown = canBlink && blinking ? "blink" : mood;
   return (
-    <span
-      className={className}
-      data-anim={mood === "idle" || mood === "happy" ? "bob" : undefined}
-      style={{ display: "inline-block" }}
-    >
+    <span className={["lumi", className].filter(Boolean).join(" ")} data-anim={mood === "idle" || mood === "happy" ? "bob" : undefined}>
       <Sprite name={`lumi-${shown}`} scale={scale} label={label} />
+      {accessory ? <Sprite name={accessory} scale={scale} className="lumi__accessory" /> : null}
     </span>
   );
 }

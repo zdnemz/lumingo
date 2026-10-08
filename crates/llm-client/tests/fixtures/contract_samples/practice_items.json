@@ -1,0 +1,18 @@
+{
+  "items": [
+    {
+      "type": "mcq",
+      "objective_id": "o1",
+      "grammar_id": "g1",
+      "stem": "She ___ tea every morning.",
+      "options": ["drink", "drinks", "drinking"],
+      "answer_index": 1,
+      "text": "",
+      "answers": [],
+      "tokens": [],
+      "answer": "",
+      "explanation_en": "With she, the verb takes s.",
+      "explanation_l1": "Dengan she, kata kerja memakai s."
+    }
+  ]
+}

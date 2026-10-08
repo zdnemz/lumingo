@@ -22,17 +22,16 @@ allow = [
   "Unicode-3.0",
   "Unicode-DFS-2016",
 ]
-# CDLA-Permissive-2.0 is a permissive data license (attribution, no copyleft). It covers
-# the Mozilla CA certificate list that reqwest's TLS stack uses. See docs/LICENSE_REGISTER.md.
+# MIT-0 is MIT without the attribution clause: it asks for less than MIT does. It is not on
+# the rule 2 list, so it is allowed for the one crate that needs it, with a register row.
+# borrow-or-share comes in through jsonschema (referencing, fluent-uri).
 exceptions = [
-  { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
-  # MIT-0 is MIT without the attribution requirement. Pulled in by jsonschema's URI parser.
-  { allow = ["MIT-0"], crate = "borrow-or-share" },
-  # MPL-2.0 (file-level copyleft) is accepted only for these unmodified crates, which
-  # harper-core pulls in. See the harper-core row in docs/LICENSE_REGISTER.md.
-  { allow = ["MPL-2.0"], crate = "colored" },
-  { allow = ["MPL-2.0"], crate = "cssparser" },
-  { allow = ["MPL-2.0"], crate = "dtoa-short" },
+  { crate = "borrow-or-share", allow = ["MIT-0"] },
+  # webpki-roots holds the CA root certificate data. It is pulled in only by the
+  # build script of sherpa-onnx-sys (through ureq), which downloads the native
+  # library, and only when the optional `sherpa` feature of `speech` is on. It is
+  # not part of the default build. Register row: docs/LICENSE_REGISTER.md section 3.
+  { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
 ]
 
 [bans]

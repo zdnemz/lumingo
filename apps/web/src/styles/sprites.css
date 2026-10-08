@@ -9,6 +9,12 @@
   --sprite-eye: #1b1230;
   --sprite-blush: #ff8fa3;
   --sprite-mouth: #7a2d12;
+  --sprite-red: #e0475b;
+  --sprite-purple: #7c4dff;
+  --sprite-silver: #c8d0e0;
+  --sprite-yellow: #ffe066;
+  --sprite-blue: #4a7bd0;
+  --sprite-brown: #5b3a1e;
 }
 
 .px-sprite .sp-k { fill: var(--sprite-ink); }
@@ -20,3 +26,19 @@
 .px-sprite .sp-m { fill: var(--sprite-mouth); }
 .px-sprite .sp-x { fill: currentColor; }
 .px-sprite .sp-a { fill: var(--color-primary); }
+.px-sprite .sp-r { fill: var(--sprite-red); }
+.px-sprite .sp-p { fill: var(--sprite-purple); }
+.px-sprite .sp-s { fill: var(--sprite-silver); }
+.px-sprite .sp-y { fill: var(--sprite-yellow); }
+.px-sprite .sp-u { fill: var(--sprite-blue); }
+.px-sprite .sp-n { fill: var(--sprite-brown); }
+
+/* An accessory is a second sprite laid exactly over Lumi. */
+.lumi {
+  position: relative;
+  display: inline-block;
+}
+.lumi__accessory {
+  position: absolute;
+  inset: 0;
+}

@@ -85,7 +85,8 @@
 
 /* ---- Theme: Night (default) -------------------------------------------- */
 :root,
-:root[data-theme="night"] {
+:root[data-theme="night"],
+[data-theme-scope="night"] {
   color-scheme: dark;
 
   --color-bg: var(--pal-night-900);
@@ -124,7 +125,8 @@
 }
 
 /* ---- Theme: Day -------------------------------------------------------- */
-:root[data-theme="day"] {
+:root[data-theme="day"],
+[data-theme-scope="day"] {
   color-scheme: light;
 
   --color-bg: var(--pal-parchment-200);
@@ -142,14 +144,14 @@
   --color-primary-pressed: #e09f00;
   --color-on-primary: var(--pal-indigo-950);
 
-  --color-success: #0b7a4b;
+  --color-success: #09663f;
   --color-danger: #b4233b;
   --color-warning: #8a5200;
-  --color-info: #0b6fa8;
+  --color-info: #0a5f96;
 
-  --color-skill-listening: #0b6fa8;
+  --color-skill-listening: #0a5f96;
   --color-skill-speaking: #b4233b;
-  --color-skill-reading: #0b7a4b;
+  --color-skill-reading: #09663f;
   --color-skill-writing: #6d3fd1;
 
   --color-focus: var(--pal-indigo-900);
@@ -160,6 +162,86 @@
   --bevel-dark: rgb(43 35 80 / 0.16);
   --color-scanline: rgb(43 35 80 / 0.1);
   --color-star: rgb(43 35 80 / 0.25);
+}
+
+/* ---- Theme: Forest (unlockable) ---------------------------------------- */
+:root[data-theme="forest"],
+[data-theme-scope="forest"] {
+  color-scheme: dark;
+
+  --color-bg: #0f1f17;
+  --color-bg-deep: #09130e;
+  --color-surface: #16301f;
+  --color-surface-raised: #1f4229;
+  --color-border: #7fcf8a;
+  --color-shadow: #09130e;
+  --color-text: #eefbe9;
+  --color-text-muted: #b4d8b0;
+  --color-link: #8fe3c0;
+
+  --color-primary: #8de06a;
+  --color-primary-hover: #a4ea85;
+  --color-primary-pressed: #6cc44a;
+  --color-on-primary: #0f1f17;
+
+  --color-success: #6ee7a8;
+  --color-danger: #ff8a8a;
+  --color-warning: #ffc15a;
+  --color-info: #6cd3ff;
+
+  --color-skill-listening: #6cd3ff;
+  --color-skill-speaking: #ff8f9a;
+  --color-skill-reading: #9be86f;
+  --color-skill-writing: #c2a8ff;
+
+  --color-focus: #fff27a;
+  --color-selection: #8de06a;
+  --color-on-selection: #0f1f17;
+
+  --bevel-light: rgb(255 255 255 / 0.1);
+  --bevel-dark: rgb(0 0 0 / 0.32);
+  --color-scanline: rgb(0 0 0 / 0.22);
+  --color-star: rgb(238 251 233 / 0.5);
+}
+
+/* ---- Theme: Ember (unlockable) ------------------------------------------- */
+:root[data-theme="ember"],
+[data-theme-scope="ember"] {
+  color-scheme: dark;
+
+  --color-bg: #1f0f10;
+  --color-bg-deep: #140808;
+  --color-surface: #331819;
+  --color-surface-raised: #472122;
+  --color-border: #e0916f;
+  --color-shadow: #140808;
+  --color-text: #fff1e8;
+  --color-text-muted: #e8bfae;
+  --color-link: #ffc08a;
+
+  --color-primary: #ff8a3d;
+  --color-primary-hover: #ffa05f;
+  --color-primary-pressed: #e06a1a;
+  --color-on-primary: #1f0f10;
+
+  --color-success: #7be0a0;
+  --color-danger: #ff7f8f;
+  --color-warning: #ffc15a;
+  --color-info: #7cc8ff;
+
+  --color-skill-listening: #7cc8ff;
+  --color-skill-speaking: #ff8f9a;
+  --color-skill-reading: #8fe3a0;
+  --color-skill-writing: #c9a8ff;
+
+  --color-focus: #fff27a;
+  --color-selection: #ff8a3d;
+  --color-on-selection: #1f0f10;
+
+  --bevel-light: rgb(255 255 255 / 0.1);
+  --bevel-dark: rgb(0 0 0 / 0.32);
+  --color-scanline: rgb(0 0 0 / 0.22);
+  --color-star: rgb(255 241 232 / 0.5);
 }
 
 /* ---- Small screens: the art pixel gets smaller, not the touch targets --- */

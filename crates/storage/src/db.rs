@@ -1,153 +1,142 @@
-//! Opening the database: connection settings, the embedded migration list, and
-//! the backup that is taken before a schema upgrade.
-//!
-//! One writer pool (a single connection, so writes serialise) and a small
-//! reader pool share the file in WAL mode. A file that is not ours, a file from
-//! a newer build, or a file whose applied migration was edited is refused
-//! untouched.
+//! Opening the database: connection settings, migrations and the backup that
+//! comes before a schema upgrade.
 
-use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use sqlx::migrate::{Migration, MigrationType, Migrator};
+use sqlx::migrate::{MigrateError, Migration, MigrationType, Migrator};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
-use sqlx::{ConnectOptions, Connection, SqlitePool};
+use sqlx::{
+    ConnectOptions, Connection, SqlSafeStr, Sqlite, SqliteConnection, SqlitePool, Transaction,
+};
 
-use crate::error::{StorageError, map_migrate_error};
+use crate::error::{Result, StorageError};
 
-/// Newest schema version this build knows: the version of the last embedded
-/// migration. Asserted against the list by a unit test below.
-pub const SCHEMA_VERSION: i64 = 1;
+/// Newest schema version this build knows. The last entry of `MIGRATIONS`.
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// How many `<db>.bak-<version>` files are kept next to the database.
 const KEPT_BACKUPS: usize = 2;
 
-/// Reader pool size. One writer connection is enough; readers run short queries.
-const READER_CONNECTIONS: u32 = 4;
-
-/// One migration as this crate embeds it. Plain data, so the configuration does
-/// not leak sqlx types into the rest of the workspace.
-#[derive(Debug, Clone, Copy)]
-pub struct OpenMigration {
-    pub version: i64,
-    pub description: &'static str,
-    pub sql: &'static str,
+struct MigrationFile {
+    version: i64,
+    description: &'static str,
+    sql: &'static str,
 }
 
-/// Every migration, in order. Listed explicitly rather than read from a folder,
-/// so a stray file can never change the schema and the SQL is part of the
-/// binary. Once a migration has shipped, its file must never be edited; a
-/// change is a new numbered file.
-const EMBEDDED_MIGRATIONS: &[OpenMigration] = &[OpenMigration {
-    version: 1,
-    description: "init",
-    sql: include_str!("../migrations/0001_init.sql"),
-}];
+/// Every migration, in order. Listed explicitly rather than read from a folder so
+/// a stray file can never change the schema, and so the SQL is part of the binary.
+const MIGRATIONS: &[MigrationFile] = &[
+    MigrationFile {
+        version: 1,
+        description: "init",
+        sql: include_str!("../migrations/0001_init.sql"),
+    },
+    MigrationFile {
+        version: 2,
+        description: "game",
+        sql: include_str!("../migrations/0002_game.sql"),
+    },
+];
 
-/// How to open a database: which migrations to apply. The default is the
-/// embedded list that the application uses. Tests and tools may pass their own
-/// list to exercise an upgrade, which is the only way the backup path runs
-/// while the build ships a single migration.
+fn migrator(up_to: i64) -> Migrator {
+    let migrations = MIGRATIONS
+        .iter()
+        .filter(|file| file.version <= up_to)
+        .map(|file| {
+            Migration::new(
+                file.version,
+                file.description.into(),
+                MigrationType::Simple,
+                file.sql.into_sql_str(),
+                false,
+            )
+        })
+        .collect();
+    Migrator::with_migrations(migrations)
+}
+
+/// Settings for [`Database::open_with`].
+#[derive(Debug, Clone)]
 pub struct OpenConfig {
-    pub migrations: Vec<OpenMigration>,
+    /// How long a connection waits for a lock held by another connection before
+    /// the call fails with a busy error.
+    pub busy_timeout: Duration,
+    /// Size of the read pool. The write side is always exactly one connection.
+    pub read_connections: u32,
 }
 
 impl Default for OpenConfig {
     fn default() -> Self {
         Self {
-            migrations: EMBEDDED_MIGRATIONS.to_vec(),
+            busy_timeout: Duration::from_secs(5),
+            read_connections: 4,
         }
     }
 }
 
-/// Builds sqlx migrations from the plain list. `Migration::new` computes the
-/// checksum, so an edited SQL file is refused on the next open.
-fn to_sqlx_migrations(config: &[OpenMigration]) -> Vec<Migration> {
-    config
-        .iter()
-        .map(|file| {
-            Migration::new(
-                file.version,
-                Cow::Borrowed(file.description),
-                MigrationType::Simple,
-                Cow::Borrowed(file.sql),
-                false,
-            )
-        })
-        .collect()
-}
-
-/// What an existing file looks like before we touch it.
-enum FileState {
-    /// No file, or a file with no tables of its own.
-    Fresh,
-    /// Our schema; `version` is the newest applied migration (0 when the
-    /// bookkeeping table exists but is empty).
-    Ours { version: i64 },
-    /// Tables exist but none of them is our migration table.
-    Foreign,
-}
-
-/// The open database: one write pool, one read pool, and the file path.
-#[derive(Debug)]
+/// The local database: one write connection and a small pool of readers.
+///
+/// Cloning is cheap and every clone shares the same connections. Writes queue on
+/// the single write connection, so two writers inside this process cannot
+/// deadlock on SQLite's write lock. Readers never block the writer under WAL.
+///
+/// Every function is async and cancel-safe: dropping the future rolls back an
+/// unfinished transaction.
+#[derive(Debug, Clone)]
 pub struct Database {
+    write: SqlitePool,
+    read: SqlitePool,
     path: PathBuf,
-    writer: SqlitePool,
-    readers: SqlitePool,
 }
 
 impl Database {
-    /// Opens the database at `path`, creating and migrating it when needed.
-    /// Uses the embedded migrations.
-    pub async fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
+    /// Opens or creates the database at `path` with the default settings and
+    /// brings the schema up to date.
+    pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         Self::open_with(path, OpenConfig::default()).await
     }
 
-    /// Opens with an explicit migration list. The application uses [`open`];
-    /// this exists for tests and tools that exercise an upgrade.
-    ///
-    /// [`open`]: Database::open
-    pub async fn open_with(
-        path: impl AsRef<Path>,
-        config: OpenConfig,
-    ) -> Result<Self, StorageError> {
-        let path = path.as_ref().to_path_buf();
-        let target = config.migrations.last().map(|m| m.version).unwrap_or(0);
+    /// Like [`Database::open`] with explicit settings.
+    pub async fn open_with(path: impl AsRef<Path>, config: OpenConfig) -> Result<Self> {
+        Self::open_up_to(path.as_ref(), &config, SCHEMA_VERSION).await
+    }
 
-        match inspect(&path).await? {
-            FileState::Foreign => return Err(StorageError::ForeignDatabase { path }),
-            FileState::Fresh => {}
-            FileState::Ours { version } => {
-                if version > target {
-                    return Err(StorageError::SchemaTooNew {
-                        found: version,
-                        supported: target,
-                    });
-                }
-                // An upgrade of a schema that already holds data is the only
-                // case that gets a backup. A fresh file has nothing to lose.
-                if version > 0 && version < target {
-                    backup(&path, version).await?;
-                }
-            }
+    /// Opens the database as a build that only knows migrations up to `up_to`.
+    /// Production code always passes [`SCHEMA_VERSION`]; the lower values let
+    /// tests build an old database and then upgrade it.
+    pub(crate) async fn open_up_to(path: &Path, config: &OpenConfig, up_to: i64) -> Result<Self> {
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|source| StorageError::Open {
+                    path: path.to_owned(),
+                    source: sqlx::Error::Io(source),
+                })?;
         }
 
-        let writer = open_pool(&path, 1).await?;
-        let readers = open_pool(&path, READER_CONNECTIONS).await?;
+        let write_options = write_options(path, config);
+        prepare_schema(path, &write_options, up_to).await?;
 
-        let migrator = Migrator {
-            migrations: Cow::Owned(to_sqlx_migrations(&config.migrations)),
-            ignore_missing: false,
-            locking: true,
-            no_tx: false,
+        let open_error = |source| StorageError::Open {
+            path: path.to_owned(),
+            source,
         };
-        migrator.run(&writer).await.map_err(map_migrate_error)?;
+        let write = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(write_options)
+            .await
+            .map_err(open_error)?;
+        let read = SqlitePoolOptions::new()
+            .max_connections(config.read_connections.max(1))
+            .connect_with(read_options(path, config))
+            .await
+            .map_err(open_error)?;
 
-        Ok(Database {
-            path,
-            writer,
-            readers,
+        Ok(Self {
+            write,
+            read,
+            path: path.to_owned(),
         })
     }
 
@@ -156,188 +145,229 @@ impl Database {
         &self.path
     }
 
-    /// The write pool: one connection, so writes serialise. Repositories use
-    /// this. Exposed for tests and diagnostics; application code should go
-    /// through the repositories.
-    pub fn writer(&self) -> &SqlitePool {
-        &self.writer
+    /// The schema version recorded in the file.
+    pub async fn schema_version(&self) -> Result<i64> {
+        let mut conn = self.reader().acquire().await?;
+        applied_version(&mut conn).await
     }
 
-    /// The read pool. See [`writer`](Database::writer) about direct use.
-    pub fn readers(&self) -> &SqlitePool {
-        &self.readers
-    }
-
-    /// The newest applied migration version in the file.
-    pub async fn schema_version(&self) -> Result<i64, StorageError> {
-        let version: Option<i64> = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
-            .fetch_one(&self.writer)
+    /// Folds the write-ahead log into the main file and rewrites the file without
+    /// free pages. Call it after deleting learning data so deleted text does not
+    /// linger in unused pages.
+    pub async fn compact(&self) -> Result<()> {
+        let mut conn = self.writer().acquire().await?;
+        sqlx::query("VACUUM").execute(&mut *conn).await?;
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(&mut *conn)
             .await?;
-        Ok(version.unwrap_or(0))
-    }
-
-    /// Rebuilds the file to reclaim space, for example after deleting a lot of
-    /// learner data. Cannot run inside a transaction, so it is a bare VACUUM.
-    pub async fn compact(&self) -> Result<(), StorageError> {
-        sqlx::query("VACUUM").execute(&self.writer).await?;
         Ok(())
     }
 
-    /// Closes both pools. Callers should close before deleting or moving the
-    /// file; dropping the value closes them too.
-    pub async fn close(&self) {
-        self.writer.close().await;
-        self.readers.close().await;
+    /// Flushes the log and closes every connection of every clone. Call it on
+    /// shutdown.
+    pub async fn close(&self) -> Result<()> {
+        if !self.writer().is_closed() {
+            let mut conn = self.writer().acquire().await?;
+            sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                .execute(&mut *conn)
+                .await?;
+        }
+        self.read.close().await;
+        self.write.close().await;
+        Ok(())
+    }
+
+    /// The pool for queries that only read.
+    pub(crate) fn reader(&self) -> &SqlitePool {
+        &self.read
+    }
+
+    /// The single write connection, for statements that change one row.
+    pub(crate) fn writer(&self) -> &SqlitePool {
+        &self.write
+    }
+
+    /// Starts a write transaction that takes SQLite's write lock immediately.
+    ///
+    /// A deferred transaction that starts as a read and later upgrades fails at
+    /// once with "database is locked" when another connection wrote in between,
+    /// without waiting for the busy timeout. Taking the lock up front waits.
+    pub(crate) async fn begin_write(&self) -> Result<Transaction<'static, Sqlite>> {
+        Ok(self.write.begin_with("BEGIN IMMEDIATE").await?)
     }
 }
 
-/// Opens a pool with the settings every connection in this app must have:
-/// foreign keys on, WAL, a busy timeout, and `synchronous = NORMAL` (the WAL
-/// recommendation: durable against app crashes, not against power loss).
-async fn open_pool(path: &Path, max_connections: u32) -> Result<SqlitePool, StorageError> {
-    let options = SqliteConnectOptions::new()
+fn write_options(path: &Path, config: &OpenConfig) -> SqliteConnectOptions {
+    SqliteConnectOptions::new()
         .filename(path)
         .create_if_missing(true)
-        .foreign_keys(true)
         .journal_mode(SqliteJournalMode::Wal)
+        // NORMAL cannot corrupt the file under WAL. It can lose the last commits
+        // on power loss, which is acceptable for learning progress.
         .synchronous(SqliteSynchronous::Normal)
-        .busy_timeout(Duration::from_secs(5));
-    SqlitePoolOptions::new()
-        .max_connections(max_connections)
-        .connect_with(options)
-        .await
-        .map_err(StorageError::Database)
+        .foreign_keys(true)
+        .busy_timeout(config.busy_timeout)
 }
 
-/// Looks at an existing file without changing it.
-async fn inspect(path: &Path) -> Result<FileState, StorageError> {
-    if !path.exists() {
-        return Ok(FileState::Fresh);
-    }
-
-    let mut conn = SqliteConnectOptions::new()
+fn read_options(path: &Path, config: &OpenConfig) -> SqliteConnectOptions {
+    // No journal_mode pragma here: WAL is stored in the file and a read-only
+    // connection must not try to change it.
+    SqliteConnectOptions::new()
         .filename(path)
-        .connect()
-        .await
-        .map_err(|error| map_open_error(path, error))?;
-
-    let tables: Result<Vec<String>, sqlx::Error> = sqlx::query_scalar(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
-    )
-    .fetch_all(&mut conn)
-    .await;
-
-    let version: Result<Option<i64>, sqlx::Error> = match &tables {
-        Ok(names) if names.iter().any(|name| name == "_sqlx_migrations") => {
-            sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
-                .fetch_one(&mut conn)
-                .await
-        }
-        _ => Ok(None),
-    };
-
-    let _ = conn.close().await;
-
-    let tables = tables.map_err(|error| map_open_error(path, error))?;
-    if tables.is_empty() {
-        return Ok(FileState::Fresh);
-    }
-    if !tables.iter().any(|name| name == "_sqlx_migrations") {
-        return Ok(FileState::Foreign);
-    }
-    let version = version.map_err(|error| map_open_error(path, error))?;
-    Ok(FileState::Ours {
-        version: version.unwrap_or(0),
-    })
+        .read_only(true)
+        .foreign_keys(true)
+        .busy_timeout(config.busy_timeout)
 }
 
-/// Copies the file with `VACUUM INTO` before an upgrade. `VACUUM INTO` reads
-/// through the WAL, so a commit that is not yet checkpointed is included.
-async fn backup(path: &Path, from_version: i64) -> Result<(), StorageError> {
-    let target = backup_path(path, from_version);
-    let fail = |source: Box<dyn std::error::Error + Send + Sync>| StorageError::BackupFailed {
-        path: target.clone(),
-        source,
-    };
-
-    if target.exists() {
-        std::fs::remove_file(&target).map_err(|source| fail(Box::new(source)))?;
-    }
-
-    let mut conn = SqliteConnectOptions::new()
-        .filename(path)
+/// Brings the file to the newest schema this build knows, after saving a copy of
+/// the old file when the upgrade changes an existing schema.
+async fn prepare_schema(path: &Path, options: &SqliteConnectOptions, up_to: i64) -> Result<()> {
+    let mut conn = options
         .connect()
         .await
-        .map_err(StorageError::Database)?;
-    sqlx::query("VACUUM INTO ?")
-        .bind(target.to_string_lossy().into_owned())
-        .execute(&mut conn)
-        .await
-        .map_err(|source| fail(Box::new(source)))?;
-    let _ = conn.close().await;
+        .map_err(|source| StorageError::Open {
+            path: path.to_owned(),
+            source,
+        })?;
 
-    prune_backups(path, KEPT_BACKUPS);
+    let outcome = upgrade(&mut conn, path, up_to).await;
+    // Closing the last connection also folds the log back into the main file.
+    let closed = conn.close().await;
+    outcome?;
+    closed?;
     Ok(())
 }
 
+async fn upgrade(conn: &mut SqliteConnection, path: &Path, up_to: i64) -> Result<()> {
+    let current = applied_version(conn).await?;
+    if current > up_to {
+        return Err(StorageError::SchemaTooNew {
+            found: current,
+            supported: up_to,
+        });
+    }
+    // A fresh file (version 0) has nothing to lose, so it gets no backup.
+    if current > 0 && current < up_to {
+        tracing::info!(from = current, to = up_to, "upgrading the database schema");
+        backup_before_upgrade(conn, path, current).await?;
+    }
+    migrator(up_to)
+        .run(&mut *conn)
+        .await
+        .map_err(|error| match error {
+            MigrateError::VersionMismatch(version) => StorageError::MigrationChanged(version),
+            other => StorageError::Migration(other),
+        })
+}
+
+/// Highest migration recorded as applied, or 0 for a file with none.
+async fn applied_version(conn: &mut SqliteConnection) -> Result<i64> {
+    let table: Option<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+    if table.is_none() {
+        return Ok(0);
+    }
+    let version: Option<i64> =
+        sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
+            .fetch_one(&mut *conn)
+            .await?;
+    Ok(version.unwrap_or(0))
+}
+
 /// `<db>.bak-<version>`, next to the database file.
-fn backup_path(path: &Path, version: i64) -> PathBuf {
-    let mut name = path
-        .file_name()
-        .map(|name| name.to_os_string())
-        .unwrap_or_default();
+fn backup_path(db_path: &Path, version: i64) -> PathBuf {
+    let mut name = db_path.as_os_str().to_owned();
     name.push(format!(".bak-{version}"));
-    path.with_file_name(name)
+    PathBuf::from(name)
 }
 
-/// Keeps the newest `keep` backups and deletes the rest. Cleanup only: a file
-/// that cannot be removed is logged, never fatal, because the backup itself
-/// already succeeded.
-fn prune_backups(path: &Path, keep: usize) {
-    let Some(parent) = path.parent() else {
-        return;
-    };
-    let Some(file_name) = path.file_name() else {
-        return;
-    };
-    let prefix = format!("{}.bak-", file_name.to_string_lossy());
-
-    let mut backups: Vec<(i64, PathBuf)> = match std::fs::read_dir(parent) {
-        Ok(entries) => entries
-            .filter_map(|entry| entry.ok())
-            .filter_map(|entry| {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let version = name.strip_prefix(&prefix)?.parse::<i64>().ok()?;
-                Some((version, entry.path()))
-            })
-            .collect(),
-        Err(error) => {
-            tracing::warn!(%error, "could not list backups for pruning");
-            return;
-        }
+/// Writes a consistent copy of the database to `<db>.bak-<old version>`.
+///
+/// `VACUUM INTO` takes the snapshot inside SQLite, so the copy is complete even
+/// though recent commits may still sit in the write-ahead log. The copy is written
+/// under a temporary name and renamed, so an interrupted backup never leaves a
+/// truncated file under the final name.
+async fn backup_before_upgrade(
+    conn: &mut SqliteConnection,
+    db_path: &Path,
+    old_version: i64,
+) -> Result<()> {
+    let target = backup_path(db_path, old_version);
+    let backup_error = |reason: String| StorageError::Backup {
+        path: target.clone(),
+        reason,
     };
 
-    backups.sort_by_key(|(version, _)| std::cmp::Reverse(*version));
-    for (version, old) in backups.into_iter().skip(keep) {
-        if let Err(error) = std::fs::remove_file(&old) {
-            tracing::warn!(%error, version, "could not prune an old backup");
-        }
+    let mut partial = target.clone().into_os_string();
+    partial.push(".partial");
+    let partial = PathBuf::from(partial);
+    remove_if_exists(&partial)
+        .await
+        .map_err(|e| backup_error(e.to_string()))?;
+    // A backup of the same version left by an earlier, failed upgrade is replaced
+    // by the copy of what the file holds now.
+    remove_if_exists(&target)
+        .await
+        .map_err(|e| backup_error(e.to_string()))?;
+
+    let partial_text = partial
+        .to_str()
+        .ok_or_else(|| backup_error("the path is not valid UTF-8".to_owned()))?;
+    sqlx::query("VACUUM INTO ?1")
+        .bind(partial_text)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| backup_error(e.to_string()))?;
+    tokio::fs::rename(&partial, &target)
+        .await
+        .map_err(|e| backup_error(e.to_string()))?;
+
+    prune_backups(db_path)
+        .await
+        .map_err(|e| backup_error(e.to_string()))
+}
+
+async fn remove_if_exists(path: &Path) -> std::io::Result<()> {
+    match tokio::fs::remove_file(path).await {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
     }
 }
 
-/// "File is not a database" from SQLite becomes a typed error; everything else
-/// passes through.
-fn map_open_error(path: &Path, error: sqlx::Error) -> StorageError {
-    let message = match &error {
-        sqlx::Error::Database(db) => db.message().to_ascii_lowercase(),
-        other => other.to_string().to_ascii_lowercase(),
+/// Keeps the newest [`KEPT_BACKUPS`] backups of this database and deletes the rest.
+async fn prune_backups(db_path: &Path) -> std::io::Result<()> {
+    let Some(file_name) = db_path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+    else {
+        return Ok(());
     };
-    if message.contains("not a database") {
-        return StorageError::NotADatabase {
-            path: path.to_path_buf(),
-        };
+    let dir = db_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let prefix = format!("{file_name}.bak-");
+
+    let mut found: Vec<(i64, PathBuf)> = Vec::new();
+    let mut entries = tokio::fs::read_dir(dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        // `.partial` files do not parse as a number and are skipped here.
+        if let Some(version) = name
+            .strip_prefix(&prefix)
+            .and_then(|v| v.parse::<i64>().ok())
+        {
+            found.push((version, entry.path()));
+        }
     }
-    StorageError::Database(error)
+    found.sort_by_key(|(version, _)| std::cmp::Reverse(*version));
+    for (_, stale) in found.into_iter().skip(KEPT_BACKUPS) {
+        remove_if_exists(&stale).await?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -345,28 +375,290 @@ mod tests {
     use super::*;
 
     #[test]
-    fn schema_version_matches_the_last_embedded_migration() {
-        let last = EMBEDDED_MIGRATIONS
-            .last()
-            .map(|file| file.version)
-            .unwrap_or(0);
-        assert_eq!(SCHEMA_VERSION, last);
+    fn schema_version_matches_the_last_migration() {
+        let last = MIGRATIONS.last().map(|m| m.version);
+        assert_eq!(last, Some(SCHEMA_VERSION));
+        let versions: Vec<i64> = MIGRATIONS.iter().map(|m| m.version).collect();
+        let expected: Vec<i64> = (1..=SCHEMA_VERSION).collect();
+        assert_eq!(versions, expected, "versions must be consecutive from 1");
     }
 
-    #[test]
-    fn embedded_migrations_are_ordered_and_nonempty() {
-        let versions: Vec<i64> = EMBEDDED_MIGRATIONS.iter().map(|f| f.version).collect();
-        assert!(!versions.is_empty());
-        assert!(versions.windows(2).all(|pair| pair[0] < pair[1]));
-        assert!(EMBEDDED_MIGRATIONS.iter().all(|f| !f.sql.trim().is_empty()));
+    #[tokio::test]
+    async fn open_creates_a_wal_database_with_foreign_keys_on() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let db = Database::open(dir.path().join("lumingo.sqlite"))
+            .await
+            .expect("open");
+
+        let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
+            .fetch_one(db.writer())
+            .await
+            .expect("journal_mode");
+        let foreign_keys: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(db.writer())
+            .await
+            .expect("foreign_keys");
+        let busy: i64 = sqlx::query_scalar("PRAGMA busy_timeout")
+            .fetch_one(db.reader())
+            .await
+            .expect("busy_timeout");
+        assert_eq!(mode, "wal");
+        assert_eq!(foreign_keys, 1);
+        assert_eq!(busy, 5_000);
+        assert_eq!(db.schema_version().await.expect("version"), SCHEMA_VERSION);
+        db.close().await.expect("close");
     }
 
-    #[test]
-    fn backup_names_sit_next_to_the_database() {
-        let path = Path::new("/data/lumingo.sqlite");
-        assert_eq!(
-            backup_path(path, 3),
-            PathBuf::from("/data/lumingo.sqlite.bak-3")
+    async fn open_plain(path: &Path) -> SqliteConnection {
+        write_options(path, &OpenConfig::default())
+            .connect()
+            .await
+            .expect("connect")
+    }
+
+    #[tokio::test]
+    async fn backup_is_a_complete_copy_even_when_commits_sit_in_the_log() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        let mut conn = open_plain(&path).await;
+        sqlx::query("CREATE TABLE note (body TEXT NOT NULL) STRICT")
+            .execute(&mut conn)
+            .await
+            .expect("create");
+        sqlx::query("INSERT INTO note (body) VALUES ('kept')")
+            .execute(&mut conn)
+            .await
+            .expect("insert");
+
+        backup_before_upgrade(&mut conn, &path, 7)
+            .await
+            .expect("backup");
+
+        let backup = backup_path(&path, 7);
+        assert!(backup.exists());
+        let mut copy = open_plain(&backup).await;
+        let body: String = sqlx::query_scalar("SELECT body FROM note")
+            .fetch_one(&mut copy)
+            .await
+            .expect("read copy");
+        assert_eq!(body, "kept");
+    }
+
+    #[tokio::test]
+    async fn only_the_two_newest_backups_are_kept() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        let mut conn = open_plain(&path).await;
+        for version in [1, 2, 3, 10] {
+            backup_before_upgrade(&mut conn, &path, version)
+                .await
+                .expect("backup");
+        }
+        // A file with a similar name that is not a backup must survive.
+        let unrelated = dir.path().join("lumingo.sqlite.bak-notes");
+        std::fs::write(&unrelated, b"x").expect("write");
+        prune_backups(&path).await.expect("prune");
+
+        assert!(!backup_path(&path, 1).exists());
+        assert!(!backup_path(&path, 2).exists());
+        assert!(backup_path(&path, 3).exists());
+        assert!(backup_path(&path, 10).exists());
+        assert!(unrelated.exists());
+    }
+
+    fn backups_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .expect("read dir")
+            .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".bak-"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    async fn table_exists(conn: &mut SqliteConnection, name: &str) -> bool {
+        let found: Option<String> =
+            sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1")
+                .bind(name)
+                .fetch_optional(&mut *conn)
+                .await
+                .expect("sqlite_master");
+        found.is_some()
+    }
+
+    async fn make_profile(db: &Database) {
+        db.profiles()
+            .create(&crate::NewProfile {
+                display_name: "Before the upgrade".to_owned(),
+                ui_language: crate::UiLanguage::Id,
+                l1: "id".to_owned(),
+                l1_help_mode: crate::L1HelpMode::Auto,
+                created_at: crate::Timestamp::from_unix_seconds(1_790_000_000).expect("timestamp"),
+            })
+            .await
+            .expect("profile");
+    }
+
+    /// A database file as an older build left it, holding one profile.
+    async fn at_version(version: i64) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        let old = Database::open_up_to(&path, &OpenConfig::default(), version)
+            .await
+            .expect("open an old database");
+        make_profile(&old).await;
+        old.close().await.expect("close");
+        (dir, path)
+    }
+
+    #[tokio::test]
+    async fn an_upgrade_copies_the_old_file_first_and_keeps_its_data() {
+        let (dir, path) = at_version(1).await;
+        assert!(
+            backups_in(dir.path()).is_empty(),
+            "a fresh file needs no backup"
         );
+
+        let upgraded = Database::open(&path).await.expect("upgrade");
+        assert_eq!(upgraded.schema_version().await.expect("version"), 2);
+        assert_eq!(backups_in(dir.path()), ["lumingo.sqlite.bak-1"]);
+
+        // The copy is the old schema with the old data ...
+        let mut copy = SqliteConnectOptions::new()
+            .filename(backup_path(&path, 1))
+            .read_only(true)
+            .connect()
+            .await
+            .expect("open the backup");
+        let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM profiles")
+            .fetch_one(&mut copy)
+            .await
+            .expect("count");
+        assert_eq!(rows, 1);
+        assert!(!table_exists(&mut copy, "xp_ledger").await);
+        // ... and the live file has both.
+        assert!(
+            table_exists(
+                &mut upgraded.reader().acquire().await.expect("conn"),
+                "xp_ledger"
+            )
+            .await
+        );
+        assert!(upgraded.profiles().first().await.expect("first").is_some());
+    }
+
+    #[tokio::test]
+    async fn reopening_a_current_database_makes_no_backup() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        for _ in 0..3 {
+            let db = Database::open(&path).await.expect("open");
+            db.close().await.expect("close");
+        }
+        assert!(backups_in(dir.path()).is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_failed_upgrade_leaves_the_old_schema_and_data_and_keeps_the_backup() {
+        let (dir, path) = at_version(1).await;
+        // Something else already uses the name migration 0002 wants for its first table.
+        let mut conn = open_plain(&path).await;
+        sqlx::query("CREATE TABLE xp_ledger (not_ours TEXT)")
+            .execute(&mut conn)
+            .await
+            .expect("squat the name");
+        conn.close().await.expect("close");
+
+        let result = Database::open(&path).await;
+        assert!(
+            matches!(result, Err(StorageError::Migration(_))),
+            "{result:?}"
+        );
+        assert_eq!(backups_in(dir.path()), ["lumingo.sqlite.bak-1"]);
+
+        let mut check = open_plain(&path).await;
+        let version: i64 =
+            sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
+                .fetch_one(&mut check)
+                .await
+                .expect("version");
+        assert_eq!(version, 1);
+        // The migration ran in one transaction: none of its other tables exist.
+        for table in [
+            "rest_tokens",
+            "streak_days",
+            "unlockables",
+            "equipped_cosmetics",
+        ] {
+            assert!(!table_exists(&mut check, table).await, "{table}");
+        }
+        let profiles: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM profiles")
+            .fetch_one(&mut check)
+            .await
+            .expect("count");
+        assert_eq!(profiles, 1);
+    }
+
+    #[tokio::test]
+    async fn a_database_from_a_newer_build_is_refused_without_a_backup_or_changes() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        let current = Database::open(&path).await.expect("open");
+        make_profile(&current).await;
+        current.close().await.expect("close");
+
+        let result = Database::open_up_to(&path, &OpenConfig::default(), 1).await;
+        assert!(matches!(
+            result,
+            Err(StorageError::SchemaTooNew {
+                found: 2,
+                supported: 1
+            })
+        ));
+        assert!(backups_in(dir.path()).is_empty());
+
+        let again = Database::open(&path)
+            .await
+            .expect("still opens with the right build");
+        assert_eq!(again.schema_version().await.expect("version"), 2);
+        assert!(again.profiles().first().await.expect("first").is_some());
+    }
+
+    #[tokio::test]
+    async fn a_migration_edited_after_it_was_applied_is_refused() {
+        let (_dir, path) = at_version(1).await;
+        let mut conn = open_plain(&path).await;
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = x'00' WHERE version = 1")
+            .execute(&mut conn)
+            .await
+            .expect("tamper");
+        conn.close().await.expect("close");
+
+        let result = Database::open(&path).await;
+        assert!(
+            matches!(result, Err(StorageError::MigrationChanged(1))),
+            "{result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_that_is_not_ours_fails_cleanly_and_is_left_alone() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("lumingo.sqlite");
+        let mut conn = open_plain(&path).await;
+        sqlx::query("CREATE TABLE profiles (only_column TEXT)")
+            .execute(&mut conn)
+            .await
+            .expect("create");
+        conn.close().await.expect("close");
+
+        let result = Database::open(&path).await;
+        assert!(
+            matches!(result, Err(StorageError::Migration(_))),
+            "{result:?}"
+        );
+        let mut check = open_plain(&path).await;
+        assert!(!table_exists(&mut check, "units").await);
+        assert!(backups_in(dir.path()).is_empty());
     }
 }

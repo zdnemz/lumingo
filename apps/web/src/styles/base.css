@@ -34,6 +34,8 @@ h4 {
   font-weight: 400;
   line-height: var(--leading-display);
   letter-spacing: 0;
+  /* The display font is wide: a long title breaks instead of widening the page at 150 percent zoom. */
+  overflow-wrap: anywhere;
 }
 h1 {
   font-size: var(--display-1);

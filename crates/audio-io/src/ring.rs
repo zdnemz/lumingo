@@ -1,189 +1,224 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
-};
+//! The capture ring buffer: the only thing an audio callback touches.
+//!
+//! The device callback owns a [`CaptureProducer`]. It copies one block of
+//! interleaved samples into a lock-free single-producer single-consumer queue
+//! and returns. It never waits: when the queue cannot take the whole block, the
+//! block is dropped and the overflow counters go up. The worker thread owns the
+//! [`CaptureConsumer`] and reads at its own pace.
+//!
+//! A block is written whole or not at all. Writing half of a block would cut an
+//! interleaved frame in two and shift every later channel by one sample.
 
-struct Shared {
-    /// `f32` bit patterns, so the buffer needs no `unsafe` and no lock.
-    slots: Box<[AtomicU32]>,
-    /// Total samples ever written. Only the producer stores to it.
-    head: AtomicUsize,
-    /// Total samples ever read. Only the consumer stores to it.
-    tail: AtomicUsize,
-    /// Samples the producer had to drop because the buffer was full.
-    overflowed: AtomicU64,
+use std::num::NonZeroUsize;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[derive(Debug, Default)]
+struct Counters {
+    pushed_samples: AtomicU64,
+    dropped_samples: AtomicU64,
+    overflow_events: AtomicU64,
 }
 
-/// Capture side of the ring. `push` is for the audio callback: it copies and
-/// returns. It never blocks, locks, allocates or logs. When the buffer is full the
-/// samples that do not fit are dropped and counted.
-pub struct Producer(Arc<Shared>);
-
-/// Reader side, owned by the VAD worker thread.
-pub struct Consumer(Arc<Shared>);
-
-/// Creates a ring that holds `capacity` samples. A capacity of zero is raised to one.
-pub fn ring(capacity: usize) -> (Producer, Consumer) {
-    let shared = Arc::new(Shared {
-        slots: (0..capacity.max(1)).map(|_| AtomicU32::new(0)).collect(),
-        head: AtomicUsize::new(0),
-        tail: AtomicUsize::new(0),
-        overflowed: AtomicU64::new(0),
-    });
-    (Producer(Arc::clone(&shared)), Consumer(shared))
+/// A point-in-time copy of the capture counters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CaptureSnapshot {
+    /// Samples that reached the ring.
+    pub pushed_samples: u64,
+    /// Samples that were thrown away because the ring was full.
+    pub dropped_samples: u64,
+    /// Callback blocks that were thrown away. Zero is the target.
+    pub overflow_events: u64,
 }
 
-impl Producer {
-    /// Returns how many samples were stored. The rest are counted as overflow.
-    pub fn push(&mut self, samples: &[f32]) -> usize {
-        let s = &*self.0;
-        let cap = s.slots.len();
-        let head = s.head.load(Ordering::Relaxed);
-        let free = cap - head.wrapping_sub(s.tail.load(Ordering::Acquire));
-        let n = samples.len().min(free);
-        for (i, v) in samples[..n].iter().enumerate() {
-            s.slots[head.wrapping_add(i) % cap].store(v.to_bits(), Ordering::Relaxed);
+/// A cheap, cloneable view of the counters. Reading never blocks the callback.
+#[derive(Debug, Clone)]
+pub struct CaptureCounters(Arc<Counters>);
+
+impl CaptureCounters {
+    pub fn snapshot(&self) -> CaptureSnapshot {
+        CaptureSnapshot {
+            pushed_samples: self.0.pushed_samples.load(Ordering::Relaxed),
+            dropped_samples: self.0.dropped_samples.load(Ordering::Relaxed),
+            overflow_events: self.0.overflow_events.load(Ordering::Relaxed),
         }
-        s.head.store(head.wrapping_add(n), Ordering::Release);
-        if n < samples.len() {
-            s.overflowed
-                .fetch_add((samples.len() - n) as u64, Ordering::Relaxed);
-        }
-        n
-    }
-
-    pub fn overflowed(&self) -> u64 {
-        self.0.overflowed.load(Ordering::Relaxed)
-    }
-
-    /// Samples that fit right now.
-    pub fn free(&self) -> usize {
-        let s = &*self.0;
-        s.slots.len()
-            - s.head
-                .load(Ordering::Relaxed)
-                .wrapping_sub(s.tail.load(Ordering::Acquire))
-    }
-
-    /// Total samples ever written. Pair it with `Consumer::position` to name a point in the stream.
-    pub fn position(&self) -> usize {
-        self.0.head.load(Ordering::Relaxed)
     }
 }
 
-impl Consumer {
-    /// Moves up to `out.len()` samples into `out` and returns how many.
+/// The audio-callback end of the capture ring.
+#[derive(Debug)]
+pub struct CaptureProducer {
+    inner: rtrb::Producer<f32>,
+    counters: Arc<Counters>,
+}
+
+impl CaptureProducer {
+    /// Copies `block` into the ring. Returns `false` and counts an overflow when
+    /// the whole block does not fit. No allocation, no lock, no waiting.
+    pub fn push(&mut self, block: &[f32]) -> bool {
+        match self.inner.push_entire_slice(block) {
+            Ok(()) => {
+                self.counters
+                    .pushed_samples
+                    .fetch_add(block.len() as u64, Ordering::Relaxed);
+                true
+            }
+            Err(_) => {
+                self.counters
+                    .dropped_samples
+                    .fetch_add(block.len() as u64, Ordering::Relaxed);
+                self.counters
+                    .overflow_events
+                    .fetch_add(1, Ordering::Relaxed);
+                false
+            }
+        }
+    }
+}
+
+/// The worker end of the capture ring.
+#[derive(Debug)]
+pub struct CaptureConsumer {
+    inner: rtrb::Consumer<f32>,
+}
+
+impl CaptureConsumer {
+    /// Samples ready to read right now.
+    pub fn available(&self) -> usize {
+        self.inner.slots()
+    }
+
+    /// Copies up to `out.len()` samples into `out` and returns how many.
     pub fn pop_into(&mut self, out: &mut [f32]) -> usize {
-        let s = &*self.0;
-        let cap = s.slots.len();
-        let tail = s.tail.load(Ordering::Relaxed);
-        let available = s.head.load(Ordering::Acquire).wrapping_sub(tail);
-        let n = out.len().min(available);
-        for (i, slot) in out[..n].iter_mut().enumerate() {
-            *slot = f32::from_bits(s.slots[tail.wrapping_add(i) % cap].load(Ordering::Relaxed));
-        }
-        s.tail.store(tail.wrapping_add(n), Ordering::Release);
-        n
+        let (popped, _) = self.inner.pop_partial_slice(out);
+        popped.len()
     }
 
-    /// Total samples ever read or skipped.
-    pub fn position(&self) -> usize {
-        self.0.tail.load(Ordering::Relaxed)
+    /// True once the callback side was dropped, which is what a closed or lost
+    /// stream looks like from here. Samples still in the ring can be read first.
+    pub fn is_abandoned(&self) -> bool {
+        self.inner.is_abandoned()
     }
+}
 
-    /// Discards samples up to the absolute stream position `target`, at most what is buffered.
-    pub fn skip_to(&mut self, target: usize) {
-        let s = &*self.0;
-        let tail = s.tail.load(Ordering::Relaxed);
-        let head = s.head.load(Ordering::Acquire);
-        let want = target.wrapping_sub(tail);
-        if want != 0 && want <= head.wrapping_sub(tail) {
-            s.tail.store(target, Ordering::Release);
-        } else if want != 0 && (want as isize) > 0 {
-            s.tail.store(head, Ordering::Release);
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        let s = &*self.0;
-        s.head
-            .load(Ordering::Acquire)
-            .wrapping_sub(s.tail.load(Ordering::Relaxed))
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn overflowed(&self) -> u64 {
-        self.0.overflowed.load(Ordering::Relaxed)
-    }
+/// Creates a ring that holds `capacity_samples` interleaved samples.
+///
+/// Size it for the longest stall you want to survive in the worker, for example
+/// two seconds of `rate * channels`.
+pub fn capture_ring(
+    capacity_samples: NonZeroUsize,
+) -> (CaptureProducer, CaptureConsumer, CaptureCounters) {
+    let (producer, consumer) = rtrb::RingBuffer::new(capacity_samples.get());
+    let counters = Arc::new(Counters::default());
+    (
+        CaptureProducer {
+            inner: producer,
+            counters: Arc::clone(&counters),
+        },
+        CaptureConsumer { inner: consumer },
+        CaptureCounters(counters),
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn overfilling_drops_the_excess_counts_it_and_never_blocks() {
-        let (mut p, mut c) = ring(8);
-        assert_eq!(p.push(&[1.0; 5]), 5);
-        assert_eq!(p.push(&[2.0; 5]), 3);
-        assert_eq!(p.overflowed(), 2);
-        assert_eq!(c.overflowed(), 2);
-        let mut out = [0.0; 16];
-        assert_eq!(c.pop_into(&mut out), 8);
-        assert_eq!(&out[..8], &[1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0]);
-        assert!(c.is_empty());
+    fn ring(capacity: usize) -> (CaptureProducer, CaptureConsumer, CaptureCounters) {
+        capture_ring(NonZeroUsize::new(capacity).expect("test capacity is non-zero"))
     }
 
     #[test]
-    fn indices_wrap_around_the_end_of_the_buffer() {
-        let (mut p, mut c) = ring(4);
-        let mut out = [0.0; 3];
-        for round in 0..10 {
-            let v = round as f32;
-            assert_eq!(p.push(&[v, v + 0.5, v + 0.25]), 3);
-            assert_eq!(c.pop_into(&mut out), 3);
-            assert_eq!(out, [v, v + 0.5, v + 0.25]);
-        }
-        assert_eq!(p.overflowed(), 0);
+    fn samples_come_out_in_order() {
+        let (mut tx, mut rx, counters) = ring(8);
+        assert!(tx.push(&[1.0, 2.0, 3.0]));
+        assert!(tx.push(&[4.0, 5.0]));
+        let mut out = [0.0; 8];
+        assert_eq!(rx.pop_into(&mut out), 5);
+        assert_eq!(&out[..5], &[1.0, 2.0, 3.0, 4.0, 5.0]);
+        assert_eq!(counters.snapshot().pushed_samples, 5);
+        assert_eq!(counters.snapshot().overflow_events, 0);
     }
 
     #[test]
-    fn a_short_read_leaves_the_rest_for_later() {
-        let (mut p, mut c) = ring(8);
-        p.push(&[1.0, 2.0, 3.0]);
-        let mut one = [0.0; 1];
-        assert_eq!(c.pop_into(&mut one), 1);
-        assert_eq!(c.len(), 2);
+    fn a_fake_callback_that_overfills_the_ring_never_blocks_and_is_counted() {
+        let (mut tx, rx, counters) = ring(100);
+        // Ten callbacks of 30 samples into a ring of 100 with nobody reading:
+        // three fit, seven are dropped whole.
+        let block = [0.5_f32; 30];
+        let accepted = (0..10).filter(|_| tx.push(&block)).count();
+        assert_eq!(accepted, 3);
+        let snap = counters.snapshot();
+        assert_eq!(snap.pushed_samples, 90);
+        assert_eq!(snap.dropped_samples, 210);
+        assert_eq!(snap.overflow_events, 7);
+        assert_eq!(rx.available(), 90);
     }
 
     #[test]
-    fn two_threads_see_every_sample_once_and_in_order() {
-        let (mut p, mut c) = ring(256);
-        const TOTAL: usize = 200_000;
+    fn a_dropped_block_never_leaves_half_a_frame_behind() {
+        let (mut tx, mut rx, _counters) = ring(5);
+        assert!(tx.push(&[1.0, 2.0, 3.0, 4.0]));
+        // Stereo block of two frames does not fit in the one free slot.
+        assert!(!tx.push(&[9.0, 9.0, 9.0, 9.0]));
+        let mut out = [0.0; 8];
+        assert_eq!(rx.pop_into(&mut out), 4);
+        assert_eq!(&out[..4], &[1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn the_ring_recovers_after_the_reader_catches_up() {
+        let (mut tx, mut rx, counters) = ring(4);
+        assert!(tx.push(&[1.0; 4]));
+        assert!(!tx.push(&[2.0; 2]));
+        let mut out = [0.0; 4];
+        assert_eq!(rx.pop_into(&mut out), 4);
+        assert!(tx.push(&[3.0; 4]));
+        assert_eq!(counters.snapshot().overflow_events, 1);
+    }
+
+    #[test]
+    fn dropping_the_callback_side_is_visible_to_the_reader() {
+        let (mut tx, mut rx, _counters) = ring(4);
+        assert!(tx.push(&[1.0, 2.0]));
+        assert!(!rx.is_abandoned());
+        drop(tx);
+        assert!(rx.is_abandoned());
+        let mut out = [0.0; 4];
+        assert_eq!(rx.pop_into(&mut out), 2);
+    }
+
+    #[test]
+    fn a_real_producer_thread_and_a_slow_reader_lose_nothing_that_was_accepted() {
+        let (mut tx, mut rx, counters) = ring(1024);
         let writer = std::thread::spawn(move || {
-            let mut next = 0;
-            while next < TOTAL {
-                let end = (next + 100).min(TOTAL);
-                let chunk: Vec<f32> = (next..end).map(|i| i as f32).collect();
-                next += p.push(&chunk);
-                // Retry from `next` instead of dropping, so the sequence stays checkable.
-                if next < end {
-                    std::thread::yield_now();
+            let mut next = 0.0_f32;
+            let mut accepted = Vec::new();
+            for _ in 0..2000 {
+                let block: Vec<f32> = (0..16).map(|i| next + i as f32).collect();
+                if tx.push(&block) {
+                    accepted.extend_from_slice(&block);
                 }
+                next += 16.0;
+                std::thread::yield_now();
             }
+            accepted
         });
-        let mut seen = 0usize;
-        let mut buf = [0.0; 64];
-        while seen < TOTAL {
-            let n = c.pop_into(&mut buf);
-            for v in &buf[..n] {
-                assert_eq!(*v, seen as f32);
-                seen += 1;
-            }
+        let mut read = Vec::new();
+        let mut buf = [0.0_f32; 64];
+        while !(writer.is_finished() && rx.available() == 0) {
+            let n = rx.pop_into(&mut buf);
+            read.extend_from_slice(&buf[..n]);
+            std::thread::sleep(std::time::Duration::from_micros(50));
         }
-        writer.join().unwrap();
+        let accepted = writer.join().expect("writer thread finished");
+        assert_eq!(read, accepted);
+        let snap = counters.snapshot();
+        assert_eq!(snap.pushed_samples as usize, accepted.len());
+        assert_eq!(
+            snap.dropped_samples + snap.pushed_samples,
+            2000 * 16,
+            "every sample is either pushed or counted as dropped"
+        );
     }
 }

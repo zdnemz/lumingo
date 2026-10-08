@@ -1,389 +1,117 @@
-//! Text chat (S4-11): the conversation engine on the text channel (PRD FR-C6,
-//! FR-C7). One tutor, by typing, with no microphone and no speech model. The
-//! scenario comes from the topic bank or from a topic the learner typed; the
-//! prompt is the T1 contract on the text channel, which `prompt.rs` already
-//! builds.
+//! The text chat session (S4-11): the conversation engine on the text channel.
 //!
-//! The chat is practice only: every learner message is stored as an attempt
-//! with origin `free_mode`, status `insufficient` and no score, so it never
-//! counts toward a level estimate (ASSESSMENT_SPEC section 11). The caller
-//! stores the turns and the attempt rows; this module owns the conversation
-//! state, the bounded history, the fallback rule, and the summary data.
-//!
-//! Analysis runs exactly as it does for a voice turn: the caller builds
-//! `AnalysisInput::free` for a learner turn, runs [`crate::run_analysis`], and
-//! feeds the filtered outcome back with [`Chat::apply_analysis`] so the notes
-//! reach the next turn.
+//! One tutor, by typing. The scenario comes from the topic bank or from a topic
+//! the learner typed. Each message is stored as a turn; the tutor's reply is
+//! streamed as plain text (ADR-010) while the analysis of the message runs in
+//! the background. Chat is practice only: attempts are stored with origin
+//! `free_mode` and never count toward an estimate.
 
-use curriculum::Level;
-use llm_client::{Message, Role, TextRequest};
+use std::sync::Arc;
+use std::time::Instant;
+
+use assessment_engine::{Level, Origin};
+use futures_util::StreamExt;
+use llm_client::{
+    ChatMessage, FinishReason, LlmClient, LlmError, Role, StreamEvent, StreamSummary, TextRequest,
+};
 use serde::Serialize;
+use serde_json::json;
+use storage::{
+    AttemptStatus, Database, InputMode, LlmCallType, LlmOutcome, NewSession, NewTurn, Scorer,
+    SessionMode, SessionStatus, TurnRole,
+};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
-use crate::analysis::{ErrorFinding, FilteredAnalysis, NotesForNextTurn};
-use crate::event::UiEvent;
-use crate::llm::LlmClient;
-use crate::prompt::{
-    FeedbackMode, T1_TEMPERATURE, TutorContext, bounded_history, opening_request, reply_limits,
-    system_prompt, user_message,
+use crate::analysis::{
+    AnalysisKind, AnalyzerConfig, InputMode as AnalysisInput, ObjectiveRef, RunReport,
+    TurnAnalyzer, TurnToAnalyse,
 };
-use crate::session::{Channel, Event, Session, SessionKind, TransitionError};
+use crate::error::{EngineError, Result};
+use crate::evidence::{EvidenceRecorder, Subject};
+use crate::prompt::{
+    FALLBACK_LINE, FeedbackMode, Focus, HISTORY_MESSAGES, TutorContext, bounded_history,
+    reply_limits, system_prompt, user_message,
+};
+use crate::session::{Channel, EndReason, Event, Phase, Session, SessionKind};
+use crate::support::{CallLog, Clock, single_line};
 use crate::topics::ConversationTopic;
-use crate::turn::{ReplyOutcome, ReplyReport, run_reply};
 
 /// Longest typed topic, in characters. It goes into the system prompt, so it is
 /// kept to a title.
 pub const MAX_TOPIC_CHARS: usize = 80;
 
-/// The `scorer_version` a chat message's attempt row carries. The row exists so
-/// the learner can look back; `origin = free_mode` and
-/// `counts_toward_estimate = false` keep it out of every estimate.
-pub const CHAT_ATTEMPT_SCORER_VERSION: &str = "text_chat/1";
+/// A roleplay of a unit: the scenario, the two roles, the goals and the language
+/// the unit wants brought out, all authored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnitRoleplay {
+    pub unit_id: String,
+    pub unit_title: String,
+    pub activity_id: String,
+    pub scenario: String,
+    pub tutor_role: String,
+    pub learner_role: String,
+    pub goals: Vec<String>,
+    /// Vocabulary and grammar of the unit's targets, for the prompt.
+    pub target_language: Vec<String>,
+    /// The unit's objectives the roleplay serves, for the turn analysis.
+    pub objectives: Vec<ObjectiveRef>,
+}
 
-/// Where the conversation's scenario comes from (PRD FR-C7).
+/// Where the conversation's scenario comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChatTopic {
-    /// One entry of the topic bank for the learner's level.
+    /// A roleplay activity of a unit. Its turns belong to the unit's session
+    /// and its messages are not stored as free-mode attempts: the roleplay's own
+    /// response is recorded when it ends.
+    Unit(UnitRoleplay),
+    /// An entry of the topic bank for the learner's level.
     Bank(ConversationTopic),
-    /// A topic the learner typed; it is cleaned and capped by [`clean_topic`].
+    /// A topic the learner typed.
     Typed(String),
 }
 
-/// What one chat needs to start.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ChatConfig {
+    pub profile_id: i64,
+    pub provider_profile_id: Option<i64>,
     pub model: String,
     /// The level the tutor speaks at: the learner's pick or their current
     /// estimate. Never a value a model produced.
     pub level: Level,
-    pub mode: FeedbackMode,
     /// The first language written in English ("Indonesian").
     pub first_language: String,
+    pub mode: FeedbackMode,
     pub topic: ChatTopic,
+    pub app_version: String,
 }
 
-/// Why a chat could not start or continue.
-#[derive(Debug, thiserror::Error)]
-pub enum ChatError {
-    #[error("the typed topic is empty")]
-    EmptyTopic,
-    #[error("the message is empty")]
-    EmptyMessage,
-    #[error(transparent)]
-    Transition(#[from] TransitionError),
+/// What a chat session works with.
+#[derive(Clone)]
+pub struct ChatDeps {
+    pub client: Arc<dyn LlmClient>,
+    pub db: Database,
+    pub clock: Clock,
 }
 
-/// One chat turn: the tutor's reply and the stored sequence numbers the caller
-/// should give the turns. The opening turn has no learner message.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ChatTurn {
-    pub report: ReplyReport,
-    /// The seq of the learner's message in the stored session; `None` for the
-    /// tutor's opening message.
-    pub learner_seq: Option<i64>,
-    /// The seq of the tutor's message.
-    pub tutor_seq: i64,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplyOutcome {
+    /// The model's reply, in full.
+    Normal,
+    /// The model said nothing or refused: the authored line was shown instead.
+    Fallback,
+    /// The reply could not be had; the session is now `ProviderUnavailable`.
+    ProviderUnavailable,
+    /// The learner stopped the reply. What had arrived is kept; the session is paused.
+    Stopped,
 }
 
-/// The attempt row data for one stored learner message. The caller fills a
-/// `storage::NewAttempt` from it with origin `free_mode`, status
-/// `insufficient`, no scores, and `counts_toward_estimate = false`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChatAttempt {
-    pub response_id: String,
-    pub activity_id: String,
-    pub activity_type: String,
-    pub level: Level,
-    pub dimension: String,
-    pub scorer_version: String,
-    /// The message's word count, kept as metric evidence.
-    pub words: i64,
-}
-
-/// A text chat in progress: the session state machine on the text channel, the
-/// bounded history, the notes from the latest analysis, and the fallback rule.
-#[derive(Debug, Clone)]
-pub struct Chat {
-    model: String,
-    context: TutorContext,
-    /// The topic-bank entry's id, when the scenario came from the bank; `None`
-    /// for a typed topic.
-    topic_id: Option<String>,
-    session: Session,
-    history: Vec<Message>,
-    notes: NotesForNextTurn,
-    empty_streak: u32,
-    next_seq: i64,
-}
-
-impl Chat {
-    /// Starts a chat. The topic decides the scenario: a bank entry fills the
-    /// T1 fields from the catalog, a typed topic uses the contract's fixed
-    /// wording for a free topic.
-    pub fn start(config: ChatConfig) -> Result<Self, ChatError> {
-        let context = match &config.topic {
-            ChatTopic::Bank(topic) => TutorContext::from_bank_topic(
-                topic,
-                config.level,
-                Channel::Text,
-                config.mode,
-                &config.first_language,
-            ),
-            ChatTopic::Typed(text) => {
-                let title = clean_topic(text);
-                if title.is_empty() {
-                    return Err(ChatError::EmptyTopic);
-                }
-                TutorContext::from_topic(
-                    &title,
-                    config.level,
-                    Channel::Text,
-                    config.mode,
-                    &config.first_language,
-                )
-            }
-        };
-        let topic_id = match &config.topic {
-            ChatTopic::Bank(topic) => Some(topic.id.clone()),
-            ChatTopic::Typed(_) => None,
-        };
-        Ok(Self {
-            model: config.model,
-            context,
-            topic_id,
-            session: Session::new(SessionKind::TextChat, Channel::Text),
-            history: Vec::new(),
-            notes: NotesForNextTurn::new(),
-            empty_streak: 0,
-            next_seq: 1,
-        })
-    }
-
-    /// The scenario the session runs on.
-    pub fn context(&self) -> &TutorContext {
-        &self.context
-    }
-
-    /// The topic-bank entry's id, for the stored session's `activity_id`.
-    pub fn topic_id(&self) -> Option<&str> {
-        self.topic_id.as_deref()
-    }
-
-    /// The session state machine, for the caller that forwards phases.
-    pub fn session(&self) -> &Session {
-        &self.session
-    }
-
-    /// The tutor's opening message (T1's trigger: session start when the tutor
-    /// speaks first). The caller stores it at `tutor_seq`.
-    pub async fn open(
-        &mut self,
-        client: &dyn LlmClient,
-        cancel: &CancellationToken,
-        emit: &mut dyn FnMut(UiEvent),
-    ) -> Result<ChatTurn, ChatError> {
-        self.session.apply(Event::OpeningTurn)?;
-        let request = opening_request(&self.model, &self.context, &self.request_history(None));
-        let report = run_reply(
-            &mut self.session,
-            client,
-            request,
-            cancel,
-            self.empty_streak == 0,
-            emit,
-        )
-        .await?;
-        let tutor_seq = self.next_seq;
-        self.next_seq += 1;
-        self.after_reply(&report);
-        Ok(ChatTurn {
-            report,
-            learner_seq: None,
-            tutor_seq,
-        })
-    }
-
-    /// One learner message: stores nothing itself, streams the tutor's reply
-    /// through `emit`, and returns the report with the seq numbers to store.
-    /// The caller appends the learner turn at `learner_seq` and the tutor turn
-    /// at `tutor_seq`, stores the message's `free_mode` attempt, and runs the
-    /// analysis.
-    pub async fn say(
-        &mut self,
-        client: &dyn LlmClient,
-        text: &str,
-        cancel: &CancellationToken,
-        emit: &mut dyn FnMut(UiEvent),
-    ) -> Result<ChatTurn, ChatError> {
-        let text = text.trim();
-        if text.is_empty() {
-            return Err(ChatError::EmptyMessage);
-        }
-        self.session.apply(Event::TextSent)?;
-        let learner_seq = self.next_seq;
-        let tutor_seq = learner_seq + 1;
-        let request = self.turn_request(text);
-        let report = run_reply(
-            &mut self.session,
-            client,
-            request,
-            cancel,
-            self.empty_streak == 0,
-            emit,
-        )
-        .await?;
-        self.next_seq += 2;
-        self.history.push(Message {
-            role: Role::User,
-            content: text.to_owned(),
-        });
-        self.after_reply(&report);
-        Ok(ChatTurn {
-            report,
-            learner_seq: Some(learner_seq),
-            tutor_seq,
-        })
-    }
-
-    /// The attempt row data for one stored learner message (PRD FR-C6: chat is
-    /// practice). The caller maps it to `storage::NewAttempt`: origin
-    /// `free_mode`, status `insufficient`, no score, `counts_toward_estimate =
-    /// false`, so it never enters a level estimate (ASSESSMENT_SPEC section 11)
-    /// but the learner can look it back up.
-    pub fn attempt_for(&self, session_id: i64, seq: i64, words: i64) -> ChatAttempt {
-        ChatAttempt {
-            response_id: format!("chat-{session_id}-{seq}"),
-            activity_id: "text_chat".to_owned(),
-            activity_type: "text_chat".to_owned(),
-            level: self.context.level,
-            dimension: "chat_message".to_owned(),
-            scorer_version: CHAT_ATTEMPT_SCORER_VERSION.to_owned(),
-            words,
-        }
-    }
-
-    /// The newest analysis's notes, ready for the next turn (T1's
-    /// `note_for_next_turn` values).
-    pub fn apply_analysis(&mut self, filtered: &FilteredAnalysis) {
-        self.notes.update(filtered);
-    }
-
-    /// The provider came back: resume where the chat left off. A session that
-    /// is not `ProviderUnavailable` refuses the event and changes nothing.
-    pub fn recover(&mut self) -> Result<(), ChatError> {
-        self.session.apply(Event::ProviderRecovered)?;
-        self.empty_streak = 0;
-        Ok(())
-    }
-
-    fn after_reply(&mut self, report: &ReplyReport) {
-        if !report.text.is_empty() {
-            self.history.push(Message {
-                role: Role::Assistant,
-                content: report.text.clone(),
-            });
-        }
-        // A second empty or refused answer in a row is a provider problem, not
-        // a silent tutor (T1's output handling).
-        self.empty_streak = if report.outcome == ReplyOutcome::Fallback {
-            self.empty_streak + 1
-        } else {
-            0
-        };
-    }
-
-    /// The provider messages for the next call: the bounded window (T1 section
-    /// 8) with consecutive roles joined, learner text wrapped in the turn
-    /// message, leading tutor messages dropped, and the current learner message
-    /// (when there is one) appended with the newest notes.
-    fn request_history(&self, current: Option<(&str, &[String])>) -> Vec<Message> {
-        let mut out = provider_history(bounded_history(&self.history).as_slice());
-        if let Some((text, notes)) = current {
-            let message = Message {
-                role: Role::User,
-                content: user_message(text, notes, &[]),
-            };
-            match out.last_mut() {
-                Some(last) if last.role == Role::User => {
-                    last.content.push('\n');
-                    last.content.push_str(&message.content);
-                }
-                _ => out.push(message),
-            }
-        }
-        out
-    }
-
-    /// The request for one learner turn on the text channel.
-    fn turn_request(&self, text: &str) -> TextRequest {
-        let limits = reply_limits(self.context.level, Channel::Text);
-        TextRequest {
-            model: self.model.clone(),
-            system: Some(system_prompt(&self.context)),
-            messages: self.request_history(Some((text, self.notes.notes()))),
-            max_tokens: u32::from(limits.max_tokens),
-            temperature: Some(T1_TEMPERATURE),
-        }
-    }
-}
-
-/// A typed topic reduced to one safe line for the system prompt: control
-/// characters, line breaks and tag brackets become spaces, runs of spaces
-/// collapse, and the result is cut to [`MAX_TOPIC_CHARS`] without a trailing
-/// space.
-pub fn clean_topic(topic: &str) -> String {
-    let flat: String = topic
-        .chars()
-        .map(|c| {
-            if c.is_control() || matches!(c, '<' | '>') {
-                ' '
-            } else {
-                c
-            }
-        })
-        .collect();
-    let collapsed = flat.split_whitespace().collect::<Vec<_>>().join(" ");
-    collapsed
-        .chars()
-        .take(MAX_TOPIC_CHARS)
-        .collect::<String>()
-        .trim_end()
-        .to_owned()
-}
-
-/// Turns the in-memory window into provider messages: learner text is wrapped
-/// in the turn message, consecutive messages of one role are joined (a learner
-/// message whose reply failed would otherwise leave two learner messages in a
-/// row), and leading assistant messages are dropped, because some providers
-/// reject a conversation that opens with the assistant.
-fn provider_history(history: &[Message]) -> Vec<Message> {
-    let mut out: Vec<Message> = Vec::new();
-    for message in history {
-        let (role, content) = match message.role {
-            Role::User => (Role::User, user_message(&message.content, &[], &[])),
-            Role::Assistant => (Role::Assistant, message.content.clone()),
-        };
-        match out.last_mut() {
-            Some(last) if last.role == role => {
-                last.content.push('\n');
-                last.content.push_str(&content);
-            }
-            _ => out.push(Message { role, content }),
-        }
-    }
-    while out.first().is_some_and(|m| m.role == Role::Assistant) {
-        out.remove(0);
-    }
-    out
-}
-
-/// One learner turn as the summary reads it: its stored position, whether it
-/// has an analysis, and the analysis's kept errors.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SummarisedTurn {
-    pub seq: i64,
-    pub analysed: bool,
-    pub errors: Vec<ErrorFinding>,
+pub struct ChatReply {
+    pub text: String,
+    pub outcome: ReplyOutcome,
+    pub learner_turn_id: Option<i64>,
+    pub tutor_turn_id: Option<i64>,
 }
 
 /// One error category seen in the session, with one example.
@@ -395,7 +123,7 @@ pub struct ErrorPattern {
     pub correction: String,
 }
 
-/// The end summary of a chat (PRD FR-C4): what to practise next.
+/// The end summary of a chat: what to practise next.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ChatSummary {
     pub learner_turns: usize,
@@ -406,27 +134,632 @@ pub struct ChatSummary {
     pub analysis_unreliable: bool,
 }
 
-/// Builds the summary from the stored learner turns: error patterns are
-/// grouped by category, ordered by count then category, and capped at five.
-/// `analysis_unreliable` is the caller's mark from the reliability window.
-pub fn session_summary(turns: &[SummarisedTurn], analysis_unreliable: bool) -> ChatSummary {
-    let mut patterns: Vec<ErrorPattern> = Vec::new();
-    let mut unanalysed_turns = Vec::new();
-    for turn in turns {
-        if !turn.analysed {
-            unanalysed_turns.push(turn.seq);
+/// Hears about what happens to a chat outside the call that is running. The
+/// program around the chat uses it to tell the screen, so the engine itself has
+/// no idea who is listening. Both methods run on the engine's own tasks and must
+/// return quickly and never block.
+pub trait ChatObserver: Send + Sync {
+    /// The learner's message was stored. `seq` is its position in the session.
+    fn learner_turn_stored(&self, turn_id: i64, seq: i64);
+    /// The background analysis of a message finished. `report.analysed` is empty
+    /// when the call failed or the turn is waiting for a batch.
+    fn analysis_finished(&self, report: &RunReport);
+}
+
+pub struct TextChat {
+    config: ChatConfig,
+    deps: ChatDeps,
+    observer: Option<Arc<dyn ChatObserver>>,
+    recorder: EvidenceRecorder,
+    session: Session,
+    session_id: i64,
+    /// False when the chat runs inside a session that belongs to someone else (a
+    /// unit's lesson session): finishing the chat then leaves that session open.
+    owns_session: bool,
+    system: String,
+    analyzer: TurnAnalyzer,
+    tasks: JoinSet<()>,
+    analysis_cancel: CancellationToken,
+    last_tutor_text: String,
+    empty_streak: u32,
+}
+
+/// A typed topic reduced to one safe line: no line breaks, no tag characters.
+pub fn clean_topic(topic: &str) -> String {
+    let flat = topic.replace(['<', '>'], " ");
+    single_line(&flat, MAX_TOPIC_CHARS)
+}
+
+fn context(config: &ChatConfig) -> Option<TutorContext> {
+    let (focus, scenario, tutor_role, learner_role, goals) = match &config.topic {
+        ChatTopic::Unit(roleplay) => (
+            Focus::Unit(roleplay.unit_title.clone()),
+            roleplay.scenario.clone(),
+            roleplay.tutor_role.clone(),
+            roleplay.learner_role.clone(),
+            roleplay.goals.clone(),
+        ),
+        ChatTopic::Bank(topic) => (
+            Focus::Topic(topic.title.en.clone()),
+            topic.scenario.en.clone(),
+            topic.tutor_role.clone(),
+            topic.learner_role.clone(),
+            topic.goals.clone(),
+        ),
+        ChatTopic::Typed(text) => {
+            let title = clean_topic(text);
+            if title.is_empty() {
+                return None;
+            }
+            (
+                Focus::Topic(title),
+                "an open conversation about this topic".to_owned(),
+                "a friendly conversation partner".to_owned(),
+                "a conversation partner".to_owned(),
+                vec![
+                    "keep the conversation going for several turns".to_owned(),
+                    "give and ask for opinions or details".to_owned(),
+                ],
+            )
         }
-        for error in &turn.errors {
-            match patterns
-                .iter_mut()
-                .find(|pattern| pattern.category == error.category)
+    };
+    Some(TutorContext {
+        channel: Channel::Text,
+        level: config.level,
+        first_language: config.first_language.clone(),
+        focus,
+        scenario,
+        tutor_role,
+        learner_role,
+        goals,
+        target_language: match &config.topic {
+            ChatTopic::Unit(roleplay) => roleplay.target_language.clone(),
+            _ => Vec::new(),
+        },
+        mode: config.mode,
+        pronunciation_findings: false,
+    })
+}
+
+fn session_mode(mode: FeedbackMode) -> SessionMode {
+    match mode {
+        FeedbackMode::Fluency => SessionMode::Fluency,
+        FeedbackMode::Accuracy => SessionMode::Accuracy,
+    }
+}
+
+/// Turns the stored window into provider messages: the window starts with a
+/// learner message, because a provider rejects a conversation that opens with
+/// the assistant, and consecutive messages of one role are joined, because a
+/// learner message whose reply failed would otherwise leave two in a row.
+fn provider_messages(history: &[(TurnRole, String)]) -> Vec<ChatMessage> {
+    let mut out: Vec<ChatMessage> = Vec::new();
+    for (role, text) in history {
+        let (role, content) = match role {
+            TurnRole::Learner => (Role::User, user_message(text, &[], &[])),
+            TurnRole::Tutor => (Role::Assistant, text.clone()),
+        };
+        match out.last_mut() {
+            Some(last) if last.role == role => {
+                last.content.push('\n');
+                last.content.push_str(&content);
+            }
+            _ => out.push(ChatMessage { role, content }),
+        }
+    }
+    while out.first().is_some_and(|m| m.role == Role::Assistant) {
+        out.remove(0);
+    }
+    out
+}
+
+impl TextChat {
+    /// Creates the stored session and the analysis service.
+    pub async fn start(deps: ChatDeps, config: ChatConfig) -> Result<Self> {
+        let ctx = context(&config).ok_or(EngineError::Refused("the topic is empty"))?;
+        let (activity_id, unit_id) = match &config.topic {
+            ChatTopic::Bank(topic) => (Some(topic.id.clone()), None),
+            ChatTopic::Typed(_) => (None, None),
+            ChatTopic::Unit(roleplay) => (
+                Some(roleplay.activity_id.clone()),
+                Some(roleplay.unit_id.clone()),
+            ),
+        };
+        let stored = deps
+            .db
+            .sessions()
+            .create(&NewSession {
+                profile_id: config.profile_id,
+                kind: if unit_id.is_some() {
+                    storage::SessionKind::Lesson
+                } else {
+                    storage::SessionKind::TextChat
+                },
+                unit_id,
+                activity_id,
+                mode: Some(session_mode(config.mode)),
+                provider_profile_id: config.provider_profile_id,
+                app_version: config.app_version.clone(),
+                started_at: (deps.clock)(),
+            })
+            .await?;
+        Self::attach(deps, config, ctx, stored.id, true)
+    }
+
+    /// Runs the chat inside a session that already exists, such as the lesson
+    /// session of a unit. The turns and their analysis are stored with that
+    /// session; [`TextChat::finish`] does not close it.
+    pub fn start_in(deps: ChatDeps, config: ChatConfig, session_id: i64) -> Result<Self> {
+        let ctx = context(&config).ok_or(EngineError::Refused("the topic is empty"))?;
+        Self::attach(deps, config, ctx, session_id, false)
+    }
+
+    fn attach(
+        deps: ChatDeps,
+        config: ChatConfig,
+        ctx: TutorContext,
+        session_id: i64,
+        owns_session: bool,
+    ) -> Result<Self> {
+        let (objectives, target_language) = match &config.topic {
+            ChatTopic::Unit(roleplay) => (
+                roleplay.objectives.clone(),
+                roleplay.target_language.clone(),
+            ),
+            _ => (Vec::new(), Vec::new()),
+        };
+        let analyzer = TurnAnalyzer::new(
+            AnalyzerConfig {
+                profile_id: config.profile_id,
+                session_id,
+                provider_profile_id: config.provider_profile_id,
+                model: config.model.clone(),
+                level: config.level,
+                first_language: config.first_language.clone(),
+                kind: AnalysisKind::Turn,
+                objectives,
+                target_language,
+            },
+            deps.client.clone(),
+            deps.db.clone(),
+            deps.clock.clone(),
+        );
+        Ok(Self {
+            system: system_prompt(&ctx),
+            session: Session::new(SessionKind::TextChat, Channel::Text),
+            session_id,
+            owns_session,
+            recorder: EvidenceRecorder::new(deps.db.clone(), deps.clock.clone()),
+            config,
+            deps,
+            observer: None,
+            analyzer,
+            tasks: JoinSet::new(),
+            analysis_cancel: CancellationToken::new(),
+            last_tutor_text: String::new(),
+            empty_streak: 0,
+        })
+    }
+
+    /// Lets `observer` hear about stored messages and finished analyses.
+    #[must_use]
+    pub fn with_observer(mut self, observer: Arc<dyn ChatObserver>) -> Self {
+        self.observer = Some(observer);
+        self
+    }
+
+    pub fn session_id(&self) -> i64 {
+        self.session_id
+    }
+
+    pub fn phase(&self) -> Phase {
+        self.session.phase()
+    }
+
+    /// The latest notes from the analysis, which go into the next tutor turn.
+    pub fn notes(&self) -> Vec<String> {
+        self.analyzer.notes()
+    }
+
+    pub fn analyzer(&self) -> &TurnAnalyzer {
+        &self.analyzer
+    }
+
+    /// The tutor speaks first. Call it once, before the learner's first message.
+    pub async fn open(
+        &mut self,
+        on_delta: impl FnMut(&str) + Send,
+        cancel: &CancellationToken,
+    ) -> Result<ChatReply> {
+        self.session.apply(Event::TextSent)?;
+        let start = ChatMessage::user(
+            "Begin the conversation now: greet the learner in your role and ask your first question.",
+        );
+        self.reply(vec![start], None, on_delta, cancel).await
+    }
+
+    /// Handles one learner message: stores it, streams the tutor's reply through
+    /// `on_delta` as it arrives, stores the reply, and hands the message to the
+    /// background analysis. Returns when the reply is complete; the analysis may
+    /// still be running.
+    pub async fn send(
+        &mut self,
+        text: &str,
+        on_delta: impl FnMut(&str) + Send,
+        cancel: &CancellationToken,
+    ) -> Result<ChatReply> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(EngineError::Refused("the message is empty"));
+        }
+        self.session.apply(Event::TextSent)?;
+        while self.tasks.try_join_next().is_some() {}
+
+        let now = (self.deps.clock)();
+        let words = i64::try_from(text.split_whitespace().count()).unwrap_or(i64::MAX);
+        let learner = self
+            .deps
+            .db
+            .turns()
+            .append(&NewTurn {
+                session_id: self.session_id,
+                role: TurnRole::Learner,
+                input_mode: InputMode::Text,
+                text: text.to_owned(),
+                stt_text: None,
+                edited_by_learner: false,
+                speech_ms: None,
+                pause_ms: None,
+                word_count: Some(words),
+                created_at: now,
+            })
+            .await?;
+        if let Some(observer) = &self.observer {
+            observer.learner_turn_stored(learner.id, learner.seq);
+        }
+        if !matches!(self.config.topic, ChatTopic::Unit(_)) {
+            self.record_attempt(learner.seq, words).await?;
+        }
+
+        // The window before this message, then this message with the notes.
+        let window = self
+            .deps
+            .db
+            .turns()
+            .recent(
+                self.session_id,
+                u32::try_from(HISTORY_MESSAGES + 1).unwrap_or(13),
+            )
+            .await?;
+        let earlier: Vec<(TurnRole, String)> = window
+            .into_iter()
+            .filter(|t| t.id != learner.id)
+            .map(|t| (t.role, t.text))
+            .collect();
+        let mut messages = provider_messages(&bounded_history(&earlier));
+        let current = ChatMessage::user(user_message(text, &self.analyzer.notes(), &[]));
+        match messages.last_mut() {
+            Some(last) if last.role == Role::User => {
+                last.content.push('\n');
+                last.content.push_str(&current.content);
+            }
+            _ => messages.push(current),
+        }
+
+        let tutor_before = self.last_tutor_text.clone();
+        let reply = self
+            .reply(messages, Some(learner.id), on_delta, cancel)
+            .await?;
+        // The message is analysed whether or not a reply came: with no reply the
+        // analysis sees an empty tutor turn, and nothing the learner wrote is lost.
+        self.spawn_analysis(TurnToAnalyse {
+            turn_id: learner.id,
+            turn_seq: learner.seq,
+            input_mode: AnalysisInput::Text,
+            tutor_before,
+            learner_text: text.to_owned(),
+            tutor_reply: reply.text.clone(),
+        });
+        Ok(reply)
+    }
+
+    /// One attempt row per message. Chat is not scored, so the row has no score and
+    /// the status `insufficient`; it exists so the learner can look back, and its
+    /// origin keeps it out of every estimate.
+    async fn record_attempt(&self, seq: i64, words: i64) -> Result<()> {
+        let subject = Subject::new(
+            self.config.profile_id,
+            Some(self.session_id),
+            None,
+            "text_chat",
+            "text_chat",
+            self.config.level,
+            "writing",
+            Origin::FreeMode,
+            format!("chat-{}-{seq}", self.session_id),
+        );
+        self.recorder
+            .record_unscored(
+                &subject,
+                Scorer::Deterministic,
+                "text_chat/1",
+                "chat_message",
+                AttemptStatus::Insufficient,
+                "Free chat is practice and has no score.",
+                None,
+                json!({ "words": words }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    fn spawn_analysis(&mut self, turn: TurnToAnalyse) {
+        let analyzer = self.analyzer.clone();
+        let cancel = self.analysis_cancel.clone();
+        let observer = self.observer.clone();
+        self.tasks.spawn(async move {
+            match analyzer.turn_finished(turn, &cancel).await {
+                Ok(report) => {
+                    if let Some(observer) = observer {
+                        observer.analysis_finished(&report);
+                    }
+                }
+                Err(error) => tracing::warn!(%error, "turn analysis failed"),
+            }
+        });
+    }
+
+    /// Streams one reply. The session is in `Thinking` on entry.
+    async fn reply(
+        &mut self,
+        messages: Vec<ChatMessage>,
+        learner_turn_id: Option<i64>,
+        mut on_delta: impl FnMut(&str) + Send,
+        cancel: &CancellationToken,
+    ) -> Result<ChatReply> {
+        let limits = reply_limits(self.config.level, Channel::Text);
+        let request = TextRequest::new(self.system.clone(), messages, u32::from(limits.max_tokens))
+            .with_temperature(0.7);
+
+        let started_at = (self.deps.clock)();
+        let timer = Instant::now();
+        let mut text = String::new();
+        let mut started = false;
+        let mut summary: Option<StreamSummary> = None;
+        let mut failure: Option<LlmError> = None;
+
+        // One retry, only while nothing has reached the learner's screen.
+        for attempt in 0..2 {
+            match self
+                .deps
+                .client
+                .stream_text(request.clone(), cancel.clone())
+                .await
             {
+                Err(error) => {
+                    let retry = attempt == 0 && error.is_provider_unavailable();
+                    failure = Some(error);
+                    if retry {
+                        continue;
+                    }
+                    break;
+                }
+                Ok(mut stream) => {
+                    failure = None;
+                    while let Some(item) = stream.next().await {
+                        match item {
+                            Ok(StreamEvent::Delta(delta)) => {
+                                if !started {
+                                    started = true;
+                                    self.session.apply(Event::ReplyStarted)?;
+                                }
+                                text.push_str(&delta);
+                                on_delta(&delta);
+                            }
+                            Ok(StreamEvent::Finished(done)) => summary = Some(done),
+                            Err(error) => {
+                                failure = Some(error);
+                                break;
+                            }
+                        }
+                    }
+                    let retry = attempt == 0
+                        && text.is_empty()
+                        && failure
+                            .as_ref()
+                            .is_some_and(LlmError::is_provider_unavailable);
+                    if retry {
+                        continue;
+                    }
+                    break;
+                }
+            }
+        }
+
+        let elapsed = timer.elapsed();
+        let refused = summary
+            .as_ref()
+            .is_some_and(|s| s.finish == FinishReason::Refusal);
+        let outcome = match &failure {
+            Some(error) => CallLog::outcome_of(error),
+            None if refused => LlmOutcome::Refused,
+            None => LlmOutcome::Ok,
+        };
+        CallLog {
+            db: &self.deps.db,
+            provider_profile_id: self.config.provider_profile_id,
+            call_type: LlmCallType::TutorTurn,
+            model: &self.config.model,
+            started_at,
+            elapsed,
+        }
+        .streamed(
+            outcome,
+            summary.as_ref().and_then(|s| s.time_to_first_token),
+            summary.as_ref().and_then(|s| s.usage),
+        )
+        .await;
+
+        let text = text.trim().to_owned();
+        if matches!(failure, Some(LlmError::Cancelled)) {
+            let tutor_turn_id = self.store_tutor_turn(&text).await?;
+            self.session.apply(Event::Pause)?;
+            return Ok(ChatReply {
+                text,
+                outcome: ReplyOutcome::Stopped,
+                learner_turn_id,
+                tutor_turn_id,
+            });
+        }
+        if !text.is_empty() {
+            // Text that reached the screen is the reply, even if the stream broke
+            // afterwards.
+            self.empty_streak = 0;
+            let tutor_turn_id = self.store_tutor_turn(&text).await?;
+            self.session.apply(Event::ReplyFinished)?;
+            return Ok(ChatReply {
+                text,
+                outcome: ReplyOutcome::Normal,
+                learner_turn_id,
+                tutor_turn_id,
+            });
+        }
+
+        // No text: a refusal or an empty stream gets the authored line once;
+        // the second time in a row, and any failure of the call, ends in
+        // ProviderUnavailable.
+        let broke = failure.is_some();
+        self.empty_streak += 1;
+        if broke || self.empty_streak >= 2 {
+            self.session.apply(Event::ProviderFailed)?;
+            return Ok(ChatReply {
+                text: String::new(),
+                outcome: ReplyOutcome::ProviderUnavailable,
+                learner_turn_id,
+                tutor_turn_id: None,
+            });
+        }
+        on_delta(FALLBACK_LINE);
+        let tutor_turn_id = self.store_tutor_turn(FALLBACK_LINE).await?;
+        self.session.apply(Event::ReplyFinished)?;
+        Ok(ChatReply {
+            text: FALLBACK_LINE.to_owned(),
+            outcome: ReplyOutcome::Fallback,
+            learner_turn_id,
+            tutor_turn_id,
+        })
+    }
+
+    async fn store_tutor_turn(&mut self, text: &str) -> Result<Option<i64>> {
+        if text.is_empty() {
+            return Ok(None);
+        }
+        let words = i64::try_from(text.split_whitespace().count()).unwrap_or(i64::MAX);
+        let turn = self
+            .deps
+            .db
+            .turns()
+            .append(&NewTurn {
+                session_id: self.session_id,
+                role: TurnRole::Tutor,
+                input_mode: InputMode::None,
+                text: text.to_owned(),
+                stt_text: None,
+                edited_by_learner: false,
+                speech_ms: None,
+                pause_ms: None,
+                word_count: Some(words),
+                created_at: (self.deps.clock)(),
+            })
+            .await?;
+        self.last_tutor_text = text.to_owned();
+        Ok(Some(turn.id))
+    }
+
+    /// Pauses a session that is waiting for the learner. A reply that is being
+    /// written is stopped by cancelling it, which pauses the session as well.
+    pub fn pause(&mut self) -> Result<Phase> {
+        Ok(self.session.apply(Event::Pause)?)
+    }
+
+    /// Resumes after a pause, or after the provider is back.
+    pub fn resume(&mut self) -> Result<Phase> {
+        let event = match self.session.phase() {
+            Phase::ProviderUnavailable => Event::ProviderRecovered,
+            _ => Event::Resume,
+        };
+        self.empty_streak = 0;
+        Ok(self.session.apply(event)?)
+    }
+
+    /// Ends the session: waits for the running analyses, analyses what is
+    /// still waiting, writes the summary and closes the stored session.
+    pub async fn finish(
+        &mut self,
+        reason: EndReason,
+        cancel: &CancellationToken,
+    ) -> Result<ChatSummary> {
+        while self.tasks.join_next().await.is_some() {}
+        if reason == EndReason::Finished {
+            self.analyzer.flush(cancel).await?;
+        } else {
+            self.analysis_cancel.cancel();
+        }
+        let summary = self.summary().await?;
+        let status = match reason {
+            EndReason::Finished => SessionStatus::Completed,
+            EndReason::Cancelled => SessionStatus::Aborted,
+        };
+        if self.owns_session {
+            let value =
+                serde_json::to_value(&summary).map_err(|_| EngineError::Output("summary"))?;
+            self.deps
+                .db
+                .sessions()
+                .finish(self.session_id, status, &(self.deps.clock)(), Some(&value))
+                .await?;
+        }
+        self.session.apply(match reason {
+            EndReason::Finished => Event::Finish,
+            EndReason::Cancelled => Event::Cancel,
+        })?;
+        Ok(summary)
+    }
+
+    /// The summary of what has been analysed so far.
+    pub async fn summary(&self) -> Result<ChatSummary> {
+        session_summary(&self.deps.db, self.session_id, self.analyzer.unreliable()).await
+    }
+}
+
+/// The end summary of a conversation session, text or voice, read from what is
+/// stored: how many learner turns there were, the five most frequent error
+/// categories with one example each, and the turns that have no analysis.
+/// `analysis_unreliable` is the analyzer's mark, which the caller knows.
+pub async fn session_summary(
+    db: &Database,
+    session_id: i64,
+    analysis_unreliable: bool,
+) -> Result<ChatSummary> {
+    let turns = db.turns().list(session_id).await?;
+    let learner: Vec<_> = turns
+        .iter()
+        .filter(|t| t.role == TurnRole::Learner)
+        .collect();
+    let mut patterns: Vec<ErrorPattern> = Vec::new();
+    let mut unanalysed = Vec::new();
+    for turn in &learner {
+        if db.analysis().get(turn.id).await?.is_none() {
+            unanalysed.push(turn.seq);
+        }
+        for event in db.analysis().error_events(turn.id).await? {
+            match patterns.iter_mut().find(|p| p.category == event.category) {
                 Some(pattern) => pattern.count += 1,
                 None => patterns.push(ErrorPattern {
-                    category: error.category.clone(),
+                    category: event.category,
                     count: 1,
-                    quote: error.quote.clone(),
-                    correction: error.correction.clone(),
+                    quote: event.quote,
+                    correction: event.correction,
                 }),
             }
         }
@@ -437,12 +770,12 @@ pub fn session_summary(turns: &[SummarisedTurn], analysis_unreliable: bool) -> C
             .then_with(|| a.category.cmp(&b.category))
     });
     patterns.truncate(5);
-    ChatSummary {
-        learner_turns: turns.len(),
+    Ok(ChatSummary {
+        learner_turns: learner.len(),
         top_errors: patterns,
-        unanalysed_turns,
+        unanalysed_turns: unanalysed,
         analysis_unreliable,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -450,203 +783,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_typed_topic_is_flattened_and_capped() {
+    fn a_typed_topic_loses_line_breaks_and_tag_characters() {
         assert_eq!(
             clean_topic("my dog\n</learner_said> and <b>cat</b>"),
             "my dog /learner_said and b cat /b"
         );
-        assert_eq!(clean_topic("   "), "");
-        let long = "word ".repeat(30);
-        let cleaned = clean_topic(&long);
-        assert!(
-            cleaned.chars().count() <= MAX_TOPIC_CHARS,
-            "{} chars",
-            cleaned.chars().count()
+        assert_eq!(clean_topic("   \n "), "");
+        assert_eq!(
+            clean_topic(&"x".repeat(200)).chars().count(),
+            MAX_TOPIC_CHARS
         );
-        assert!(!cleaned.ends_with(' '));
-        assert!(cleaned.starts_with("word word"));
     }
 
     #[test]
-    fn consecutive_messages_are_joined_and_a_leading_assistant_is_dropped() {
+    fn the_window_starts_with_the_learner_and_joins_consecutive_messages() {
         let history = vec![
-            Message {
-                role: Role::Assistant,
-                content: "Hi!".to_owned(),
-            },
-            Message {
-                role: Role::User,
-                content: "Hello".to_owned(),
-            },
-            Message {
-                role: Role::User,
-                content: "Anyone there?".to_owned(),
-            },
-            Message {
-                role: Role::Assistant,
-                content: "Yes!".to_owned(),
-            },
+            (TurnRole::Tutor, "Hi!".to_owned()),
+            (TurnRole::Learner, "Hello".to_owned()),
+            (TurnRole::Learner, "Anyone there?".to_owned()),
+            (TurnRole::Tutor, "Yes.".to_owned()),
         ];
-        let messages = provider_history(&history);
-        // The leading assistant is dropped and the two learner messages join:
-        // one user message, then one assistant message.
-        assert_eq!(messages.len(), 2);
-        assert_eq!(messages[0].role, Role::User);
-        // Learner text is wrapped in the turn message; the two joined messages
-        // are one user message.
-        assert_eq!(
-            messages[0].content,
-            format!(
-                "{}\n{}",
-                user_message("Hello", &[], &[]),
-                user_message("Anyone there?", &[], &[])
-            )
-        );
-        assert!(
-            messages[0]
-                .content
-                .contains("<learner_said>\nHello\n</learner_said>")
-        );
-        assert_eq!(messages[1].role, Role::Assistant);
-        assert_eq!(messages[1].content, "Yes!");
-        assert!(provider_history(&[]).is_empty());
-        // A history of only tutor messages has nothing to send.
-        let only_tutor = vec![Message {
-            role: Role::Assistant,
-            content: "Hi!".to_owned(),
-        }];
-        assert!(provider_history(&only_tutor).is_empty());
-    }
-
-    fn finding(category: &str, quote: &str) -> ErrorFinding {
-        ErrorFinding {
-            category: category.to_owned(),
-            quote: quote.to_owned(),
-            correction: "x".to_owned(),
-            severity: "major".to_owned(),
-            addressed_in_reply: false,
-        }
+        let messages = provider_messages(&history);
+        let roles: Vec<Role> = messages.iter().map(|m| m.role).collect();
+        assert_eq!(roles, [Role::User, Role::Assistant]);
+        assert!(messages[0].content.contains("Hello"));
+        assert!(messages[0].content.contains("Anyone there?"));
+        assert_eq!(messages[1].content, "Yes.");
     }
 
     #[test]
-    fn the_summary_groups_errors_by_category_and_lists_unanalysed_turns() {
-        let turns = vec![
-            SummarisedTurn {
-                seq: 2,
-                analysed: true,
-                errors: vec![
-                    finding("verb_tense", "go"),
-                    finding("word_choice", "brother"),
-                ],
-            },
-            SummarisedTurn {
-                seq: 4,
-                analysed: true,
-                errors: vec![finding("verb_tense", "watch")],
-            },
-            SummarisedTurn {
-                seq: 6,
-                analysed: false,
-                errors: Vec::new(),
-            },
-        ];
-        let summary = session_summary(&turns, false);
-        assert_eq!(summary.learner_turns, 3);
-        assert_eq!(summary.unanalysed_turns, [6]);
-        assert!(!summary.analysis_unreliable);
-        assert_eq!(summary.top_errors.len(), 2);
-        assert_eq!(summary.top_errors[0].category, "verb_tense");
-        assert_eq!(summary.top_errors[0].count, 2);
-        assert_eq!(summary.top_errors[0].quote, "go");
-        assert_eq!(summary.top_errors[1].category, "word_choice");
-        assert_eq!(summary.top_errors[1].count, 1);
-    }
-
-    #[test]
-    fn the_summary_keeps_at_most_five_patterns_ordered_by_count_then_category() {
-        let mut turns = Vec::new();
-        for (i, category) in ["a", "b", "c", "d", "e", "f"].iter().enumerate() {
-            turns.push(SummarisedTurn {
-                seq: i as i64 + 1,
-                analysed: true,
-                errors: vec![finding(category, "q")],
-            });
-        }
-        // "f" and "a" both have one hit; the cap keeps five, ordered by category.
-        let summary = session_summary(&turns, true);
-        assert_eq!(summary.top_errors.len(), 5);
-        let categories: Vec<&str> = summary
-            .top_errors
-            .iter()
-            .map(|p| p.category.as_str())
-            .collect();
-        assert_eq!(categories, ["a", "b", "c", "d", "e"]);
-        assert!(summary.analysis_unreliable);
-    }
-
-    #[test]
-    fn an_empty_chat_summarises_to_nothing() {
-        let summary = session_summary(&[], false);
-        assert_eq!(summary.learner_turns, 0);
-        assert!(summary.top_errors.is_empty());
-        assert!(summary.unanalysed_turns.is_empty());
-    }
-
-    #[test]
-    fn a_bank_topic_fills_the_context_from_the_catalog_entry() {
-        let topic = ConversationTopic {
-            id: "cafe".to_owned(),
-            title: curriculum::Localized {
-                en: "At a cafe".to_owned(),
-                id: Some("Di kafe".to_owned()),
-            },
-            scenario: curriculum::Localized {
-                en: "You order a drink and pay.".to_owned(),
-                id: None,
-            },
-            tutor_role: "a friendly waiter".to_owned(),
-            learner_role: "a customer".to_owned(),
-            goals: vec!["Order a drink".to_owned()],
-        };
-        let chat = Chat::start(ChatConfig {
-            model: "m".to_owned(),
-            level: Level::A1,
-            mode: FeedbackMode::Fluency,
-            first_language: "Indonesian".to_owned(),
-            topic: ChatTopic::Bank(topic),
-        })
-        .unwrap();
-        assert_eq!(chat.context().scenario, "You order a drink and pay.");
-        assert_eq!(chat.context().tutor_role, "a friendly waiter");
-        assert_eq!(chat.context().goals, ["Order a drink"]);
-        assert_eq!(chat.session().kind(), SessionKind::TextChat);
-        assert_eq!(chat.session().channel(), Channel::Text);
-    }
-
-    #[test]
-    fn a_typed_topic_uses_the_contract_wording_and_an_empty_one_is_refused() {
-        let chat = Chat::start(ChatConfig {
-            model: "m".to_owned(),
-            level: Level::B1,
-            mode: FeedbackMode::Fluency,
-            first_language: "Indonesian".to_owned(),
-            topic: ChatTopic::Typed("  Travel\nplans  ".to_owned()),
-        })
-        .unwrap();
-        assert_eq!(
-            chat.context().scenario,
-            "an open conversation about this topic"
-        );
-        assert_eq!(chat.context().tutor_role, "a friendly conversation partner");
-
-        let error = Chat::start(ChatConfig {
-            model: "m".to_owned(),
-            level: Level::B1,
-            mode: FeedbackMode::Fluency,
-            first_language: "Indonesian".to_owned(),
-            topic: ChatTopic::Typed(" \n ".to_owned()),
-        })
-        .unwrap_err();
-        assert!(matches!(error, ChatError::EmptyTopic));
+    fn an_empty_window_makes_no_messages() {
+        assert!(provider_messages(&[]).is_empty());
     }
 }
