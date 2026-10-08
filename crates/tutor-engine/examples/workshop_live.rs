@@ -175,9 +175,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         None => println!("no comparison: the first draft had no analysis"),
     }
     println!(
-        "\nlayer 3 (rubric bands, T3): S5-03, not part of this build (ADR-051). \
-         Layer 1 first findings: {}, second: {}",
-        errors_first,
+        "\nlayer 3 (rubric bands, T3): S5-03, not part of this build (ADR-051).\n\
+         counts: layer 1 (rules) draft 1 {} / draft 2 {}; \
+         layer 2 (T2) draft 1 {errors_first} / draft 2 {}",
+        first.rule.findings.len(),
+        second.rule.findings.len(),
         outcome.filtered.turns[0].errors.len()
     );
     Ok(())
