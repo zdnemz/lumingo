@@ -7,6 +7,13 @@ repository.workspace = true
 rust-version.workspace = true
 description = "Tutoring logic for Lumingo: session states, UI events, the tutor turn and prompt assembly"
 
+[features]
+default = ["grammar"]
+# Rule-based grammar and spelling findings for the writing workshop's first
+# layer, through `assessment-engine`'s harper-core feature (already in the
+# license register). Crates that do not need the workshop can turn it off.
+grammar = ["assessment-engine/grammar"]
+
 [dependencies]
 assessment-engine = { path = "../assessment-engine", default-features = false }
 curriculum = { path = "../curriculum" }

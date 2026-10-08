@@ -85,6 +85,19 @@ pub struct AnalysisTurn {
     pub tutor_reply: String,
 }
 
+impl AnalysisTurn {
+    /// One writing draft as T2 reads it: a draft has no tutor text before or
+    /// after it, and its input mode is text (T2, writing workshop).
+    pub fn draft(turn_seq: i64, text: &str) -> Self {
+        Self {
+            turn_seq,
+            tutor_before: String::new(),
+            learner_text: text.to_owned(),
+            tutor_reply: String::new(),
+        }
+    }
+}
+
 /// Everything one T2 call carries (T2's user message). Serialises to the JSON
 /// object the contract describes: `level`, `l1`, `input_mode`, `objectives`,
 /// `target_language`, `turns`.
@@ -403,7 +416,9 @@ pub fn filter_output(
 }
 
 /// Lowercased, whitespace-collapsed text, the form T2's substring filters use.
-fn normalise(text: &str) -> String {
+/// The writing workshop's revision comparison shares it, so two quotes the
+/// filter would call equal compare equal.
+pub(crate) fn normalise(text: &str) -> String {
     text.split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")

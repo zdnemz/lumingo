@@ -1,6 +1,6 @@
 //! Tutoring logic: the session state machine, the events for the UI, the
-//! streamed tutor reply and the T1 prompt (`context_pack.md` section 9,
-//! `PROMPT_CONTRACTS.md` call type T1).
+//! streamed tutor reply, the T1 prompt and the free modes (`context_pack.md`
+//! section 9, `PROMPT_CONTRACTS.md` call type T1).
 //!
 //! The crate is pure logic plus one streamed call. It owns no engines, no
 //! database and no HTTP: the caller applies learner-side events to the
@@ -19,6 +19,7 @@ mod session;
 mod topics;
 mod turn;
 mod unit;
+mod workshop;
 
 pub use analysis::{
     ActivityError, AnalysisCadence, AnalysisFailure, AnalysisInput, AnalysisOutcome, AnalysisTurn,
@@ -49,4 +50,9 @@ pub use unit::{
     CheckpointReport, CheckpointRow, PENDING_SCORER_VERSION, PRODUCTION_PENDING_VERSION,
     PendingProduction, StoredAttempt, Submission, SubmissionOutcome, SubmitError,
     checkpoint_report, submit,
+};
+pub use workshop::{
+    DRAFT_PENDING_VERSION, DraftAttempt, DraftComparison, DraftError, DraftPending, DraftRun,
+    DraftSource, DraftSubmission, EarlierError, Resolution, RuleChecker, RuleFinding, RuleReport,
+    WORKSHOP_ATTEMPT_SCORER_VERSION, Workshop, WorkshopConfig, WorkshopError, compare_drafts,
 };
