@@ -88,6 +88,7 @@ Licenses were read from each installed package's `package.json`. Checked 2026-10
 | eslint, eslint-config-next | Lint | MIT | ok | |
 | vitest, jsdom, @testing-library/* , @vitejs/plugin-react | Tests | MIT | ok | |
 | cross-env | Sets environment variables in scripts on every OS | MIT | ok | |
+| husky, lint-staged | Git hooks at the repository root: lint-staged formats and fixes only the staged files, then `scripts/verify.sh` runs the checks of `.github/workflows/ci.yml` before a commit is made. Development tooling only; not part of the web app, the server, or the exported UI. | MIT | ok | Checked 2026-10-09. Pinned in the root `package.json`. |
 | caniuse-lite | Browser data used by the Next.js build | CC-BY-4.0 | ok | Data, not shipped in the UI. Attribution is in `NOTICE`. |
 | sharp and its libvips binaries | Optional Next.js image optimiser | Apache-2.0 and LGPL-3.0-or-later | excluded | Dropped with `pnpm.ignoredOptionalDependencies`. The UI uses unoptimised images only. |
 

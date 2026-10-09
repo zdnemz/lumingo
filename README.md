@@ -37,6 +37,19 @@ TUTOR_LLM_API_KEY=
 
 Never commit `.env`.
 
+## Development
+
+The pre-commit hook (husky and lint-staged) formats the staged files and then
+runs the same checks as CI. After cloning, install the hook tooling once:
+
+```
+pnpm install
+```
+
+`sh scripts/verify.sh` runs the checks on demand. While iterating,
+`LUMINGO_PRECOMMIT=quick git commit ...` keeps only format, lint, and typecheck.
+`git commit --no-verify` skips the hook; CI still runs every check.
+
 ## Licenses
 
 - Code: Apache-2.0 (`LICENSE`).

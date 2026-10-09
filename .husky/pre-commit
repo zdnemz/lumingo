@@ -1,0 +1,26 @@
+# Runs on every `git commit` in this repository.
+#
+# 1. lint-staged formats and fixes only the staged files (rustfmt on Rust,
+#    eslint --fix on the web app) and stages the result again.
+# 2. scripts/verify.sh runs the same checks as .github/workflows/ci.yml, so a
+#    green commit is a green push.
+#
+# Faster loop while iterating:
+#   LUMINGO_PRECOMMIT=quick git commit ...   (format, lint, typecheck only)
+# Skip everything:
+#   git commit --no-verify                   (CI still runs every check)
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+if ! command -v pnpm >/dev/null 2>&1; then
+    echo "pre-commit: pnpm is not on PATH. Install it (the web app needs it) and commit again." >&2
+    exit 1
+fi
+
+if [ ! -e node_modules/.bin/lint-staged ]; then
+    echo "pre-commit: the hook tooling is not installed yet. Run this once:" >&2
+    echo "    pnpm install" >&2
+    exit 1
+fi
+
+pnpm exec lint-staged || exit 1
+sh scripts/verify.sh || exit 1
