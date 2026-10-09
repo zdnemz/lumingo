@@ -15,3 +15,20 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"
+
+# target/ is where this workspace's disk goes, and cargo's defaults are wrong
+# for it: one test binary per integration test file, each 250-340 MB, because
+# full DWARF is about 80% of a binary (one 339 MB test binary: 41 MB .text
+# against 106 MB .debug_info and 104 MB .debug_str). With the defaults the
+# directory reached 44 GB: ~12 GB of incremental caches and ~3 GB of .rcgu.o
+# (42k files) kept for reuse, on top of ~12 GB of binaries.
+#
+# Line tables keep file:line in a panic backtrace, which is what a test
+# failure needs, and drop the variable and type DWARF that is most of the
+# size. Incremental is off because every commit runs the full workspace suite
+# (see .husky/pre-commit), so reuse rarely pays for its disk, and a corrupt
+# incremental artifact is one of the known clippy failures in HANDOFF.md.
+# The test profile inherits both settings.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
