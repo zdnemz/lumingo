@@ -6,7 +6,7 @@
   "content": [
     { "type": "thinking", "thinking": "", "signature": "EqQBCgIYAhIM" },
     { "type": "text", "text": "{\"title\":\"A short test\"," },
-    { "type": "text", "text": "\"word_count\":3,\"is_ok\":true}" }
+    { "type": "text", "text": "\"word_count\":3,\"is_ok\":true,\"check\":\"schema_received\"}" }
   ],
   "stop_reason": "end_turn",
   "stop_sequence": null,

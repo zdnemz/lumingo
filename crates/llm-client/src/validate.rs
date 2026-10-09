@@ -113,9 +113,16 @@ pub(crate) fn contract_schema(contract: Contract) -> &'static CompiledSchema {
     CELLS[index].get_or_init(|| CompiledSchema::compile(contract.name(), contract.schema().clone()))
 }
 
-/// The three-field schema of probe step 3. It uses the same portable subset as
-/// the contracts: every property required, `additionalProperties: false`, no
+/// The test schema of probe step 3. It uses the same portable subset as the
+/// contracts: every property required, `additionalProperties: false`, no
 /// length or numeric constraints.
+///
+/// The `check` enum is a canary (found live, 2026-10-07): a gateway can answer
+/// HTTP 200 while silently ignoring the native schema, so the model only ever
+/// sees the user message and cannot know this value. Without the canary such a
+/// provider passes a guessable three-field schema, gets cached as level 1, and
+/// then fails every real contract. With it, level 1 fails and the walk
+/// continues to a level where the schema does reach the model.
 pub(crate) fn probe_schema() -> &'static CompiledSchema {
     static CELL: OnceLock<CompiledSchema> = OnceLock::new();
     CELL.get_or_init(|| {
@@ -124,11 +131,12 @@ pub(crate) fn probe_schema() -> &'static CompiledSchema {
             json!({
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["title", "word_count", "is_ok"],
+                "required": ["title", "word_count", "is_ok", "check"],
                 "properties": {
                     "title": { "type": "string" },
                     "word_count": { "type": "integer" },
-                    "is_ok": { "type": "boolean" }
+                    "is_ok": { "type": "boolean" },
+                    "check": { "type": "string", "enum": ["schema_received"] }
                 }
             }),
         )
@@ -320,17 +328,33 @@ mod tests {
         let schema = probe_schema();
         assert!(
             schema
-                .check_value(&json!({"title": "t", "word_count": 1, "is_ok": true, "extra": 1}))
+                .check_value(
+                    &json!({"title": "t", "word_count": 1, "is_ok": true, "check": "schema_received", "extra": 1})
+                )
                 .is_err()
         );
         assert!(
             schema
-                .check_value(&json!({"title": "t", "word_count": 1, "is_ok": true}))
+                .check_value(&json!({"title": "t", "word_count": 1, "is_ok": true, "check": "schema_received"}))
                 .is_ok()
         );
         assert!(
             schema
-                .check_value(&json!({"title": "t", "word_count": 1.5, "is_ok": true}))
+                .check_value(&json!({"title": "t", "word_count": 1.5, "is_ok": true, "check": "schema_received"}))
+                .is_err()
+        );
+        // The canary is required and its value is fixed: a guess without it,
+        // or with a wrong value, does not pass (the schema-ignoring gateway).
+        assert!(
+            schema
+                .check_value(&json!({"title": "t", "word_count": 1, "is_ok": true}))
+                .is_err()
+        );
+        assert!(
+            schema
+                .check_value(
+                    &json!({"title": "t", "word_count": 1, "is_ok": true, "check": "guessed"})
+                )
                 .is_err()
         );
     }
@@ -353,7 +377,9 @@ mod tests {
             InvalidReason::SchemaMismatch
         );
         let ok = schema
-            .check_text("```json\n{\"title\":\"t\",\"word_count\":1,\"is_ok\":false}\n```")
+            .check_text(
+                "```json\n{\"title\":\"t\",\"word_count\":1,\"is_ok\":false,\"check\":\"schema_received\"}\n```",
+            )
             .expect("valid");
         assert_eq!(ok["is_ok"], false);
     }

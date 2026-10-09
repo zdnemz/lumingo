@@ -15,14 +15,91 @@ use llm_client::{
     ClientOptions, EnvProfileLoader, Limits, LlmClient, ProfileSet, ProviderClient,
     ProviderProfile, RetryPolicy,
 };
+use tokio_util::sync::CancellationToken;
+
+/// What the capability probe found, for the caller to act on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeOutcome {
+    /// The probe ran and at least one structured-output ladder level worked.
+    StructuredWorks,
+    /// The probe ran but no structured-output ladder level worked: the
+    /// streaming calls (T1) still work, the structured ones (T2, rubrics) will
+    /// fail.
+    NoStructuredLevel,
+    /// The provider rejected the key. Nothing will work.
+    KeyRejected,
+    /// The probe could not finish: a transport failure, a timeout, a rate
+    /// limit. The calls themselves may still work.
+    Unavailable,
+}
+
+impl ProbeOutcome {
+    /// Whether the run should go on. Only a rejected key stops it: a provider
+    /// that fails the probe's non-streaming step can still stream, and a
+    /// missing structured level only affects the structured calls.
+    pub fn continues(self) -> bool {
+        !matches!(self, Self::KeyRejected)
+    }
+}
 
 /// A connected provider and what may be said about it.
 pub struct Provider {
-    pub client: Arc<dyn LlmClient>,
+    client: Arc<ProviderClient>,
     pub name: String,
     pub protocol: String,
     pub host: String,
     pub model: String,
+}
+
+impl Provider {
+    /// The client as the rest of the program takes it.
+    pub fn client(&self) -> Arc<dyn LlmClient> {
+        self.client.clone()
+    }
+
+    /// Runs the capability probe (the connection test) and prints what it found.
+    ///
+    /// Every live check that makes structured calls runs this first: the probe
+    /// caches the ladder level the provider really supports, and without it the
+    /// structured calls start at level 1 and fail on a gateway that silently
+    /// ignores the native schema (the S4-06 quirk).
+    /// `TUTOR_LLM_FORCE_LEVEL=1..4` forces a level after the probe, to compare
+    /// what a provider does at each one.
+    pub async fn probe(&self) -> ProbeOutcome {
+        let caps = match self.client.probe(&CancellationToken::new()).await {
+            Ok(caps) => caps,
+            Err(error) => {
+                eprintln!("probe failed: {error}");
+                return match error {
+                    llm_client::LlmError::Auth { .. } => ProbeOutcome::KeyRejected,
+                    _ => ProbeOutcome::Unavailable,
+                };
+            }
+        };
+        println!(
+            "probe: auth {}, stream {}, structured level {:?}, first token {:?} ms",
+            caps.auth_ok,
+            caps.stream_ok,
+            caps.structured_level.map(llm_client::LadderLevel::as_u8),
+            caps.ttft_ms
+        );
+        if let Ok(forced) = std::env::var("TUTOR_LLM_FORCE_LEVEL")
+            && let Ok(number) = forced.parse::<u8>()
+            && let Ok(level) = llm_client::LadderLevel::try_from(number)
+        {
+            self.client.set_structured_level(level);
+            println!("forced structured level {}", level.as_u8());
+        }
+        if caps.structured_level.is_some() {
+            ProbeOutcome::StructuredWorks
+        } else {
+            eprintln!(
+                "warning: no structured-output ladder level worked in the probe; \
+                 structured calls will fail"
+            );
+            ProbeOutcome::NoStructuredLevel
+        }
+    }
 }
 
 /// The limits of one tutor turn from the whole time the provider is given to

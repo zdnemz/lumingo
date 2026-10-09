@@ -105,6 +105,13 @@ impl ProviderClient {
         }
     }
 
+    /// Forces the structured-output ladder level. A normal run never calls this:
+    /// the level comes from the probe. The live checks use it to compare what a
+    /// provider does at each level (`TUTOR_LLM_FORCE_LEVEL=1..4`).
+    pub fn set_structured_level(&self, level: LadderLevel) {
+        self.caps.update(|caps| caps.structured_level = Some(level));
+    }
+
     /// Share of the last structured replies that were valid on the first try, once
     /// `VALIDITY_WINDOW` replies have been seen.
     pub fn validity_rate(&self) -> Option<f64> {

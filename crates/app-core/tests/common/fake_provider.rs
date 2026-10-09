@@ -7,7 +7,8 @@
 //!
 //! - a request with the wrong key gets HTTP 401;
 //! - a streaming request gets a short event stream;
-//! - the probe's three-field schema gets a matching JSON object;
+//! - the probe's schema gets a matching JSON object, including the `check`
+//!   canary field that only a provider honouring the schema can produce;
 //! - every other request (the contract steps) gets plain text, which the
 //!   ladder rejects as invalid output, so those contracts are reported as not
 //!   working.
@@ -129,7 +130,9 @@ async fn handle(State(shared): State<Shared>, headers: HeaderMap, body: Bytes) -
             .into_response();
     }
     if request["response_format"]["json_schema"]["name"] == "probe_test" {
-        return completion("{\"title\":\"A short test\",\"word_count\":3,\"is_ok\":true}");
+        return completion(
+            "{\"title\":\"A short test\",\"word_count\":3,\"is_ok\":true,\"check\":\"schema_received\"}",
+        );
     }
     completion("ok")
 }

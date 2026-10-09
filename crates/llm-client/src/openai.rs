@@ -349,6 +349,17 @@ fn parse_completion(
 ) -> Result<Completion, LlmError> {
     let reply: Value = serde_json::from_slice(body)
         .map_err(|_| LlmError::Protocol("the reply was not valid JSON".to_owned()))?;
+    completion_from_reply(&reply, format, key)
+}
+
+/// Reads a completion from an already-parsed reply in the OpenAI body shape.
+/// Shared with the `anthropic_messages` adapter: some Anthropic-compatible
+/// gateways answer a non-streaming request with this shape (`choices[0]`).
+pub(crate) fn completion_from_reply(
+    reply: &Value,
+    format: &Format<'_>,
+    key: Option<&str>,
+) -> Result<Completion, LlmError> {
     let Some(choice) = reply.get("choices").and_then(|c| c.get(0)) else {
         return Err(match reply.get("error").filter(|e| !e.is_null()) {
             Some(error) => LlmError::Protocol(format!(

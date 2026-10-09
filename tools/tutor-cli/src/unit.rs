@@ -302,7 +302,7 @@ struct Connection {
 
 /// The provider of the run, or none: a learner with no provider can still play
 /// the unit, and its productive responses wait.
-fn connect(args: &UnitRunArgs) -> Connection {
+async fn connect(args: &UnitRunArgs) -> Connection {
     if !args.offline {
         match provider::connect(
             &llm_client::EnvProfileLoader::with_default_paths(),
@@ -312,11 +312,20 @@ fn connect(args: &UnitRunArgs) -> Connection {
             Duration::from_millis(args.provider_timeout_ms),
         ) {
             Ok(connected) => {
-                return Connection {
-                    label: format!("{} ({})", connected.host, connected.model),
-                    model: connected.model,
-                    client: connected.client,
-                };
+                // Productive responses are scored with structured calls: the
+                // probe must run first, or they start at ladder level 1 and
+                // fail on a gateway that ignores the native schema (S4-06).
+                // A probe failure that is not about the key still lets the run
+                // continue; the responses then wait as pending.
+                if connected.probe().await.continues() {
+                    let client = connected.client();
+                    return Connection {
+                        label: format!("{} ({})", connected.host, connected.model),
+                        model: connected.model,
+                        client,
+                    };
+                }
+                eprintln!("note: the provider did not accept the key");
             }
             Err(error) => eprintln!("note: no provider: {error:#}"),
         }
@@ -353,7 +362,7 @@ async fn execute_run(args: &UnitRunArgs) -> Result<Exit, Failure> {
         }
         None => None,
     };
-    let connection = connect(args);
+    let connection = connect(args).await;
     let database_path = args
         .db
         .clone()
@@ -484,8 +493,17 @@ async fn execute_score_pending(args: &ScorePendingArgs) -> Result<Exit, Failure>
         error,
     })?;
     println!("provider: {} ({})", connected.host, connected.model);
+    // Scoring the backlog is all structured calls: the probe must run first
+    // (S4-06), or they start at ladder level 1 and fail on a gateway that
+    // ignores the native schema.
+    if !connected.probe().await.continues() {
+        return Err(Failure {
+            exit: Exit::ProviderUnavailable,
+            error: anyhow!("the provider did not accept the key"),
+        });
+    }
     let scorer = RubricScorer::new(ScorerEnv {
-        client: connected.client,
+        client: connected.client(),
         db,
         clock: tutor_engine::system_clock(),
         model: connected.model,

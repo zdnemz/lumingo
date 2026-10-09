@@ -210,6 +210,15 @@ async fn execute(args: &ChatArgs) -> Result<Exit, Failure> {
     .map_err(|problem| Failure::new(Exit::SpeechUnavailable, anyhow!("{problem}")))?;
 
     let recording = if args.analysis {
+        // The background analysis is a structured call: the probe must run
+        // first, or T2 starts at ladder level 1 and fails on a gateway that
+        // ignores the native schema (the S4-06 quirk).
+        if !provider.probe().await.continues() {
+            return Err(Failure {
+                exit: Exit::ProviderUnavailable,
+                error: anyhow!("the provider did not accept the key"),
+            });
+        }
         Some(open_recording(args, &provider).await?)
     } else {
         None
@@ -220,7 +229,7 @@ async fn execute(args: &ChatArgs) -> Result<Exit, Failure> {
     let backend_name = built.backend;
     let warning = built.warning.clone();
     let voice = VoiceLoop::start(VoiceParts {
-        llm: provider.client.clone(),
+        llm: provider.client(),
         clock: std::sync::Arc::new(SystemLoopClock::new()),
         scenario,
         config,

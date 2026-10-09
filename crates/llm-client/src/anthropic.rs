@@ -321,9 +321,12 @@ fn parse_completion(
         return Err(LlmError::Refusal);
     }
     let Some(blocks) = reply.get("content").and_then(Value::as_array) else {
-        return Err(LlmError::Protocol(
-            "the reply has no content blocks".to_owned(),
-        ));
+        // Some Anthropic-compatible gateways answer a non-streaming request
+        // with the OpenAI body shape (`choices[0].message`) even though the
+        // request used the Anthropic protocol. The Anthropic shape is tried
+        // first and the OpenAI shape is the fallback, so such a gateway costs
+        // a fallback instead of the call.
+        return crate::openai::completion_from_reply(&reply, format, key);
     };
     let tool_input = match format {
         Format::ForcedTool(_) => blocks

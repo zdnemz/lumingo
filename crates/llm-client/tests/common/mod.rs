@@ -381,6 +381,32 @@ pub fn openai_reply(content: &str) -> Reply {
     )
 }
 
+/// An `openai_chat` reply that answers a forced tool call with `arguments`.
+pub fn openai_tool_reply(arguments: &str) -> Reply {
+    Reply::json_text(
+        200,
+        &json!({
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call_test",
+                        "type": "function",
+                        "function": { "name": "probe_test", "arguments": arguments }
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 }
+        })
+        .to_string(),
+    )
+}
+
 /// An `anthropic_messages` reply with one text block.
 pub fn anthropic_text_reply(content: &str) -> Reply {
     Reply::json_text(

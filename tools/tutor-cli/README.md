@@ -100,6 +100,32 @@ classified as speech to the first tutor sample the output callback consumed
 "Output start" is found by polling the playback counters every 2 ms, so it carries that
 resolution, and it includes the conversion of the audio to the device rate.
 
+## `probe`: the capability probe on the command line
+
+```
+tutor-cli probe [OPTIONS]
+```
+
+It runs the connection test (`docs/PROMPT_CONTRACTS.md` section 4) against the
+provider and prints what each step found: auth, streaming, the structured-output
+ladder level, the time to the first token, and which contracts work. The protocol
+and the model name are printed; the key never is.
+
+```
+provider 127.0.0.1 (openai_chat, model some-model)
+probe: auth true, stream true, structured level Some(2), first token Some(640) ms
+```
+
+Every command that makes structured calls (`chat --analysis`, `unit run` with a
+provider, `unit score-pending`) runs the probe first for the same reason, so the
+calls start at the ladder level the provider really supports. Without the probe a
+gateway that silently ignores the native schema (found live on 2026-10-07) would
+fail every structured call at level 1. `TUTOR_LLM_FORCE_LEVEL=1..4` forces a level
+after the probe, to compare what a provider does at each one.
+
+Exit codes: 0 when a structured level worked, 1 when none did, 3 when the provider
+could not be reached or rejected the key.
+
 ## `unit`: play a unit to its checkpoint
 
 ```

@@ -26,6 +26,26 @@ pub enum Command {
     /// Play a unit from its first activity to its checkpoint, or score the
     /// responses that waited for a provider.
     Unit(UnitArgs),
+    /// Run the capability probe (the connection test) against the provider and
+    /// print what it found. The live check for the gateway quirks of S4-06.
+    Probe(ProbeArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ProbeArgs {
+    /// The provider profile: `env` for the TUTOR_LLM_* variables or a `.env` file,
+    /// or the name of a profile in providers.toml. With one profile, that one.
+    #[arg(long)]
+    pub provider: Option<String>,
+    /// providers.toml. Defaults to the one in the data directory.
+    #[arg(long)]
+    pub providers_file: Option<PathBuf>,
+    /// The data directory (providers.toml).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+    /// The whole time, in milliseconds, the provider gets to start a reply.
+    #[arg(long, default_value_t = 16_000)]
+    pub provider_timeout_ms: u64,
 }
 
 #[derive(Debug, Args)]

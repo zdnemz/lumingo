@@ -251,6 +251,62 @@ async fn native_structured_output_goes_through_output_config_format() {
 }
 
 #[tokio::test]
+async fn an_anthropic_gateway_that_answers_in_the_openai_shape_is_read_too() {
+    // Seen live on 2026-10-07 from an Anthropic-compatible gateway: the request
+    // used `anthropic_messages`, the body came back OpenAI-shaped.
+    let (rig, adapter) = anthropic_rig().await;
+    rig.server.enqueue(Reply::json_text(
+        200,
+        &json!({
+            "id": "cmb-1",
+            "object": "chat.completion",
+            "model": "some-model",
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": "{\"word\":\"tea\"}" }
+            }]
+        })
+        .to_string(),
+    ));
+
+    let completion = complete(
+        &adapter,
+        |schema| {
+            Format::NativeSchema(SchemaRef {
+                name: "probe_test",
+                schema,
+            })
+        },
+        None,
+    )
+    .await
+    .expect("completion");
+
+    assert_eq!(completion.text, "{\"word\":\"tea\"}");
+
+    // The documented Anthropic shape still wins when both are present.
+    let both = json!({
+        "content": [{ "type": "text", "text": "{\"from\":\"anthropic\"}" }],
+        "choices": [{ "index": 0, "message": { "content": "{\"from\":\"openai\"}" } }]
+    });
+    rig.server.enqueue(Reply::json_text(200, &both.to_string()));
+    let completion = complete(
+        &adapter,
+        |schema| {
+            Format::NativeSchema(SchemaRef {
+                name: "probe_test",
+                schema,
+            })
+        },
+        None,
+    )
+    .await
+    .expect("completion");
+
+    assert_eq!(completion.text, "{\"from\":\"anthropic\"}");
+}
+
+#[tokio::test]
 async fn forced_tool_call_is_the_fallback_and_its_input_is_the_json() {
     let (rig, adapter) = anthropic_rig().await;
     rig.server

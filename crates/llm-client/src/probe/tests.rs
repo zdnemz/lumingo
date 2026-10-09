@@ -13,7 +13,10 @@ use crate::profile::Protocol;
 use crate::types::{FinishReason, StreamSummary, StructuredRequest};
 
 fn probe_json() -> Reply {
-    text(&json!({"title": "A short test", "word_count": 3, "is_ok": true}).to_string())
+    text(
+        &json!({"title": "A short test", "word_count": 3, "is_ok": true, "check": "schema_received"})
+            .to_string(),
+    )
 }
 
 fn turn_analysis() -> Value {
@@ -378,6 +381,39 @@ async fn a_timeout_during_the_structured_steps_aborts_the_probe() {
     let error = run_probe(&client).await.expect_err("timeout");
 
     assert!(matches!(error, LlmError::Timeout(TimeoutKind::Total)));
+}
+
+#[tokio::test]
+async fn a_forced_structured_level_is_what_the_next_call_uses() {
+    // The live checks force a level (`TUTOR_LLM_FORCE_LEVEL`) to compare what
+    // a provider does at each one; the forced level is what the next
+    // structured call starts from.
+    let (client, adapter) = setup(
+        Protocol::OpenAiChat,
+        vec![text(&turn_analysis().to_string())],
+        vec![],
+    );
+    client.set_structured_level(LadderLevel::ForcedTool);
+    assert_eq!(
+        client.capabilities().structured_level,
+        Some(LadderLevel::ForcedTool)
+    );
+
+    let out = client
+        .structured(
+            StructuredRequest::new(
+                Contract::TurnAnalysis,
+                "s",
+                vec![ChatMessage::user("u")],
+                100,
+            ),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("valid");
+    assert_eq!(out.ladder_level, LadderLevel::ForcedTool);
+    let seen: Vec<Seen> = adapter.requests().into_iter().map(|r| r.format).collect();
+    assert_eq!(seen, vec![Seen::Tool]);
 }
 
 #[tokio::test]

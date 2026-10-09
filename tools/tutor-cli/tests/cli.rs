@@ -80,14 +80,43 @@ fn serve(stream: TcpStream, reply: &str, log: &Mutex<Vec<String>>) {
     let mut body = vec![0_u8; length];
     let _ = reader.read_exact(&mut body);
     log.lock().unwrap().push(request_line.trim().to_owned());
-    let payload = format!(
-        "{}{}{}data: [DONE]\n\n",
-        chunk("\"role\":\"assistant\",\"content\":\"\"", None),
-        chunk(&format!("\"content\":{}", serde_json::json!(reply)), None),
-        chunk("", Some("stop")),
-    );
+    let request: serde_json::Value =
+        serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+    let (content_type, payload) = if request["stream"] == true {
+        // The tutor turn: one streamed reply.
+        let payload = format!(
+            "{}{}{}data: [DONE]\n\n",
+            chunk("\"role\":\"assistant\",\"content\":\"\"", None),
+            chunk(&format!("\"content\":{}", serde_json::json!(reply)), None),
+            chunk("", Some("stop")),
+        );
+        ("text/event-stream", payload)
+    } else {
+        // A non-streaming call: the capability probe's steps. The probe's test
+        // schema gets a reply that carries the canary, so level 1 works; the
+        // contract steps get an empty object, which the ladder rejects, so
+        // those contracts are left out and the probe still succeeds.
+        let content = if request["response_format"]["json_schema"]["name"] == "probe_test" {
+            r#"{"title":"A short test","word_count":3,"is_ok":true,"check":"schema_received"}"#
+                .to_owned()
+        } else {
+            "{}".to_owned()
+        };
+        let payload = serde_json::json!({
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": content, "refusal": null },
+                "finish_reason": "stop"
+            }],
+            "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 }
+        })
+        .to_string();
+        ("application/json", payload)
+    };
     let response = format!(
-        "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{payload}",
+        "HTTP/1.1 200 OK\r\ncontent-type: {content_type}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{payload}",
         payload.len()
     );
     let mut stream = reader.into_inner();
@@ -493,4 +522,86 @@ fn a_script_that_needs_the_recogniser_cannot_be_combined_with_text() {
     );
     assert_eq!(result.code, Some(1), "{}", result.stderr);
     assert!(result.stderr.contains("drop --text"), "{}", result.stderr);
+}
+
+// ---- the probe command (S4-06 live check) ---------------------------------------------
+
+#[test]
+fn the_probe_command_runs_the_capability_probe_and_prints_what_it_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let provider = Provider::start("Hello there.");
+    let result = run(
+        {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_tutor-cli"));
+            command
+                .current_dir(dir.path())
+                .env_remove("RUST_LOG")
+                .args(["probe", "--data-dir"])
+                .arg(dir.path().join("data"))
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .env("TUTOR_LLM_PROTOCOL", "openai_chat")
+                .env("TUTOR_LLM_BASE_URL", &provider.base_url)
+                .env("TUTOR_LLM_MODEL", "test-model")
+                .env("TUTOR_LLM_API_KEY", KEY);
+            command
+        },
+        Duration::from_secs(30),
+    );
+    assert_eq!(result.code, Some(0), "{}\n{}", result.stdout, result.stderr);
+    assert!(
+        result.stdout.contains("provider 127.0.0.1"),
+        "{}",
+        result.stdout
+    );
+    assert!(
+        result
+            .stdout
+            .contains("probe: auth true, stream true, structured level Some(1)"),
+        "{}",
+        result.stdout
+    );
+    no_secret(&result);
+    // The probe's test schema carries the canary, and it was answered with it.
+    let seen = provider.requests();
+    assert!(
+        seen.iter()
+            .any(|r| r.starts_with("POST /v1/chat/completions")),
+        "{seen:?}"
+    );
+}
+
+#[test]
+fn the_probe_command_with_a_rejected_key_exits_with_the_provider_code() {
+    let dir = tempfile::tempdir().unwrap();
+    // The scripted provider accepts every key, so a wrong one is simulated by
+    // a closed port instead: the probe cannot reach it.
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let result = run(
+        {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_tutor-cli"));
+            command
+                .current_dir(dir.path())
+                .env_remove("RUST_LOG")
+                .args(["probe", "--data-dir"])
+                .arg(dir.path().join("data"))
+                .args(["--provider-timeout-ms", "1500"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .env("TUTOR_LLM_PROTOCOL", "openai_chat")
+                .env("TUTOR_LLM_BASE_URL", format!("http://127.0.0.1:{port}/v1"))
+                .env("TUTOR_LLM_MODEL", "test-model")
+                .env("TUTOR_LLM_API_KEY", KEY);
+            command
+        },
+        Duration::from_secs(20),
+    );
+    assert_eq!(result.code, Some(3), "{}\n{}", result.stdout, result.stderr);
+    no_secret(&result);
 }

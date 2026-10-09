@@ -8,7 +8,7 @@
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "{\"title\":\"A short test\",\"word_count\":3,\"is_ok\":true}",
+        "content": "{\"title\":\"A short test\",\"word_count\":3,\"is_ok\":true,\"check\":\"schema_received\"}",
         "refusal": null
       },
       "finish_reason": "stop"

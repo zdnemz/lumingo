@@ -6,7 +6,7 @@ mod common;
 
 use common::{
     CONTRACT_NAMES, Reply, anthropic_rig, anthropic_text_reply, anthropic_tool_reply, client_for,
-    openai_reply, openai_rig, sample,
+    openai_reply, openai_rig, openai_tool_reply, sample,
 };
 use llm_client::{
     Capabilities, ChatMessage, Contract, InvalidReason, LadderLevel, LlmClient, LlmError,
@@ -130,6 +130,52 @@ async fn a_probe_with_a_bad_key_returns_the_auth_error_and_sends_nothing_more() 
 
     assert!(matches!(error, LlmError::Auth { status: 401 }));
     assert_eq!(rig.server.hits(), 1);
+}
+
+#[tokio::test]
+async fn a_provider_that_ignores_the_native_schema_fails_level_1() {
+    // Found live on 2026-10-07: a gateway answers HTTP 200 but never passes the
+    // native schema to the model, so the model answers from the user message
+    // alone and cannot know the `check` canary. Level 1 must not be cached.
+    let (rig, adapter) = openai_rig().await;
+    rig.server
+        .enqueue(Reply::json_fixture(200, "openai/chat_text.json"));
+    rig.server
+        .enqueue(Reply::sse_fixture("openai/stream_basic.sse"));
+    // Step 3, level 1: the guess (the probe makes one call per level, no repair).
+    let guessed = "{\"title\":\"A short test\",\"word_count\":3,\"is_ok\":true}";
+    let canary = "{\"title\":\"A short test\",\"word_count\":3,\"is_ok\":true,\"check\":\"schema_received\"}";
+    rig.server.enqueue(openai_reply(guessed));
+    // Step 3, level 2 (forced tool): the canary comes back, so the walk stops
+    // there, and the four contract probes run at level 2 as well.
+    rig.server.enqueue(openai_tool_reply(canary));
+    for name in CONTRACT_NAMES {
+        rig.server
+            .enqueue(openai_tool_reply(&sample(name).to_string()));
+    }
+    let client = client_for(adapter, &rig.caps);
+
+    let caps = client
+        .probe(&CancellationToken::new())
+        .await
+        .expect("probe");
+
+    assert_eq!(caps.structured_level, Some(LadderLevel::ForcedTool));
+    assert_eq!(
+        client.capabilities().structured_level,
+        Some(LadderLevel::ForcedTool)
+    );
+    assert_eq!(caps.contracts_ok, CONTRACT_NAMES);
+    let bodies: Vec<_> = rig.server.requests().iter().map(|r| r.json()).collect();
+    // Request 2 is the level-1 attempt, request 3 the level-2 attempt.
+    assert_eq!(
+        bodies[2]["response_format"]["json_schema"]["name"],
+        "probe_test"
+    );
+    assert_eq!(
+        bodies[3]["tool_choice"],
+        json!({ "type": "function", "function": { "name": "probe_test" } })
+    );
 }
 
 #[tokio::test]
