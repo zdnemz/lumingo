@@ -36,7 +36,7 @@ let analysis = client.structured(structured_request, cancel).await?;      // val
 
 ## Not verified
 
-- The wire formats follow the providers' documentation as read on 2026-10-05. The owner's live smoke tests of 2026-10-07 and 2026-10-08 ran on the pre-merge line and found two gateway quirks, both handled here: a gateway that answers `anthropic_messages` with an OpenAI-shaped body (read as a fallback), and one that silently ignores the native JSON schema (the probe's `check` canary fails level 1 and the walk continues). The merged tree's live check is `tutor-cli probe` (ROADMAP S3-03).
+- The wire formats follow the providers' documentation as read on 2026-10-05. The owner's live smoke tests of 2026-10-07 and 2026-10-08 ran on the pre-merge line and found two gateway quirks, both handled here: a gateway that answers `anthropic_messages` with an OpenAI-shaped body (read as a fallback), and one that silently ignores the native JSON schema (the probe's `check` canary fails level 1 and the walk continues). **Live check 2026-10-10: the owner ran `tutor-cli probe` from the merged tree and it passed** — `anthropic_messages`, `structured level Some(2)`, auth and stream true, exit 0 — so both fixes are validated live against the real gateway (the OpenAI-shaped body is read at step 1; the canary walks the ladder at step 3).
 - The HTTPS path (native-tls) is compiled for Linux and checked for `x86_64-pc-windows-msvc`, but no test performs a TLS handshake, because the tests use loopback HTTP. Schannel on Windows is untested.
 - The connect timeout is set on the HTTP client but no test reaches it.
 - Rate-limit header names are the ones OpenAI and Anthropic document; other servers leave `rate_limit` empty.

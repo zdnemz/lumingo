@@ -6,9 +6,10 @@ file, before the UI exists. The loop itself is `app_core::voice`; this crate is 
 terminal around it: arguments, provider choice, the audio and speech side, scripted
 runs and the result file.
 
-**Nothing here has been run with a microphone, a speaker, a speech model or a real
-provider.** The build container has none of them. Read "What is verified" and
-"UNVERIFIED" before you trust a sentence of this file.
+**Nothing here has been run with a microphone, a speaker or a speech model.** The
+build container has none of them. One real provider run has happened: the owner's
+`tutor-cli probe` from the merged tree on 2026-10-10 (see "What is verified"). Read
+"What is verified" and "UNVERIFIED" before you trust a sentence of this file.
 
 ## Build
 
@@ -108,12 +109,21 @@ tutor-cli probe [OPTIONS]
 
 It runs the connection test (`docs/PROMPT_CONTRACTS.md` section 4) against the
 provider and prints what each step found: auth, streaming, the structured-output
-ladder level, the time to the first token, and which contracts work. The protocol
-and the model name are printed; the key never is.
+ladder level and the time to the first token. (The per-contract results live in
+the `Capabilities` object the probe returns; the command line does not print
+them.) The protocol and the model name are printed; the key never is.
 
 ```
 provider 127.0.0.1 (openai_chat, model some-model)
 probe: auth true, stream true, structured level Some(2), first token Some(640) ms
+```
+
+The owner's run from the merged tree, 2026-10-10, against the gateway (the model
+name is left out; it is configuration, not part of the record):
+
+```
+provider localhost (anthropic_messages, model <configured>)
+probe: auth true, stream true, structured level Some(2), first token Some(1285) ms
 ```
 
 Every command that makes structured calls (`chat --analysis`, `unit run` with a
@@ -291,9 +301,18 @@ By tests that run here without hardware or network (`cargo test -p app-core -p t
 * the sherpa feature compiles (`SHERPA_ONNX_LIB_DIR` pointing at an empty folder, so
   nothing is linked) and the cpal device code compiles for `x86_64-pc-windows-msvc`.
 
+By a live run the owner did from the merged tree on 2026-10-10:
+
+* `tutor-cli probe` against the gateway (`anthropic_messages`):
+  `auth true, stream true, structured level Some(2), first token Some(1285) ms`,
+  exit 0 — the expected level on this gateway, where level 1's native schema is
+  silently ignored and the canary walks the ladder to 2.
+
 ## UNVERIFIED
 
 * **`unit run` with a real provider.** Only a fake provider answered rubric and tutor calls.
+* **`chat --analysis` with a real provider** and **a two-draft workshop round** on the
+  merged code (the owner's 2026-10-08 runs validated the pre-merge implementations).
 * **Pronunciation drills with a real phoneme model** and any recording of a learner.
 
 Everything below needs hardware, a model or a provider that this container does not
@@ -304,10 +323,12 @@ have. None of it has run.
   backend only.
 * **Speech models** (`sherpa`): no model was loaded, no transcript or sound produced.
   The engines file is parsed by code that has only been compiled.
-* **A real provider:** no real request has been made. Both protocols are tested against
-  recorded fixtures in `llm-client`.
+* **A real provider beyond `probe`:** the probe's five steps have run live; no
+  tutor turn, analysis or rubric call has. Both protocols are otherwise tested
+  against recorded fixtures in `llm-client`.
 * **Any latency figure.** The tests use an injected clock and fakes; they show that the
-  parts are measured and add up, not how fast anything is.
+  parts are measured and add up, not how fast anything is. The probe's first-token
+  number (1285 ms) is one observation on this gateway, not a benchmark.
 * **A real conversation.** Whether it works, whether the endpointing cuts learner speech
   short and whether the tutor hears itself is for the owner to judge.
 * **S2-09 soak and stress** (zero dropped frames, zero underruns over 30 minutes) is not
