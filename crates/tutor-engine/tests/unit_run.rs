@@ -1039,6 +1039,104 @@ async fn a_scored_roleplay_without_its_rubric_is_stored_unscored() {
     assert_eq!(llm.rubric_calls(), 0);
 }
 
+/// A mediation activity built on the example unit's rubric catalog. Written as a
+/// test: the example unit has no mediation (E16 wants one every third B2 unit).
+fn with_mediation(unit: &Unit, spoken: bool) -> Unit {
+    let mut unit = unit.clone();
+    unit.activities
+        .push(Activity::Mediation(curriculum::Mediation {
+            id: "m1-relay".to_owned(),
+            skill: curriculum::Skill::Mediation,
+            objective_ids: vec!["o6-write-intro".to_owned()],
+            instructions: curriculum::Localized {
+                en: "Relay the message.".to_owned(),
+                id: None,
+            },
+            scoring: Scoring::Rubric,
+            source_text: "The class starts at eight in the morning.".to_owned(),
+            task: curriculum::Localized {
+                en: "Tell your friend when the class starts.".to_owned(),
+                id: None,
+            },
+            rubric_id: if spoken {
+                "rubric-a1-spoken-production".to_owned()
+            } else {
+                "rubric-a1-written-production".to_owned()
+            },
+            model_answers: Vec::new(),
+        }));
+    unit
+}
+
+#[tokio::test]
+async fn a_mediation_runs_end_to_end_and_files_under_the_channel_it_was_answered_in() {
+    // Written: text in, written-production rubric, writing evidence.
+    let llm = ReactiveLlm::new();
+    let f = fixture(&llm, None).await;
+    let mut p = player_of(&f, with_mediation(&f.unit, false)).await;
+    let written = p
+        .submit("m1-relay", text("The class starts at eight."), &cancel())
+        .await
+        .unwrap();
+    assert_eq!(written.skill, "writing");
+    assert_eq!(written.activity_type, curriculum::ActivityType::Mediation);
+    let ResultOutcome::Rubric(outcome) = &written.outcome else {
+        panic!("scored: {:?}", written.outcome);
+    };
+    assert_eq!(outcome.dimensions.len(), 4, "a production rubric");
+    assert_eq!(written.score, Some(0.75));
+    // The scorer saw the source text with the task, so it can judge the relay.
+    let call = llm
+        .structured_seen
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|r| r.contract == llm_client::Contract::RubricScore)
+        .cloned()
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_str(&call.messages[0].content).unwrap();
+    assert!(
+        body["task_prompt"]
+            .as_str()
+            .unwrap()
+            .contains("The class starts at eight in the morning."),
+        "{body}"
+    );
+    let rows = f.db.attempts().for_session(p.session_id()).await.unwrap();
+    assert!(rows.iter().all(|a| a.activity_type == "mediation"));
+    assert!(rows.iter().all(|a| a.skill == "writing"));
+    assert!(rows.iter().all(|a| a.counts_toward_estimate));
+
+    // Spoken: a transcript in, spoken-production rubric, speaking evidence.
+    let llm = ReactiveLlm::new();
+    let f = fixture(&llm, None).await;
+    let mut p = player_of(&f, with_mediation(&f.unit, true)).await;
+    let said = p
+        .submit(
+            "m1-relay",
+            spoken("The class starts at eight in the morning."),
+            &cancel(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(said.skill, "speaking");
+    assert_eq!(said.score, Some(0.75));
+    let rows = f.db.attempts().for_session(p.session_id()).await.unwrap();
+    assert!(rows.iter().all(|a| a.skill == "speaking"));
+    // A spoken response is analysed as voice, so the prompt tells the model to
+    // ignore the transcript's spelling.
+    let call = llm
+        .structured_seen
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|r| r.contract == llm_client::Contract::RubricScore)
+        .cloned()
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_str(&call.messages[0].content).unwrap();
+    assert_eq!(body["input_mode"], "voice");
+}
+
 #[tokio::test]
 async fn no_attempt_of_a_unit_run_is_generated_or_free_mode() {
     let llm = ReactiveLlm::new();
