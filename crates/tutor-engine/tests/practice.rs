@@ -234,6 +234,15 @@ async fn provider_trouble_and_invalid_output_fall_back_to_authored_items() {
             FallbackReason::ProviderUnavailable,
         ),
         (
+            LlmError::Auth { status: 401 },
+            FallbackReason::ProviderUnavailable,
+        ),
+        // What the `NoProvider` client answers: not the model's fault.
+        (
+            LlmError::InvalidRequest("no provider is configured".to_owned()),
+            FallbackReason::ProviderUnavailable,
+        ),
+        (
             LlmError::InvalidOutput(InvalidOutput {
                 reason: InvalidReason::SchemaMismatch,
                 paths: vec![],

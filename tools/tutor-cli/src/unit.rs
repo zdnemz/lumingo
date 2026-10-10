@@ -35,6 +35,7 @@ pub async fn run(args: UnitArgs) -> Exit {
     let result = match args.command {
         UnitCommand::Run(run) => execute_run(&run).await,
         UnitCommand::ScorePending(score) => execute_score_pending(&score).await,
+        UnitCommand::Practice(practice) => crate::practice::execute(&practice).await,
     };
     match result {
         Ok(exit) => exit,
@@ -243,13 +244,13 @@ async fn play_roleplay<R: AsyncBufRead + Unpin, W: Write>(
     Ok(player.finish_roleplay(run, cancel).await?)
 }
 
-async fn open_database(path: &Path) -> Result<Database, Failure> {
+pub(crate) async fn open_database(path: &Path) -> Result<Database, Failure> {
     Database::open(path)
         .await
         .map_err(|error| other(anyhow!("the database could not be opened: {error}")))
 }
 
-async fn ensure_profile(db: &Database) -> Result<i64, Failure> {
+pub(crate) async fn ensure_profile(db: &Database) -> Result<i64, Failure> {
     let existing = db
         .profiles()
         .first()
@@ -294,22 +295,32 @@ fn default_database(unit_id: &str) -> PathBuf {
     ))
 }
 
-struct Connection {
-    client: Arc<dyn llm_client::LlmClient>,
-    model: String,
-    label: String,
+pub struct Connection {
+    pub client: Arc<dyn llm_client::LlmClient>,
+    pub model: String,
+    pub label: String,
+}
+
+/// How the caller asked for a provider, shared by the commands that connect.
+pub(crate) struct ProviderChoice<'a> {
+    pub offline: bool,
+    pub provider: Option<&'a str>,
+    pub providers_file: Option<&'a std::path::Path>,
+    pub data_dir: Option<&'a std::path::Path>,
+    pub timeout_ms: u64,
 }
 
 /// The provider of the run, or none: a learner with no provider can still play
-/// the unit, and its productive responses wait.
-async fn connect(args: &UnitRunArgs) -> Connection {
-    if !args.offline {
+/// the unit, and its productive responses wait. `none_label` says what happens
+/// without one, which differs per command.
+pub(crate) async fn connect(choice: &ProviderChoice<'_>, none_label: &str) -> Connection {
+    if !choice.offline {
         match provider::connect(
             &llm_client::EnvProfileLoader::with_default_paths(),
-            args.data_dir.as_deref(),
-            args.providers_file.as_deref(),
-            args.provider.as_deref(),
-            Duration::from_millis(args.provider_timeout_ms),
+            choice.data_dir,
+            choice.providers_file,
+            choice.provider,
+            Duration::from_millis(choice.timeout_ms),
         ) {
             Ok(connected) => {
                 // Productive responses are scored with structured calls: the
@@ -333,7 +344,7 @@ async fn connect(args: &UnitRunArgs) -> Connection {
     Connection {
         client: Arc::new(NoProvider),
         model: "none".to_owned(),
-        label: "none: productive responses will be stored as pending".to_owned(),
+        label: none_label.to_owned(),
     }
 }
 
@@ -362,7 +373,17 @@ async fn execute_run(args: &UnitRunArgs) -> Result<Exit, Failure> {
         }
         None => None,
     };
-    let connection = connect(args).await;
+    let connection = connect(
+        &ProviderChoice {
+            offline: args.offline,
+            provider: args.provider.as_deref(),
+            providers_file: args.providers_file.as_deref(),
+            data_dir: args.data_dir.as_deref(),
+            timeout_ms: args.provider_timeout_ms,
+        },
+        "none: productive responses will be stored as pending",
+    )
+    .await;
     let database_path = args
         .db
         .clone()

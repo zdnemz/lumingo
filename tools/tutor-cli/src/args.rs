@@ -61,6 +61,59 @@ pub enum UnitCommand {
     /// Score the responses of earlier runs that were stored as pending because
     /// no provider could be reached.
     ScorePending(ScorePendingArgs),
+    /// Extra practice: items the model generates within the unit's policy, or
+    /// authored items replayed when generation is not possible. Every answer is
+    /// practice and never counts toward a level estimate (S4-10).
+    Practice(PracticeArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+#[command(group(clap::ArgGroup::new("responses").required(true).args(["script", "interactive"])))]
+pub struct PracticeArgs {
+    /// The unit file.
+    pub unit: PathBuf,
+    /// How many items to ask the model for. The unit's generation policy may
+    /// allow fewer; the session limit counts what was generated before.
+    #[arg(long, default_value_t = 3)]
+    pub count: u8,
+    /// A JSON file of responses, one entry per activity id. A generated item's
+    /// id is session-scoped, so its answers are keyed by position instead:
+    /// `gen-1`, `gen-2`, ... answer the first, second, ... generated item (see
+    /// tools/tutor-cli/README.md).
+    #[arg(long)]
+    pub script: Option<PathBuf>,
+    /// Type the responses at the terminal instead of reading a script.
+    #[arg(long)]
+    pub interactive: bool,
+    /// A word list, one `word,LEVEL` per line, for the vocabulary check.
+    #[arg(long)]
+    pub word_list: Option<PathBuf>,
+    /// The database file the attempts are written to. A new file in the
+    /// temporary folder when not given; the run prints its path.
+    #[arg(long)]
+    pub db: Option<PathBuf>,
+    /// Write the items, their scores and the set's status as one JSON file.
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+    /// The learner's first language, written in English.
+    #[arg(long, default_value = "Indonesian")]
+    pub first_language: String,
+    /// Do not look for a provider: the authored fallback is replayed.
+    #[arg(long)]
+    pub offline: bool,
+    /// The provider profile: `env` for the TUTOR_LLM_* variables or a `.env` file,
+    /// or the name of a profile in providers.toml. With one profile, that one.
+    #[arg(long)]
+    pub provider: Option<String>,
+    /// providers.toml. Defaults to the one in the data directory.
+    #[arg(long)]
+    pub providers_file: Option<PathBuf>,
+    /// The data directory (providers.toml).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+    /// The whole time, in milliseconds, the provider gets to start a reply.
+    #[arg(long, default_value_t = 16_000)]
+    pub provider_timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, Args)]

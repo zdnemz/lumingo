@@ -21,6 +21,7 @@ use crate::script::{self, ScriptTurn};
 use crate::wav;
 
 /// A failure with the exit code it should end the program with.
+#[derive(Debug)]
 pub struct Failure {
     pub exit: Exit,
     pub error: anyhow::Error,

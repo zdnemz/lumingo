@@ -47,8 +47,10 @@ pub enum FallbackReason {
     PolicyForbids,
     /// The session already holds as many generated items as the policy allows.
     SessionLimit,
+    /// The provider could not be used: no provider is configured, or the call
+    /// failed for a reason that is not about the model's output.
     ProviderUnavailable,
-    /// The reply stayed invalid after the client's repair call.
+    /// The reply was unusable: it stayed invalid after the client's repair call.
     InvalidOutput,
     /// Fewer than half of the items passed the checks, twice.
     TooFewValid,
@@ -194,10 +196,15 @@ impl PracticeGenerator {
                     return Err(EngineError::Llm(LlmError::Cancelled));
                 }
                 Err(EngineError::Llm(error)) => {
-                    let reason = if error.is_provider_unavailable() {
-                        FallbackReason::ProviderUnavailable
-                    } else {
-                        FallbackReason::InvalidOutput
+                    // Only invalid output points at the model's answer being
+                    // unusable. Everything else is the provider being unusable
+                    // for this call: no provider configured (the `NoProvider`
+                    // client answers `InvalidRequest`), a rejected key, a
+                    // timeout, a rate limit, a refusal. The reading service
+                    // makes the same split.
+                    let reason = match error {
+                        LlmError::InvalidOutput(_) => FallbackReason::InvalidOutput,
+                        _ => FallbackReason::ProviderUnavailable,
                     };
                     return Ok(fallback(reason, rejected, regenerated));
                 }

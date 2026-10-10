@@ -12,6 +12,7 @@ mod cpal_devices;
 pub mod engines;
 pub mod exit;
 pub mod observer;
+pub mod practice;
 pub mod probe;
 pub mod provider;
 pub mod results;

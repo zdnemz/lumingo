@@ -127,11 +127,11 @@ probe: auth true, stream true, structured level Some(2), first token Some(1285) 
 ```
 
 Every command that makes structured calls (`chat --analysis`, `unit run` with a
-provider, `unit score-pending`) runs the probe first for the same reason, so the
-calls start at the ladder level the provider really supports. Without the probe a
-gateway that silently ignores the native schema (found live on 2026-10-07) would
-fail every structured call at level 1. `TUTOR_LLM_FORCE_LEVEL=1..4` forces a level
-after the probe, to compare what a provider does at each one.
+provider, `unit score-pending`, `unit practice`) runs the probe first for the same
+reason, so the calls start at the ladder level the provider really supports. Without
+the probe a gateway that silently ignores the native schema (found live on 2026-10-07)
+would fail every structured call at level 1. `TUTOR_LLM_FORCE_LEVEL=1..4` forces a
+level after the probe, to compare what a provider does at each one.
 
 Exit codes: 0 when a structured level worked, 1 when none did, 3 when the provider
 could not be reached or rejected the key.
@@ -142,6 +142,7 @@ could not be reached or rejected the key.
 tutor-cli unit run <unit.json> --script <responses.json> [--db <file>] [--out <file>] [--offline]
 tutor-cli unit run <unit.json> --interactive
 tutor-cli unit score-pending --db <file>
+tutor-cli unit practice <unit.json> --script <responses.json> [--count <n>] [--db <file>] [--offline]
 ```
 
 `unit run` plays every activity of the unit in order with `tutor_engine::UnitPlayer`,
@@ -180,6 +181,41 @@ cargo run -p tutor-cli -- unit run curriculum/examples/a1-u01.example.json \
 Exit codes: 0 when the checkpoint was decided, 1 when it was not (an activity of it was
 skipped or refused) or on any other failure, 2 for a usage error, 3 when
 `score-pending` finds no reachable provider, 130 on Ctrl-C.
+
+### `unit practice`: extra practice (S4-10)
+
+```
+tutor-cli unit practice <unit.json> --script <responses.json> [--count <n>]
+tutor-cli unit practice <unit.json> --interactive [--offline]
+```
+
+`unit practice` is "more practice" (PRD FR-L4): the model writes extra items inside
+the unit's `generation_policy` (T4, `contracts/practice_items.schema.json`), each is
+converted to the typed activity, checked by the same validators as authored items and
+dropped when it fails, fewer than half valid means one regeneration, and when that
+fails too — or there is no provider — the run replays authored items instead: the
+wrong answers of the newest lesson or checkpoint run first, then the other items of an
+allowed type. The run stores a `drill` session, plays the items through the same
+scoring runtime a unit answer uses, and writes one attempt row per item with origin
+`generated` (or `authored` for a replay) and `counts_toward_estimate = false`. The
+generated items themselves are stored with the session in `generated_content` and are
+deleted with it. **Nothing here can move a level estimate**, and the result file names
+no level.
+
+* **`--count <n>`** asks for up to `n` items (default 3). The unit's
+  `max_items_per_session` caps the session, and items generated in this session count
+  against it.
+* **Script keys.** A generated item's id is scoped to its session (`gen-s<session>-1`),
+  which a script written in advance cannot know, so a script answers generated items by
+  position: `gen-1`, `gen-2`, ... in the order the set lists them. A replayed authored
+  item keeps its authored id. An item with no entry is skipped; an entry the item cannot
+  take is refused by name and the run goes on.
+* **`--word-list`** (one `word,LEVEL` per line) turns on the vocabulary check against the
+  unit's `max_level`. Without it the check is skipped and the run says so.
+* **`--out <file>`** writes the items, their origins, their scores and why the set is
+  what it is (`source`, `fallback`, `dropped`, `regenerated`) as JSON.
+* Exit codes are the same as `unit run`, except that there is no checkpoint: 0 when the
+  run finished, 1 on a failure, 130 on Ctrl-C.
 
 ## Scripts
 
@@ -279,6 +315,21 @@ It must print a message that the provider could not be reached, within the
 `--provider-timeout-ms` budget (16 s by default), stop cleanly and exit with code 3:
 `echo $LASTEXITCODE`.
 
+**Extra practice with a real provider (S4-10 verify), by hand.** The probe must pass
+first (the gateway quirk); the command probes on its own:
+
+```powershell
+cargo run --release -p tutor-cli -- unit practice curriculum/examples/a1-u01.example.json `
+  --interactive --count 3 --out benchmarks/results/s4-10-practice.json
+```
+
+Answer the three items it prints. The lines to look at: `set: generated, 3 item(s)`,
+each item's score, `every answer here is practice`, and the result file's `source`
+(`generated`) — plus `dropped` and `regenerated` when the model's first answer had
+problems. Then the same command with `--offline`: the set must be `authored` with
+`fallback: provider_unavailable`, and the wrong answers of the newest lesson run (if
+any) must come first. Nothing may change a level estimate in either run.
+
 ## What is verified
 
 By tests that run here without hardware or network (`cargo test -p app-core -p tutor-cli`):
@@ -298,6 +349,14 @@ By tests that run here without hardware or network (`cargo test -p app-core -p t
   (test code only), including its reading set, listening set (with a replay limit)
   and writing tasks; the typed-input path; the offline run through the real binary
   with its pending rows, result file and `score-pending` exit code (`tests/unit.rs`);
+* `unit practice` (S4-10): three generated items stored as a `drill` session with the
+  raw items in `generated_content`, converted, marked `generated`, scored through the
+  same runtime and stored with `counts_toward_estimate = false`; the offline fallback
+  replaying the wrong answer of the newest lesson run first, keeping its `authored`
+  origin and still not counting; the result file naming the source and no level; and
+  the real binary offline (`tests/practice.rs`); the practice service's own fallback
+  reasons, including the `NoProvider` client's answer, are covered in
+  `crates/tutor-engine/tests/practice.rs`;
 * the sherpa feature compiles (`SHERPA_ONNX_LIB_DIR` pointing at an empty folder, so
   nothing is linked) and the cpal device code compiles for `x86_64-pc-windows-msvc`.
 
@@ -311,6 +370,8 @@ By a live run the owner did from the merged tree on 2026-10-10:
 ## UNVERIFIED
 
 * **`unit run` with a real provider.** Only a fake provider answered rubric and tutor calls.
+* **`unit practice` with a real provider.** The generation, the checks and the fallback
+  are tested against a fake provider and offline; no live T4 call has run.
 * **`chat --analysis` with a real provider** and **a two-draft workshop round** on the
   merged code (the owner's 2026-10-08 runs validated the pre-merge implementations).
 * **Pronunciation drills with a real phoneme model** and any recording of a learner.
