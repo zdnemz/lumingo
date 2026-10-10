@@ -14,7 +14,7 @@ import type { ProviderList } from "@/generated/ProviderList";
 import type { UnitList } from "@/generated/UnitList";
 import type { MessageKey } from "@/i18n";
 import { CapabilityRows, ProbeResult } from "@/providers/ProbeResult";
-import { KeyGuide } from "@/providers/KeyGuide";
+import { KeyGuidePanel } from "@/providers/KeyGuidePanel";
 import { ProviderCard } from "@/providers/ProviderCard";
 import { ProviderForm } from "@/providers/ProviderForm";
 import type { ProviderPreset } from "@/providers/keyGuide";
@@ -249,7 +249,7 @@ function GuideStep({ filled, onFill }: { filled: boolean; onFill: (preset: Provi
   return (
     <>
       <p>{t("onb.guide.body")}</p>
-      <KeyGuide onFill={onFill} filled={filled} />
+      <KeyGuidePanel onFill={onFill} filled={filled} />
     </>
   );
 }

@@ -5,14 +5,19 @@ import { Button } from "@/ui/Button";
 import { Panel } from "@/ui/Panel";
 import { KEY_GUIDE, KEY_GUIDE_PRESET, type ProviderPreset } from "./keyGuide";
 
-export interface KeyGuideProps {
+export interface KeyGuidePanelProps {
   /** Puts the guide's values into the provider form. Without it the button is not shown. */
   onFill?: (preset: ProviderPreset) => void;
   filled?: boolean;
 }
 
-/** Step by step key guide for one provider with a free tier, with that provider's data-use statement (FR-A7). */
-export function KeyGuide({ onFill, filled }: KeyGuideProps) {
+/**
+ * Step by step key guide for one provider with a free tier, with that provider's
+ * data-use statement (FR-A7). The name ends in "Panel" because `KeyGuide.tsx`
+ * and `keyGuide.ts` differ only in case, and Windows — where CI runs — cannot
+ * keep two such files apart.
+ */
+export function KeyGuidePanel({ onFill, filled }: KeyGuidePanelProps) {
   const t = useT();
   return (
     <Panel title={t("guide.title")} raised>
