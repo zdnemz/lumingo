@@ -128,6 +128,7 @@ pub fn system_prompt(ctx: &TutorContext) -> String {
         FeedbackMode::Accuracy => {
             "If the learner made a mistake, correct one mistake at most, choosing the one closest to the \
              language listed above. Say the correct sentence, then ask the learner to say it again. \
+             If the learner does not say it again within two turns, move on and continue the scenario. \
              If there was no mistake, continue the scenario."
         }
     };
@@ -365,6 +366,18 @@ mod tests {
         assert!(!accuracy.contains("Do not correct mistakes."));
         assert!(fluency.contains("Do not correct mistakes."));
         assert!(!fluency.contains("correct one mistake at most"));
+    }
+
+    #[test]
+    fn accuracy_stops_insisting_after_two_turns_without_a_retry() {
+        // The owner's decision of 2026-10-10 (ADR-057): the learner may ignore
+        // the "say it again" instruction; after two turns the tutor moves on.
+        let accuracy = system_prompt(&context(Channel::Voice, Level::A1, FeedbackMode::Accuracy));
+        assert!(accuracy.contains(
+            "If the learner does not say it again within two turns, move on and continue the scenario."
+        ));
+        let fluency = system_prompt(&context(Channel::Voice, Level::A1, FeedbackMode::Fluency));
+        assert!(!fluency.contains("two turns"));
     }
 
     #[test]
