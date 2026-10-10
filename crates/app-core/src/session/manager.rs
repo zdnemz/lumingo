@@ -376,6 +376,18 @@ impl SessionManager {
         *lock(&self.slot) = Slot::Idle;
         let emit = run.emitter();
         let ended = outcome?;
+        // The scores are stored, so the estimates can be brought up to date. A
+        // failure here must not fail the end: the session did end. No detached
+        // task: `close()` races one against the database shutdown. An aborted
+        // session recomputes too, because its scored attempts are real rows.
+        match self.core() {
+            Ok(core) => {
+                if let Err(error) = core.recompute_estimates().await {
+                    tracing::warn!(%error, "the skill estimates could not be recomputed");
+                }
+            }
+            Err(error) => tracing::warn!(%error, "the skill estimates could not be recomputed"),
+        }
         if let Some(feedback) = ended.feedback.clone() {
             emit.feedback(feedback);
         }

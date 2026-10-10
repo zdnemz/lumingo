@@ -21,8 +21,9 @@ use crate::settings;
 const EXPORT_FORMAT_VERSION: u32 = 1;
 
 /// The four skills a level estimate exists for. The export reads the attempts
-/// of each, because storage lists attempts by skill.
-const ESTIMATE_SKILLS: [&str; 4] = ["listening", "speaking", "reading", "writing"];
+/// of each, because storage lists attempts by skill; `estimates` recomputes the
+/// estimate of each. The order matches `assessment_engine::Skill::ALL`.
+pub(crate) const ESTIMATE_SKILLS: [&str; 4] = ["listening", "speaking", "reading", "writing"];
 
 /// Where a stored recording path points, or `None` when it would leave the data
 /// directory. Stored paths are relative to the data directory; an absolute path

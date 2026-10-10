@@ -58,6 +58,11 @@ impl Timestamp {
             .ok_or(TimeError::Timestamp)
     }
 
+    /// Whole seconds since the Unix epoch, as the estimation code wants it.
+    pub fn unix_seconds(&self) -> i64 {
+        self.0.timestamp()
+    }
+
     fn from_utc(value: DateTime<Utc>) -> Self {
         // Truncate below a millisecond so equal text means equal value.
         let nanos = value.nanosecond() / 1_000_000 * 1_000_000;
@@ -226,6 +231,22 @@ mod tests {
             .minus_days(1)
             .expect("in range");
         assert_eq!(earlier.to_string(), "2026-02-28T12:00:00.000Z");
+    }
+
+    #[test]
+    fn unix_seconds_reads_the_same_instant_whatever_the_written_offset() {
+        // The estimator compares these numbers with a window in seconds, so the
+        // value must be the instant, not the text's local form.
+        let cases = [
+            ("1970-01-01T00:00:00Z", 0),
+            ("2026-10-04T08:15:30Z", 1_791_101_730),
+            ("2026-10-04T15:15:30+07:00", 1_791_101_730),
+            // Milliseconds are truncated, not rounded.
+            ("2026-10-04T08:15:30.999Z", 1_791_101_730),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(stamp(input).unix_seconds(), expected, "{input}");
+        }
     }
 
     #[test]

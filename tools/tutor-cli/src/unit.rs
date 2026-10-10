@@ -502,6 +502,9 @@ async fn execute_score_pending(args: &ScorePendingArgs) -> Result<Exit, Failure>
         )));
     }
     let db = open_database(&args.db).await?;
+    // The estimates are recomputed from the same database after the drain, so a
+    // second handle stays here while the scorer takes its own.
+    let estimate_db = db.clone();
     let connected = provider::connect(
         &llm_client::EnvProfileLoader::with_default_paths(),
         args.data_dir.as_deref(),
@@ -542,6 +545,28 @@ async fn execute_score_pending(args: &ScorePendingArgs) -> Result<Exit, Failure>
         "scored {}, given up {}, skipped {}, still waiting {}",
         report.scored, report.given_up, report.skipped, report.remaining
     );
+    // The drain scored responses, so the estimates are now out of date: the
+    // progress screen would otherwise show what the last session end computed.
+    // A failure here is a note, not the command's outcome: the scores are
+    // stored, which is what was asked for.
+    if report.scored > 0 {
+        match ensure_profile(&estimate_db).await {
+            Ok(profile_id) => {
+                let now = storage::Timestamp::now();
+                if let Err(error) =
+                    app_core::estimates::recompute_estimates(&estimate_db, profile_id, now).await
+                {
+                    eprintln!("note: the skill estimates could not be recomputed: {error}");
+                }
+            }
+            Err(failure) => {
+                eprintln!(
+                    "note: the skill estimates could not be recomputed: {:#}",
+                    failure.error
+                );
+            }
+        }
+    }
     if report.provider_unreachable {
         eprintln!("the provider could not be reached: the rest stays queued");
         return Ok(Exit::ProviderUnavailable);

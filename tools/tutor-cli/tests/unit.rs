@@ -4,6 +4,8 @@
 //! provider (test code only), the typed-input path, and the program as a user
 //! runs it, offline. No hardware, no network, no real provider.
 
+use std::io::{BufRead, BufReader as IoBufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -598,4 +600,214 @@ fn the_program_needs_a_script_or_interactive_and_refuses_a_bad_script() {
     .output()
     .unwrap();
     assert_eq!(missing.status.code(), Some(1));
+}
+
+/// A provider on 127.0.0.1 that answers the probe and the rubric contract, so
+/// the binary's `unit score-pending` can drain a queue. Test code only.
+struct LocalProvider {
+    base_url: String,
+}
+
+impl LocalProvider {
+    fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                std::thread::spawn(move || serve(stream));
+            }
+        });
+        Self {
+            base_url: format!("http://127.0.0.1:{port}/v1"),
+        }
+    }
+}
+
+fn serve(stream: TcpStream) {
+    let mut reader = IoBufReader::new(stream);
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).unwrap_or(0) == 0 {
+        return;
+    }
+    let mut length = 0_usize;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+            break;
+        }
+        if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+            length = value.trim().parse().unwrap_or(0);
+        }
+    }
+    let mut body = vec![0_u8; length];
+    let _ = reader.read_exact(&mut body);
+    let request: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+    let (content_type, payload) = if request["stream"] == true {
+        // The probe's streaming step: one short sentence, then the end.
+        let chunk = |delta: Value, finish: Value| {
+            format!(
+                "data: {{\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"model\":\"m\",\"choices\":[{{\"index\":0,\"delta\":{delta},\"finish_reason\":{finish}}}]}}\n\n"
+            )
+        };
+        let payload = format!(
+            "{}{}{}data: [DONE]\n\n",
+            chunk(json!({"role": "assistant", "content": ""}), Value::Null),
+            chunk(json!({"content": "It is sunny."}), Value::Null),
+            chunk(json!({}), json!("stop")),
+        );
+        ("text/event-stream", payload)
+    } else {
+        let schema_name = request["response_format"]["json_schema"]["name"]
+            .as_str()
+            .unwrap_or_default();
+        let content = match schema_name {
+            // The probe's step 3 asks for the canary field; a provider that
+            // answers it passes level 1, which the probe then caches.
+            "probe_test" => {
+                r#"{"title":"A short test","word_count":3,"is_ok":true,"check":"schema_received"}"#
+                    .to_owned()
+            }
+            // The drain: a band of 3 in every dimension of the rubric that was
+            // sent, with a quote taken from the response (X1 accepts it).
+            "rubric_score" => {
+                let response = request["messages"]
+                    .as_array()
+                    .and_then(|messages| messages.last())
+                    .and_then(|message| message["content"].as_str())
+                    .unwrap_or_default();
+                let body: Value = serde_json::from_str(response).unwrap_or(Value::Null);
+                let quote = body["response"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .split_whitespace()
+                    .take(3)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let dimensions: Vec<Value> = body["rubric"]
+                    .as_array()
+                    .map(|dimensions| {
+                        dimensions
+                            .iter()
+                            .map(|dimension| {
+                                json!({
+                                    "dimension": dimension["dimension"],
+                                    "band": "3",
+                                    "evidence_quotes": [quote],
+                                    "reason": "A short reason."
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let points: Vec<Value> = body["content_points"]
+                    .as_array()
+                    .map(|points| {
+                        points
+                            .iter()
+                            .map(|point| json!({ "point": point, "covered": true, "quote": quote }))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                json!({
+                    "dimension_scores": dimensions,
+                    "content_points": points,
+                    "on_task": true,
+                    "feedback_en": "You did the task. Add one more detail.",
+                    "feedback_l1": "Kamu menyelesaikan tugasnya. Tambahkan satu detail lagi."
+                })
+                .to_string()
+            }
+            // Every other contract: an empty object, which the ladder rejects
+            // as a support failure and the probe moves past.
+            _ => "{}".to_owned(),
+        };
+        let payload = json!({
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": content, "refusal": null },
+                "finish_reason": "stop"
+            }],
+            "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 }
+        })
+        .to_string();
+        ("application/json", payload)
+    };
+    let response = format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: {content_type}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{payload}",
+        payload.len()
+    );
+    let mut stream = reader.into_inner();
+    let _ = stream.write_all(response.as_bytes());
+}
+
+#[test]
+fn a_backlog_drain_writes_the_estimates() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("drain.sqlite");
+    // A run with no provider leaves the two productive responses queued.
+    let offline = tutor_cli(&[
+        "unit",
+        "run",
+        unit_path().to_str().unwrap(),
+        "--script",
+        script_path().to_str().unwrap(),
+        "--offline",
+        "--db",
+        db_path.to_str().unwrap(),
+    ])
+    .current_dir(dir.path())
+    .output()
+    .unwrap();
+    let stdout = String::from_utf8(offline.stdout).unwrap();
+    assert_eq!(offline.status.code(), Some(0), "{stdout}");
+
+    // With a provider, the drain scores them and the estimates follow.
+    let provider = LocalProvider::start();
+    let mut command = tutor_cli(&[
+        "unit",
+        "score-pending",
+        "--db",
+        db_path.to_str().unwrap(),
+        "--data-dir",
+        dir.path().to_str().unwrap(),
+    ]);
+    command
+        .env("TUTOR_LLM_PROTOCOL", "openai_chat")
+        .env("TUTOR_LLM_BASE_URL", &provider.base_url)
+        .env("TUTOR_LLM_MODEL", "fake-model")
+        .env("TUTOR_LLM_API_KEY", "sk-test-0123456789abcdef");
+    let drained = command.current_dir(dir.path()).output().unwrap();
+    let stdout = String::from_utf8(drained.stdout).unwrap();
+    let stderr = String::from_utf8(drained.stderr).unwrap();
+    assert_eq!(drained.status.code(), Some(0), "{stdout}\n{stderr}");
+    assert!(stdout.contains("scored 2,"), "{stdout}");
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let db = Database::open(&db_path).await.unwrap();
+        let estimates = db.estimates().latest_per_skill(1).await.unwrap();
+        assert_eq!(
+            estimates.len(),
+            4,
+            "the drain recomputes every skill: {estimates:?}"
+        );
+        assert!(
+            estimates.iter().all(|row| row.algorithm_version == "est/1"),
+            "{estimates:?}"
+        );
+        // The drained responses are evidence: a12's four dimension rows are one
+        // observation, and the two error-correction items are one each.
+        let speaking = estimates
+            .iter()
+            .find(|row| row.skill == "speaking")
+            .expect("a row for speaking");
+        assert_eq!(speaking.evidence_count, 1, "{speaking:?}");
+        let writing = estimates
+            .iter()
+            .find(|row| row.skill == "writing")
+            .expect("a row for writing");
+        assert_eq!(writing.evidence_count, 3, "{writing:?}");
+    });
 }

@@ -29,6 +29,7 @@ mod data;
 mod diagnostics;
 pub mod engines;
 pub mod error;
+pub mod estimates;
 pub mod events;
 pub mod hardware;
 mod inspector;
