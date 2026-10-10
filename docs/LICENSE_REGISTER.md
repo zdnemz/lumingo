@@ -148,3 +148,26 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 3. If the status is `review` or `blocked`, stop and ask the owner.
 4. If the item is a model, put its license and license URL in `models/manifest.toml` too.
 5. If the license needs attribution, add the line to `NOTICE`.
+
+## 9. Promotional video
+
+The promo video in `docs/` is built from this project's own interface and art,
+with one third-party element: the voiceover and sound effects.
+
+| Item | Use | License | Status | Notes |
+|---|---|---|---|---|
+| ElevenLabs-generated audio (voiceover, 5 lines; sound effects, 6) | Narration and sound effects in `docs/lumingo-promo.mp4` and `docs/lumingo-promo.webp` | ElevenLabs terms of use; generated on the **Free** plan | review | Read at `https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform` on 2026-10-10. The Free plan carries **no commercial licence** and requires attribution: published content must credit `elevenlabs.io`. The video promotes an Apache-2.0 project and is not sold, so the non-commercial limit is not breached, and the attribution requirement is met by the credit line next to the video in `README.md`. **If the project ever needs commercial use of this audio, or the credit line is removed, this row becomes blocking** — a paid plan grants the commercial licence and drops the attribution requirement. The audio is not part of the application, the release zip, or any first-run download; it exists only in the two committed video files. |
+
+The video's own text is read at build time from `apps/web/src/i18n/en.ts`, so no
+copy is duplicated. The fonts it uses are the bundled OFL faces in section 5.
+The Remotion tooling that builds it lives in a gitignored `.video/` folder and is
+**not** a dependency of this project: no Remotion package enters the build, the
+release, or the repository. Remotion's licence (free for individuals and
+companies of up to three people) therefore does not apply to this repository's
+distribution, and no row is needed for it.
+
+This section is deliberately last. Adding it as section 6 shifted every section
+after it, and five cross-references in the repository point at sections by
+number — `crates/speech/README.md`, `deny.toml`, `models/manifest.toml` and two
+rows above all broke silently. New sections go at the end, or the references
+need updating in the same commit.

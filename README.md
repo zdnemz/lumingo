@@ -7,6 +7,12 @@ Lumingo runs on your own computer and opens in your browser. One Rust program
 owns the microphone, the speakers, the speech models, and your data, and it
 serves the interface on the loopback address.
 
+[![A 31-second tour of Lumingo: the quest map, an activity, and what stays on your machine.](docs/lumingo-promo.webp)](docs/lumingo-promo.mp4)
+
+*31 seconds. [Full-quality MP4](docs/lumingo-promo.mp4) — the animation above is
+a smaller copy for this page. Voiceover and sound effects generated with
+[elevenlabs.io](https://elevenlabs.io); see `docs/LICENSE_REGISTER.md`.*
+
 ## Status
 
 Early development. Nothing in this repository has been measured yet, and no
