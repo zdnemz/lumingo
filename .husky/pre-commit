@@ -6,7 +6,7 @@
 #    green commit is a green push.
 #
 # Faster loop while iterating:
-#   LUMINGO_PRECOMMIT=quick git commit ...   (format, lint, typecheck only)
+#   LUMINGO_PRECOMMIT=quick git commit ...   (path case check, format, lint, typecheck)
 # Skip everything:
 #   git commit --no-verify                   (CI still runs every check)
 cd "$(git rev-parse --show-toplevel)" || exit 1

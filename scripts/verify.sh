@@ -8,8 +8,8 @@
 #
 #   sh scripts/verify.sh                      # everything, like CI
 #   LUMINGO_PRECOMMIT=quick sh scripts/verify.sh
-#       format, lint and typecheck only. clippy, the tests, the build and the
-#       license checks are skipped and CI may still fail.
+#       the path case check, format, lint and typecheck only. clippy, the tests,
+#       the build and the license checks are skipped and CI may still fail.
 set -eu
 
 # Run from the repository root, whatever the caller's directory was. A clear
@@ -50,9 +50,16 @@ step() {
 }
 
 if [ "$quick" = 1 ]; then
-    printf 'pre-commit: LUMINGO_PRECOMMIT=quick — running format, lint and typecheck only.\n'
+    printf 'pre-commit: LUMINGO_PRECOMMIT=quick — running format, lint, typecheck and the path case check only.\n'
     printf 'pre-commit: clippy, the tests, the build and the license checks are skipped.\n'
 fi
+
+# First, because it is instant and because the mistake it catches is invisible
+# on this machine: TypeScript strips the extension before resolving an import,
+# so `KeyGuide.tsx` and `keyGuide.ts` are one module on Windows, where CI runs,
+# while this file system keeps them apart.
+step "no two tracked paths differ only in case"
+node scripts/check-case-collisions.mjs
 
 step "cargo fmt --all -- --check"
 cargo fmt --all -- --check

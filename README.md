@@ -47,8 +47,9 @@ pnpm install
 ```
 
 `sh scripts/verify.sh` runs the checks on demand. While iterating,
-`LUMINGO_PRECOMMIT=quick git commit ...` keeps only format, lint, and typecheck.
-`git commit --no-verify` skips the hook; CI still runs every check.
+`LUMINGO_PRECOMMIT=quick git commit ...` keeps only the path case check, format,
+lint, and typecheck. `git commit --no-verify` skips the hook; CI still runs
+every check.
 
 ## Licenses
 

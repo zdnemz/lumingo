@@ -66,6 +66,14 @@ jobs:
           cache: pnpm
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
+      # TypeScript strips the extension before resolving an import, so a
+      # `KeyGuide.tsx` next to a `keyGuide.ts` gives one module two spellings and
+      # tsc fails on Windows (TS2724, TS1149). The pre-commit hook runs the same
+      # check, but it can be skipped with --no-verify.
+      - name: No two tracked paths differ only in case
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-case-collisions.mjs
+
       - run: pnpm install --frozen-lockfile
 
       - name: Lint
