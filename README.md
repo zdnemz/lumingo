@@ -13,8 +13,11 @@ to the AI provider you choose.
 [![A 31-second tour of Lumingo: the quest map, an activity, and what stays on your machine.](docs/lumingo-promo.webp)](docs/lumingo-promo.mp4)
 
 *31 seconds. [Full-quality MP4](docs/lumingo-promo.mp4) — the animation above is
-a smaller copy for this page. Voiceover and sound effects generated with
-[elevenlabs.io](https://elevenlabs.io); see `docs/LICENSE_REGISTER.md`.*
+a smaller copy for this page. [A 2:20 cut](docs/lumingo-promo-long.mp4) follows
+one unit from setup to the first honest estimate, and says which screens are
+routed today and which are still only in the engine. Voiceover and sound effects
+generated with [elevenlabs.io](https://elevenlabs.io); see
+`docs/LICENSE_REGISTER.md`.*
 
 ## Why Lumingo
 
