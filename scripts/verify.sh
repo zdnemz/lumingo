@@ -12,8 +12,14 @@
 #       license checks are skipped and CI may still fail.
 set -eu
 
-# Run from the repository root, whatever the caller's directory was.
-cd "$(git rev-parse --show-toplevel)" || exit 1
+# Run from the repository root, whatever the caller's directory was. A clear
+# message when this is not inside a checkout, instead of a confusing failure
+# from the first cargo command.
+if ! root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    echo "pre-commit: this is not inside a git checkout. Run it from the Lumingo repository." >&2
+    exit 1
+fi
+cd "$root" || exit 1
 
 if [ "${LUMINGO_PRECOMMIT:-full}" = "quick" ]; then
     quick=1
