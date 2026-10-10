@@ -105,7 +105,15 @@ async fn a_closed_loopback_port_is_unavailable_within_the_timeout() {
         .unwrap()
         .port();
     let (waited, message, phase) = unavailable_after(&format!("http://127.0.0.1:{port}/v1")).await;
-    assert!(waited < BUDGET, "{waited:?}");
+    // The loop must give up on its own budget (1.5 s for both attempts
+    // together), not on the client's limits (3 s in total). A closed port
+    // usually refuses at once, but the CI runner reported 1.534 s: the
+    // signature of both attempts using their whole half-budget, which is what a
+    // connection that neither refuses nor answers looks like — the port can be
+    // taken between the bind above and the connect, for example by another test
+    // in this binary. The margin is the same as in the tests below; a run that
+    // waits for the client's total limit still fails this.
+    assert!(waited < BUDGET + Duration::from_millis(500), "{waited:?}");
     assert_eq!(phase, Phase::ProviderUnavailable);
     assert!(message.contains("could not be reached"), "{message}");
     assert!(message.contains("resume"), "{message}");
