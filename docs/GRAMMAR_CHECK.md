@@ -22,6 +22,16 @@ spelling is the recogniser's.
 
 ## Status: not linked, waiting for the owner
 
+**Update 2026-10-10 (ADR-055).** On the pre-merge line the owner approved
+`harper-core` on 2026-10-07 and it was linked there (2.11.0, default features
+off, spelling off for W03; the register row and the `deny.toml` MPL-2.0
+exceptions are in `backup-pre-merge-20261008`). The 2026-10-08 merge kept
+origin's implementations for the shared crates, so that linking is not in this
+tree: `content-cli` passes `grammar_check: None`, `app-core` and `tutor-cli`
+pass `grammar: None`, and the table above describes the current behaviour
+exactly (W03 skipped, X5 not evaluated, drafts `rule_checked: false`).
+Re-linking `harper-core` here is an open owner decision.
+
 `harper-core` is Apache-2.0, but it needs `ammonia`, which needs `cssparser` and
 `dtoa-short`. Both of those are MPL-2.0. `docs/LICENSE_REGISTER.md` rule 2 asks
 for a `review` row and the owner's decision before MPL-2.0 enters the build, so
