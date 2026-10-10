@@ -32,6 +32,13 @@ exceptions = [
   # library, and only when the optional `sherpa` feature of `speech` is on. It is
   # not part of the default build. Register row: docs/LICENSE_REGISTER.md section 3.
   { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
+  # MPL-2.0 (file-level copyleft) is accepted only for these unmodified crates,
+  # which harper-core pulls in. They stay crates.io dependencies, never vendored
+  # or patched, which is what MPL-2.0 requires. Register row: harper-core in
+  # docs/LICENSE_REGISTER.md section 6.
+  { allow = ["MPL-2.0"], crate = "colored" },
+  { allow = ["MPL-2.0"], crate = "cssparser" },
+  { allow = ["MPL-2.0"], crate = "dtoa-short" },
 ]
 
 [bans]

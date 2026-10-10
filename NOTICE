@@ -31,14 +31,17 @@ Build-time data:
 
 Bundled certificate data:
 
-- webpki-root-certs, the Mozilla CA certificate list used by the TLS stack, is
-  licensed under the Community Data License Agreement Permissive 2.0
-  (https://cdla.dev/permissive-2-0/).
+- webpki-roots, the Mozilla CA certificate list, is licensed under the
+  Community Data License Agreement Permissive 2.0
+  (https://cdla.dev/permissive-2-0/). It is pulled in only by the build script of
+  sherpa-onnx-sys, which downloads the native speech library, and only when the
+  optional `sherpa` feature is built. It is not part of the default build.
 
 Mozilla Public License 2.0 components (unmodified, used as dependencies of
-harper-core; their source is available from https://crates.io/crates/colored,
-https://crates.io/crates/cssparser and https://crates.io/crates/dtoa-short, and
-the license text is at https://www.mozilla.org/MPL/2.0/):
+harper-core 0.68.0; their source is available from
+https://crates.io/crates/colored, https://crates.io/crates/cssparser and
+https://crates.io/crates/dtoa-short, and the license text is at
+https://www.mozilla.org/MPL/2.0/):
 
 - colored 3.1.1
 - cssparser 0.38.0

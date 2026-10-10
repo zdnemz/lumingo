@@ -158,7 +158,7 @@ pub(crate) async fn start(
         model: env.model.clone(),
         provider_profile_id: env.provider_profile_id,
         provider_qualified: env.provider_qualified,
-        grammar: None,
+        grammar: shared.catalogs.grammar.clone(),
         word_levels: shared.catalogs.word_levels.clone(),
         rubrics: Arc::clone(&shared.catalogs.rubrics),
         drill: shared.engines.drill().cloned(),

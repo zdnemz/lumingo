@@ -8,6 +8,8 @@
 mod checkpoint;
 mod deterministic;
 mod estimate;
+#[cfg(feature = "grammar")]
+mod grammar;
 mod metrics;
 mod normalise;
 mod placement;
@@ -22,6 +24,8 @@ pub use estimate::{
     ALGORITHM_VERSION, Confidence, EstimateStatus, LevelEvidence, Profile, SkillEstimate,
     confidence_band, estimate_profile, estimate_skill, wilson_lower_bound,
 };
+#[cfg(feature = "grammar")]
+pub use grammar::{Finding, GrammarChecker};
 pub use metrics::{
     MAX_SPANS, MetricsError, PAUSE_THRESHOLD_MS, TextCounts, TimingMetrics, VocabularyProfile,
     VoicedSpan, WordList, text_counts, timing_metrics, vocabulary_profile, word_count, words,

@@ -35,6 +35,11 @@ ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
 tutor-engine = { version = "0.0.0", path = "../tutor-engine" }
 
 [features]
+default = ["grammar"]
+# Rule-based grammar findings (harper-core through tutor-engine): the rubric's
+# X5 and the writing workshop's first layer. Turning it off makes those seams
+# report "not checked" instead of running.
+grammar = ["tutor-engine/grammar"]
 # Fakes for the voice loop (a scripted language model, a manual clock, fake
 # speech engines and a fake audio backend). They are for tests of this crate and
 # of tools/tutor-cli. No release build enables this feature.

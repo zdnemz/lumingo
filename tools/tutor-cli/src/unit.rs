@@ -402,7 +402,7 @@ async fn execute_run(args: &UnitRunArgs) -> Result<Exit, Failure> {
         model: connection.model,
         provider_profile_id: None,
         provider_qualified: false,
-        grammar: None,
+        grammar: Some(Arc::new(tutor_engine::HarperCheck::new())),
         word_levels,
         rubrics: Arc::new(rubrics),
         drill: None,
@@ -529,7 +529,7 @@ async fn execute_score_pending(args: &ScorePendingArgs) -> Result<Exit, Failure>
         clock: tutor_engine::system_clock(),
         model: connected.model,
         provider_profile_id: None,
-        grammar: None,
+        grammar: Some(Arc::new(tutor_engine::HarperCheck::new())),
         word_levels: None,
         provider_qualified: false,
     });

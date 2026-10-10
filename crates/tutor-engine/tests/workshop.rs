@@ -683,3 +683,55 @@ async fn without_a_checker_the_first_layer_says_it_did_not_check_and_x5_is_not_e
     let rubric = feedback.rubric.expect("layer three");
     assert!(rubric.alarms.is_empty(), "no checker, no X5 alarm");
 }
+
+#[tokio::test]
+async fn the_real_harper_checker_answers_the_first_layer_with_findings() {
+    // The shipped checker (harper-core through assessment-engine), not the fake:
+    // this is what a learner gets in a release build.
+    let f = fixture().await;
+    let mut env = f.env.clone();
+    env.grammar = Some(Arc::new(tutor_engine::HarperCheck::new()));
+    let workshop = Workshop::start(
+        env,
+        WorkshopConfig {
+            profile_id: 1,
+            level: Level::A2,
+            first_language: "Indonesian".into(),
+            app_version: "0.0.0-test".into(),
+            prompt_id: None,
+            rubric: Some(rubric()),
+            task: task(),
+        },
+    )
+    .await
+    .unwrap();
+    // "an test" is one of the mistakes the checker does catch; "I has" is one it
+    // does not (see docs/GRAMMAR_CHECK.md — the agreement gap is real and
+    // recorded, not hidden).
+    let submission = workshop
+        .submit_draft("Last weekend I saw an test at the lake with my family.")
+        .await
+        .unwrap();
+    assert!(submission.rule_checked, "the checker is linked");
+    assert!(
+        submission
+            .rule_findings
+            .iter()
+            .any(|f| f.to_lowercase().contains("article")),
+        "the article mistake is found: {:?}",
+        submission.rule_findings
+    );
+    // Spelling stays in for a typed draft: it is the learner's own spelling.
+    let typed = workshop
+        .submit_draft("Last weekend I recieve a letter from my family.")
+        .await
+        .unwrap();
+    assert!(
+        typed
+            .rule_findings
+            .iter()
+            .any(|f| f.starts_with("Spelling")),
+        "{:?}",
+        typed.rule_findings
+    );
+}

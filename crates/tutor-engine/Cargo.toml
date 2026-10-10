@@ -7,8 +7,16 @@ repository.workspace = true
 rust-version.workspace = true
 description = "Tutoring logic for Lumingo: sessions, turns, prompts and the free modes"
 
+[features]
+default = ["grammar"]
+# Rule-based grammar and spelling findings for the rubric's X5 and the writing
+# workshop's first layer, through `assessment-engine`'s harper-core feature
+# (already in the license register). Crates that do not need the checker can
+# turn it off; a build without it reports "not checked" at the seams.
+grammar = ["assessment-engine/grammar"]
+
 [dependencies]
-assessment-engine = { version = "0.0.0", path = "../assessment-engine" }
+assessment-engine = { version = "0.0.0", path = "../assessment-engine", default-features = false }
 async-trait = "0.1.92"
 curriculum = { version = "0.0.0", path = "../curriculum" }
 futures-util = "0.3.34"

@@ -6,19 +6,35 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use curriculum::validate::GrammarCheck;
 use curriculum::validate::WordLevels;
 use tutor_engine::{RubricCatalog, TopicBank};
 
 use crate::config::CoreConfig;
 
 /// What was loaded.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct Catalogs {
     pub rubrics: Arc<RubricCatalog>,
     /// `None` when `topics.json` is not installed.
     pub topics: Option<Arc<TopicBank>>,
     /// `None` when no word list was configured or it could not be read.
     pub word_levels: Option<Arc<WordLevels>>,
+    /// The rule-based checker (harper-core). One dictionary load for the whole
+    /// process; the scorer and the workshop share it. `None` only in a build
+    /// without the `grammar` feature.
+    pub grammar: Option<Arc<dyn GrammarCheck + Send + Sync>>,
+}
+
+impl Default for Catalogs {
+    fn default() -> Self {
+        Self {
+            rubrics: Arc::new(RubricCatalog::default()),
+            topics: None,
+            word_levels: None,
+            grammar: None,
+        }
+    }
 }
 
 impl Catalogs {
@@ -52,10 +68,18 @@ impl Catalogs {
                     None
                 }
             });
+        // One dictionary load for the whole process: building the checker is the
+        // expensive part, and every session shares the result.
+        #[cfg(feature = "grammar")]
+        let grammar: Option<Arc<dyn GrammarCheck + Send + Sync>> =
+            Some(Arc::new(tutor_engine::HarperCheck::new()));
+        #[cfg(not(feature = "grammar"))]
+        let grammar: Option<Arc<dyn GrammarCheck + Send + Sync>> = None;
         Self {
             rubrics: Arc::new(rubrics),
             topics,
             word_levels,
+            grammar,
         }
     }
 }

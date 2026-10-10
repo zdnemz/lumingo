@@ -32,12 +32,14 @@ fn warnings_are_listed_and_do_not_fail_the_run() {
 #[test]
 fn rules_that_could_not_run_are_listed_and_not_passed_silently() {
     let text = stdout(&content_cli(&["validate", "curriculum/examples"]));
-    for code in ["W01", "W02", "W03", "X03", "X05"] {
+    for code in ["W01", "W02", "X03", "X05"] {
         assert!(
             text.contains(&format!("skipped {code}")),
             "{code} missing in\n{text}"
         );
     }
+    // W03 runs through the real checker, and the example unit's model answers pass it.
+    assert!(!text.contains("skipped W03"), "W03 should run in\n{text}");
     // The rubric catalog exists in the repository, so X06 runs instead of being skipped.
     assert!(!text.contains("skipped X06"), "X06 should run in\n{text}");
 }

@@ -130,7 +130,7 @@ pub(crate) async fn start_writing(
             clock: env.clock.clone(),
             model: env.model.clone(),
             provider_profile_id: env.provider_profile_id,
-            grammar: None,
+            grammar: shared.catalogs.grammar.clone(),
             word_levels: shared.catalogs.word_levels.clone(),
             provider_qualified: env.provider_qualified,
         },

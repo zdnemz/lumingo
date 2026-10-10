@@ -9,6 +9,8 @@ mod chunker;
 mod drafts;
 mod error;
 mod evidence;
+#[cfg(feature = "grammar")]
+mod grammar;
 mod no_provider;
 mod practice;
 mod prompt;
@@ -34,6 +36,8 @@ pub use evidence::{
     PRON_ALGORITHM_VERSION, PRON_CONFIDENCE_CAP, PronRecord, RECORDER_VERSION, Recorded,
     RubricMeta, Subject, counts_toward_estimate, rubric_scorer_version,
 };
+#[cfg(feature = "grammar")]
+pub use grammar::HarperCheck;
 pub use no_provider::NoProvider;
 pub use practice::*;
 pub use prompt::{

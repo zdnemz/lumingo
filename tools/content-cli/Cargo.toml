@@ -17,6 +17,9 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.104"
+# The real W03 checker (harper-core through its `grammar` feature, default on).
+# An internal path dependency; harper-core itself is in the register.
+assessment-engine = { path = "../../crates/assessment-engine" }
 clap = { version = "4.6.7", features = ["derive"] }
 curriculum = { path = "../../crates/curriculum" }
 serde = { version = "1.0.229", features = ["derive"] }

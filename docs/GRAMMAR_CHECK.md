@@ -20,98 +20,70 @@ Convention: a finding about spelling starts with `Spelling`. The rubric scorer
 leaves those out of the X5 count for a voice response, because a transcript's
 spelling is the recogniser's.
 
-## Status: not linked, waiting for the owner
+## Status: linked (owner decision 2026-10-10, ADR-057)
 
-**Update 2026-10-10 (ADR-055).** On the pre-merge line the owner approved
-`harper-core` on 2026-10-07 and it was linked there (2.11.0, default features
-off, spelling off for W03; the register row and the `deny.toml` MPL-2.0
-exceptions are in `backup-pre-merge-20261008`). The 2026-10-08 merge kept
-origin's implementations for the shared crates, so that linking is not in this
-tree: `content-cli` passes `grammar_check: None`, `app-core` and `tutor-cli`
-pass `grammar: None`, and the table above describes the current behaviour
-exactly (W03 skipped, X5 not evaluated, drafts `rule_checked: false`).
-Re-linking `harper-core` here is an open owner decision.
+**Update 2026-10-10.** The owner accepted the harper re-link. The tree now links
+`harper-core` **0.68.0** (default features off, plus harper's `concurrent`
+feature so the checker is `Send + Sync`):
 
-`harper-core` is Apache-2.0, but it needs `ammonia`, which needs `cssparser` and
-`dtoa-short`. Both of those are MPL-2.0. `docs/LICENSE_REGISTER.md` rule 2 asks
-for a `review` row and the owner's decision before MPL-2.0 enters the build, so
-nothing was added to `Cargo.toml` and `cargo deny check licenses` was not
-changed. The register row says what was read and what could not be.
+| Where | What | Spelling |
+|---|---|---|
+| `assessment-engine` | default-on `grammar` feature; `GrammarChecker` (the concrete checker, `&self` + internal lock) | per call |
+| `tutor-engine` | default-on `grammar` feature; `HarperCheck` implements the seam for `ScorerEnv`/`WorkshopEnv` | on |
+| `content-cli` | its own `HarperCheck` for `UnitOptions.grammar_check` (W03) | **off** on purpose |
+| `app-core` | one `HarperCheck` built in `Catalogs::load` (one dictionary load per process), shared by the unit runs and the workshop | on |
+| `tutor-cli` | builds one for `unit run` and `unit score-pending` | on |
 
-Other findings that matter for the decision:
+**Version.** The pre-merge line linked 2.11.0, but 2.11.0 (and 0.69+) cannot
+resolve in this tree: `harper-pos-utils` → `burn` → `tracel-llvm-bundler` →
+`liblzma-sys` links the native `lzma`, which conflicts with `sherpa-onnx-sys` →
+`zip` → `xz2` → `lzma-sys`. The pre-merge tree had no `speech/sherpa`, so the
+conflict never appeared there. 0.68.0 is the newest version that resolves next
+to sherpa (checked empirically 2026-10-10: 0.55–0.68 resolve; 0.69, 0.70 and
+0.72 fail). It still pulls `burn` 0.18.0 (272 new lock entries) but no second
+native lzma link.
 
-* Newer versions are heavier. From 0.55 `harper-pos-utils` depends on `burn`
-  (a machine-learning framework). From 0.73 `burn` brings a second native `lzma`
-  link that Cargo refuses next to `sherpa-onnx-sys`. 0.54.0 is the newest that
-  resolves in this workspace.
-* 0.54.0 builds on the pinned toolchain (checked outside the workspace, 36 s).
-* What it finds, run on 2026-10-06 against five sentences: `an apple and a umbrella`
-  gives "Incorrect indefinite article."; `teh cat sat on teh mat.` gives spelling
-  and capitalisation findings; but **`I has a book.` and `She go to school every
-  day.` give no finding at all**, and the name `Dewi` in a correct sentence is
-  reported as a spelling mistake. Subject-verb agreement is the most common error
-  of the target learners, so X5 built on this version would be a weak alarm, and
-  names would raise false "spelling" findings in written work. This is a
-  five-sentence check, not an evaluation.
+**Licenses.** harper-core, harper-brill and harper-pos-utils say `Apache-2.0`;
+ammonia says `MIT OR Apache-2.0`; `cssparser`, `dtoa-short` and `colored` say
+`MPL-2.0` (file-level copyleft, allowed for unmodified crates.io dependencies by
+per-crate exceptions in `deny.toml` and the register row). `cargo deny check
+licenses` passes.
 
-## The adapter that was built and run
+**The split, and why it stays split.** W03 runs with spelling **off**: units are
+full of names the dictionary does not know, and W03 is about grammar. The
+workshop keeps spelling **on**: a typed draft is the learner's own spelling. The
+rubric's X5 drops spelling findings for a **voice** response (the transcript's
+spelling is the recogniser's) and keeps them for typed text. Do not "unify" the
+three.
 
-This is the whole adapter, compiled and tested against `harper-core =0.54.0` in a
-scratch crate with its own `[workspace]` and a path dependency on `curriculum`.
-It is not in the repository's build.
+## What the linked checker actually finds (measured 2026-10-10, 0.68.0)
 
-```toml
-[dependencies]
-curriculum = { version = "0.0.0", path = "../curriculum" }
-harper-core = { version = "=0.54.0", default-features = false }
-```
+Run against the same sentences the 0.54.0 five-sentence check used:
 
-```rust
-use std::sync::{Arc, Mutex};
+| Sentence | Findings |
+|---|---|
+| `I has a book.` | **none** |
+| `She go to school every day.` | **none** |
+| `This is an test.` | `Miscellaneous: Incorrect indefinite article.` |
+| `Last weekend I has a picnic with my family near the lake.` | **none** |
+| `teh cat sat on teh mat.` | spelling, capitalisation, typo findings |
+| `I recieve a letter.` | `Spelling: Did you mean to spell 'recieve' this way?` |
 
-use curriculum::validate::GrammarCheck;
-use harper_core::linting::{LintGroup, LintKind, Linter};
-use harper_core::spell::FstDictionary;
-use harper_core::{Dialect, Document};
+**The agreement gap persists in 0.68.0.** Subject-verb agreement is the most
+common error of the target learners, and the checker does not catch it, so X5
+built on this version is a weak alarm and the workshop's first layer is a
+partial one. This is recorded, not hidden: the tests assert what the checker
+does find (the article mistake, spelling) and never assert that a clean result
+means correct grammar. Whether to layer a rule-based agreement check of the
+project's own on top is an open question for the owner.
 
-pub struct HarperChecker {
-    dictionary: Arc<FstDictionary>,
-    group: Mutex<LintGroup>,
-}
+## History
 
-impl HarperChecker {
-    pub fn new() -> Self {
-        let dictionary = FstDictionary::curated();
-        let group = LintGroup::new_curated(dictionary.clone(), Dialect::American);
-        Self { dictionary, group: Mutex::new(group) }
-    }
-}
-
-fn label(kind: LintKind) -> &'static str {
-    match kind {
-        LintKind::Spelling | LintKind::Typo => "Spelling",
-        LintKind::Punctuation => "Punctuation",
-        LintKind::Capitalization => "Capitalization",
-        LintKind::Agreement => "Agreement",
-        _ => "Grammar",
-    }
-}
-
-impl GrammarCheck for HarperChecker {
-    fn findings(&self, text: &str) -> Vec<String> {
-        let document = Document::new_plain_english(text, &*self.dictionary);
-        let Ok(mut group) = self.group.lock() else { return Vec::new() };
-        group
-            .lint(&document)
-            .into_iter()
-            .map(|lint| format!("{}: {}", label(lint.lint_kind), lint.message))
-            .collect()
-    }
-}
-```
-
-If the owner accepts the licenses: put this in a small `crates/grammar-check`
-crate, add the two `deny.toml` exceptions with their register rows, add
-`Arc::new(HarperChecker::new())` to `UnitEnv.grammar`, `ScorerEnv.grammar` and
-`WorkshopEnv.grammar`, and consider dropping findings whose text is a capitalised
-word inside a sentence before they are counted.
+* 2026-10-06: read the licenses, built the adapter against 0.54.0 outside the
+  workspace, measured the five sentences.
+* 2026-10-07: the owner approved `harper-core`; the pre-merge line linked 2.11.0
+  with spelling off for W03.
+* 2026-10-08: the merge kept origin's tree, dropping the linking (ADR-055).
+* 2026-10-10: the owner accepted the re-link (ADR-057). Linked 0.68.0, the
+  newest version that resolves next to sherpa; all four call sites wired; the
+  agreement gap re-measured and recorded.

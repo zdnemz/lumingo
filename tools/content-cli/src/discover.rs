@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use curriculum::syllabus::Syllabus;
+use curriculum::validate::GrammarCheck;
 use curriculum::validate::catalogs::{SKIPPED_DIRECTORIES, detect_kind, validate_catalog};
 use curriculum::validate::{
     FileKind, FileReport, Finding, RuleCode, SetConfig, UnitInput, UnitOptions, WordLevels,
@@ -15,6 +16,32 @@ use curriculum::{Level, sha256_hex};
 use serde_json::Value;
 
 use crate::{Outcome, ValidateOptions};
+
+/// W03's checker: the rule-based grammar checker of `assessment-engine`
+/// (harper-core, no network). Spelling is off on purpose: units are full of
+/// names and place names the dictionary does not know, and W03 is about
+/// grammar, not spelling.
+struct HarperCheck {
+    checker: assessment_engine::GrammarChecker,
+}
+
+impl HarperCheck {
+    fn new() -> Self {
+        Self {
+            checker: assessment_engine::GrammarChecker::new(),
+        }
+    }
+}
+
+impl GrammarCheck for HarperCheck {
+    fn findings(&self, text: &str) -> Vec<String> {
+        self.checker
+            .findings(text, false)
+            .into_iter()
+            .map(|f| format!("{}: {}", f.kind, f.message))
+            .collect()
+    }
+}
 
 /// One JSON file as read from disk.
 struct SourceFile {
@@ -72,10 +99,11 @@ pub fn validate(options: &ValidateOptions) -> Result<Outcome> {
         }
     }
 
+    let checker = HarperCheck::new();
     let config = SetConfig {
         unit_options: UnitOptions {
             word_levels: word_levels.as_ref(),
-            grammar_check: None,
+            grammar_check: Some(&checker),
         },
         whole_set: any_folder,
         complete: options.complete,
