@@ -7,9 +7,10 @@ terminal around it: arguments, provider choice, the audio and speech side, scrip
 runs and the result file.
 
 **Nothing here has been run with a microphone, a speaker or a speech model.** The
-build container has none of them. One real provider run has happened: the owner's
-`tutor-cli probe` from the merged tree on 2026-10-10 (see "What is verified"). Read
-"What is verified" and "UNVERIFIED" before you trust a sentence of this file.
+build container has none of them. Real provider runs have happened: the owner's
+`tutor-cli probe` (2026-10-10), then `unit practice` and `chat --analysis` against
+the gateway the same day (see "What is verified"). Read "What is verified" and
+"UNVERIFIED" before you trust a sentence of this file.
 
 ## Build
 
@@ -360,20 +361,30 @@ By tests that run here without hardware or network (`cargo test -p app-core -p t
 * the sherpa feature compiles (`SHERPA_ONNX_LIB_DIR` pointing at an empty folder, so
   nothing is linked) and the cpal device code compiles for `x86_64-pc-windows-msvc`.
 
-By a live run the owner did from the merged tree on 2026-10-10:
+By live runs the owner did from the merged tree on 2026-10-10:
 
 * `tutor-cli probe` against the gateway (`anthropic_messages`):
   `auth true, stream true, structured level Some(2), first token Some(1285) ms`,
   exit 0 — the expected level on this gateway, where level 1's native schema is
   silently ignored and the canary walks the ladder to 2.
+* `unit practice` (S4-10) against the gateway (`cx/gpt-6-luna`): probe →
+  `structured level Some(2)`, first token 951 ms; `set: generated, 2 item(s),
+  1 dropped` — the model's third item failed the validators and was dropped, and
+  the two that passed were converted, marked `generated`, scored 1.00 on the
+  owner's answers and stored with `counts_toward_estimate = false`. The result
+  file is `benchmarks/results/s4-10-practice.json` (`source: generated`,
+  `fallback: null`, `dropped: 1`).
+* `chat --text --analysis --turns 10` against the gateway: probe → level 2,
+  21 turns stored with **0 turns without an analysis**, first-sentence latency
+  p50 1384 ms / p95 5059 ms over 11 tutor turns. This is the merged chat's
+  T1+T2 path validated live (the 2026-10-08 run exercised the pre-merge
+  implementation).
 
 ## UNVERIFIED
 
 * **`unit run` with a real provider.** Only a fake provider answered rubric and tutor calls.
-* **`unit practice` with a real provider.** The generation, the checks and the fallback
-  are tested against a fake provider and offline; no live T4 call has run.
-* **`chat --analysis` with a real provider** and **a two-draft workshop round** on the
-  merged code (the owner's 2026-10-08 runs validated the pre-merge implementations).
+* **A two-draft workshop round** on the merged code (the owner's 2026-10-08 run
+  validated the pre-merge implementation; there is no CLI surface for it yet).
 * **Pronunciation drills with a real phoneme model** and any recording of a learner.
 
 Everything below needs hardware, a model or a provider that this container does not

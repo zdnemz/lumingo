@@ -1,0 +1,28 @@
+{
+  "database": "/tmp/lumingo-practice-a1-u01-436258-1791621324353.sqlite",
+  "dropped": 1,
+  "fallback": null,
+  "items": [
+    {
+      "activity_id": "gen-s1-1",
+      "id": "gen-1",
+      "origin": "generated",
+      "score": 1.0,
+      "status": "scored",
+      "type": "mcq"
+    },
+    {
+      "activity_id": "gen-s1-2",
+      "id": "gen-2",
+      "origin": "generated",
+      "score": 1.0,
+      "status": "scored",
+      "type": "gap_fill"
+    }
+  ],
+  "regenerated": false,
+  "session_id": 1,
+  "source": "generated",
+  "unit": "a1-u01",
+  "vocabulary_checked": false
+}
