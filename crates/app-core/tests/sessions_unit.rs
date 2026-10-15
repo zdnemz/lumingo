@@ -326,6 +326,19 @@ async fn a_checkpoint_plays_its_own_activities_and_an_unfinished_one_ends_unpass
         .unwrap()
         .unwrap();
     assert_eq!(stored.kind, storage::SessionKind::Checkpoint);
+    // An unfinished run never enrols the unit's review items.
+    let due = r
+        .core()
+        .database()
+        .review_schedule()
+        .due(
+            r.core().profile_id(),
+            &storage::Timestamp::parse("2030-01-01T00:00:00.000Z").unwrap(),
+            10,
+        )
+        .await
+        .unwrap();
+    assert!(due.is_empty(), "{due:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

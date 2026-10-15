@@ -14,14 +14,14 @@ use std::sync::Arc;
 
 use assessment_engine::{CheckpointItem, CheckpointOutcome, Origin, evaluate_checkpoint};
 use curriculum::validate::{GrammarCheck, WordLevels};
-use curriculum::{Activity, ActivityType, Unit};
+use curriculum::{Activity, ActivityType, ReviewKind as UnitReviewKind, Unit};
 use llm_client::LlmClient;
 use pron_engine::UtteranceReport;
 use serde::Serialize;
 use serde_json::json;
 use storage::{
-    AttemptStatus, Database, NewSession, ObjectiveMastery, SessionStatus, Timestamp, UnitProgress,
-    UnitStatus,
+    AttemptStatus, Database, NewReviewItem, NewSession, ObjectiveMastery,
+    ReviewKind as StoredReviewKind, SessionStatus, Timestamp, UnitProgress, UnitStatus,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -456,6 +456,53 @@ impl UnitPlayer {
         Ok(())
     }
 
+    /// Enrols the unit's review items for this learner, due at `now`.
+    ///
+    /// `ReviewSchedule::put` overwrites every column on conflict, so the merge
+    /// that keeps an item's history is done here: an item that was reviewed
+    /// before keeps its interval, ease, counts and last-review date, and only
+    /// its due date moves to `now`. A fresh item starts at the schema defaults
+    /// with no history. `due_at = now` brings the item back at once; the
+    /// scheduler spaces it out from the first real review.
+    async fn enrol_review_items(&self, now: Timestamp) -> Result<()> {
+        for item in &self.unit.review_items {
+            let item_ref = format!("{}/{}", self.unit.id, item.r#ref);
+            let kind = review_kind(item.kind);
+            let previous = self
+                .env
+                .db
+                .review_schedule()
+                .get(self.config.profile_id, kind, &item_ref)
+                .await?;
+            let (interval_days, ease, reps, lapses, last_reviewed_at) = match &previous {
+                Some(prev) => (
+                    prev.interval_days,
+                    prev.ease,
+                    prev.reps,
+                    prev.lapses,
+                    prev.last_reviewed_at,
+                ),
+                None => (0.0, 2.5, 0, 0, None),
+            };
+            self.env
+                .db
+                .review_schedule()
+                .put(&NewReviewItem {
+                    profile_id: self.config.profile_id,
+                    item_kind: kind,
+                    item_ref,
+                    due_at: now,
+                    interval_days,
+                    ease,
+                    reps,
+                    lapses,
+                    last_reviewed_at,
+                })
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Takes the response to an activity, scores it and stores it.
     ///
     /// Objective activities are scored here. A productive activity goes to the
@@ -535,6 +582,10 @@ impl UnitPlayer {
     /// unit's progress (see [`settle_unit`]) and closes the session. An
     /// incomplete checkpoint is an error: finish only when every activity of it
     /// has been answered.
+    ///
+    /// A run that gets this far counts as completed, so the unit's review items
+    /// are enrolled after the session row is closed: a failed close leaves no
+    /// review rows behind.
     pub async fn finish(&mut self) -> Result<UnitSummary> {
         let now = (self.env.clock)();
         let summary = settle_unit(
@@ -561,6 +612,7 @@ impl UnitPlayer {
                 Some(&record),
             )
             .await?;
+        self.enrol_review_items(now).await?;
         Ok(summary)
     }
 
@@ -624,6 +676,15 @@ impl UnitPlayer {
             })
             .await?;
         Ok(())
+    }
+}
+
+/// Maps the unit file's review kind to the stored vocabulary.
+fn review_kind(kind: UnitReviewKind) -> StoredReviewKind {
+    match kind {
+        UnitReviewKind::Vocab => StoredReviewKind::Vocab,
+        UnitReviewKind::Grammar => StoredReviewKind::Grammar,
+        UnitReviewKind::Pron => StoredReviewKind::Pron,
     }
 }
 
