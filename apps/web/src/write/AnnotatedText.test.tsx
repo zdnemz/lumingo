@@ -50,6 +50,20 @@ describe("AnnotatedText", () => {
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 
+  it("leaves the reason out when a mark has none, instead of filling it with invented text", async () => {
+    // There is no error catalog in this build: a mark carries a category and a
+    // correction, and the "why" line must be absent rather than made up.
+    const withoutReason: Segment[] = [
+      { text: "She go ", error: { id: "e1", label: "verb_tense", correction: "She goes" } },
+      { text: "home." },
+    ];
+    renderApp(<AnnotatedText segments={withoutReason} selectedId="e1" onSelect={vi.fn()} />);
+    expect(await screen.findByText("Better: She goes")).toBeInTheDocument();
+    expect(screen.getByText("verb_tense")).toBeInTheDocument();
+    expect(screen.queryByText(/Why/)).toBeNull();
+    expect(document.querySelector(".annotated__why")).toBeNull();
+  });
+
   it("renders text as text, never as HTML", async () => {
     const hostile: Segment[] = [{ text: "<script>alert(1)</script>", error: { id: "x", label: "<b>L</b>", correction: "<i>c</i>", explanation: "<u>e</u>" } }];
     renderApp(<AnnotatedText segments={hostile} selectedId="x" onSelect={vi.fn()} />);
