@@ -89,6 +89,8 @@ Licenses were read from each installed package's `package.json`. Checked 2026-10
 | vitest, jsdom, @testing-library/* , @vitejs/plugin-react | Tests | MIT | ok | |
 | cross-env | Sets environment variables in scripts on every OS | MIT | ok | |
 | husky, lint-staged | Git hooks at the repository root: lint-staged formats and fixes only the staged files, then `scripts/verify.sh` runs the checks of `.github/workflows/ci.yml` before a commit is made. Development tooling only; not part of the web app, the server, or the exported UI. | MIT | ok | Checked 2026-10-09. Pinned in the root `package.json`. |
+| e2e, @e2e-dev/web | Browser end-to-end tests at the repository root (`pnpm test:e2e`): drives the built UI in a real Chromium against a locally started server. Run manually, outside the pre-commit hook and CI. Development tooling only; not part of the web app, the server, or the exported UI. | Apache-2.0 | ok | Checked 2026-10-13. Pinned in the root `package.json`. |
+| ai, @ai-sdk/anthropic, @ai-sdk/google, @ai-sdk/openai, @ai-sdk/openai-compatible, zod | The model driver of the e2e harness, used only by its optional agent-driven tests (the default offline suite does not use it). Development tooling only. | Apache-2.0 (zod: MIT) | ok | Checked 2026-10-13. Pinned in the root `package.json`. |
 | caniuse-lite | Browser data used by the Next.js build | CC-BY-4.0 | ok | Data, not shipped in the UI. Attribution is in `NOTICE`. |
 | sharp and its libvips binaries | Optional Next.js image optimiser | Apache-2.0 and LGPL-3.0-or-later | excluded | Dropped with `pnpm.ignoredOptionalDependencies`. The UI uses unoptimised images only. |
 
