@@ -8,11 +8,15 @@ import { Panel } from "@/ui/Panel";
 
 export interface MarkedError {
   id: string;
-  /** The catalog name of the error type, already in the learner's language. */
+  /** The name of the error type. The server's own category, or a catalog name. */
   label: string;
   correction: string;
-  /** The catalog explanation, already in the learner's language. */
-  explanation: string;
+  /**
+   * The catalog explanation, already in the learner's language. There is no
+   * error catalog in this build, so a mark usually has none and the "why" line
+   * is left out: an invented reason would be worse than none.
+   */
+  explanation?: string;
 }
 
 export interface Segment {
@@ -66,10 +70,12 @@ export function AnnotatedText({ segments, selectedId, onSelect }: AnnotatedTextP
           <Panel tone="danger" inset className="annotated__detail">
             <p className="annotated__label">{selected.label}</p>
             <p>{t("write.fix", { correction: selected.correction })}</p>
-            <p className="annotated__why">
-              <strong>{t("write.why")}: </strong>
-              {selected.explanation}
-            </p>
+            {selected.explanation ? (
+              <p className="annotated__why">
+                <strong>{t("write.why")}: </strong>
+                {selected.explanation}
+              </p>
+            ) : null}
             <Button small onClick={() => onSelect(null)}>
               {t("write.close")}
             </Button>
