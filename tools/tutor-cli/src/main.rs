@@ -1,7 +1,7 @@
 use std::process::ExitCode;
 
 use tutor_cli::args::{self, Command};
-use tutor_cli::{chat, probe, unit};
+use tutor_cli::{chat, probe, unit, workshop};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -18,5 +18,6 @@ async fn main() -> ExitCode {
         Command::Chat(args) => chat::run(args).await.into(),
         Command::Unit(args) => unit::run(args).await.into(),
         Command::Probe(args) => probe::run(args).await.into(),
+        Command::Workshop(args) => workshop::run_command(args).await.into(),
     }
 }

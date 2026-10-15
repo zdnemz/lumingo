@@ -1,0 +1,216 @@
+{
+  "awaiting_feedback": 0,
+  "counts_toward_estimate": false,
+  "database": "/var/tmp/lumingo-logs/s4-12-workshop.sqlite",
+  "drafts": [
+    {
+      "below_minimum": false,
+      "comparison": null,
+      "dropped": 0,
+      "errors": [
+        {
+          "category": "verb_tense",
+          "correction": "went",
+          "quote": "go",
+          "severity": "major"
+        },
+        {
+          "category": "verb_tense",
+          "correction": "bought",
+          "quote": "buy",
+          "severity": "major"
+        },
+        {
+          "category": "plural_number",
+          "correction": "vegetables",
+          "quote": "vegetable",
+          "severity": "major"
+        },
+        {
+          "category": "article",
+          "correction": "a test",
+          "quote": "an test",
+          "severity": "major"
+        }
+      ],
+      "index": 1,
+      "rubric": {
+        "alarms": [],
+        "confidence": 0.5,
+        "dimensions": [
+          {
+            "band": 2,
+            "capped": false,
+            "dimension": "task_achievement",
+            "reason": "The response gives a simple weekend experience but does not clearly address a friend as a note.",
+            "status": "scored"
+          },
+          {
+            "band": 3,
+            "capped": false,
+            "dimension": "range",
+            "reason": "It uses enough familiar vocabulary to describe a weekend without much repetition.",
+            "status": "scored"
+          },
+          {
+            "band": 2,
+            "capped": false,
+            "dimension": "accuracy",
+            "reason": "Several basic grammar and word-form errors appear, though the meaning remains understandable.",
+            "status": "scored"
+          },
+          {
+            "band": 3,
+            "capped": false,
+            "dimension": "coherence",
+            "reason": "The short sentences follow a sensible order and the final sentence uses a simple linking word.",
+            "status": "scored"
+          }
+        ],
+        "feedback_en": "You describe a fun weekend with your mother, and your ideas are easy to follow. Use past-tense verbs, like “went” and “bought,” and begin the note with a greeting to your friend.",
+        "feedback_l1": "Kamu menceritakan akhir pekan yang menyenangkan bersama ibu, dan idemu mudah diikuti. Gunakan kata kerja lampau seperti “went” dan “bought,” lalu awali catatan dengan sapaan kepada temanmu.",
+        "on_task": true
+      },
+      "rule_checked": true,
+      "rule_findings": [
+        "Miscellaneous: Incorrect indefinite article."
+      ],
+      "status": "analysed",
+      "turn_id": 1,
+      "turn_seq": 1,
+      "words": 29
+    },
+    {
+      "below_minimum": false,
+      "comparison": {
+        "earlier": [
+          {
+            "category": "verb_tense",
+            "quote": "go",
+            "resolution": "fixed"
+          },
+          {
+            "category": "verb_tense",
+            "quote": "buy",
+            "resolution": "fixed"
+          },
+          {
+            "category": "plural_number",
+            "quote": "vegetable",
+            "resolution": "fixed"
+          },
+          {
+            "category": "article",
+            "quote": "an test",
+            "resolution": "fixed"
+          }
+        ],
+        "fixed": 4,
+        "new": [
+          {
+            "category": "verb_form",
+            "quote": "buyed"
+          }
+        ],
+        "remaining": 0
+      },
+      "dropped": 0,
+      "errors": [
+        {
+          "category": "verb_form",
+          "correction": "bought",
+          "quote": "buyed",
+          "severity": "major"
+        }
+      ],
+      "index": 2,
+      "rubric": {
+        "alarms": [],
+        "confidence": 0.5,
+        "dimensions": [
+          {
+            "band": 3,
+            "capped": false,
+            "dimension": "task_achievement",
+            "reason": "The note tells a friend about a weekend activity in short, simple sentences.",
+            "status": "scored"
+          },
+          {
+            "band": 3,
+            "capped": false,
+            "dimension": "range",
+            "reason": "The response uses enough familiar vocabulary to describe the weekend without much repetition.",
+            "status": "scored"
+          },
+          {
+            "band": 3,
+            "capped": false,
+            "dimension": "accuracy",
+            "reason": "Most basic patterns and spelling are correct, though “buyed” should be “bought.”",
+            "status": "scored"
+          },
+          {
+            "band": 4,
+            "capped": false,
+            "dimension": "coherence",
+            "reason": "The sentences follow a clear order and use simple links such as “and” and “but.”",
+            "status": "scored"
+          }
+        ],
+        "feedback_en": "You describe your weekend clearly and use “and” and “but” well. Improve the past tense: write “bought,” not “buyed.”",
+        "feedback_l1": "Kamu menjelaskan akhir pekan dengan jelas dan menggunakan “and” serta “but” dengan baik. Perbaiki bentuk lampau: tulis “bought,” bukan “buyed.”",
+        "on_task": true
+      },
+      "rule_checked": true,
+      "rule_findings": [
+        "Spelling: Did you mean to spell `buyed` this way?"
+      ],
+      "status": "analysed",
+      "turn_id": 2,
+      "turn_seq": 2,
+      "words": 29
+    }
+  ],
+  "fixed": [
+    {
+      "category": "verb_tense",
+      "quote": "go"
+    },
+    {
+      "category": "verb_tense",
+      "quote": "buy"
+    },
+    {
+      "category": "plural_number",
+      "quote": "vegetable"
+    },
+    {
+      "category": "article",
+      "quote": "an test"
+    }
+  ],
+  "new": [
+    {
+      "category": "verb_form",
+      "quote": "buyed"
+    }
+  ],
+  "remaining": [],
+  "rubric": {
+    "dimensions": [
+      "task_achievement",
+      "range",
+      "accuracy",
+      "coherence"
+    ],
+    "id": "rubric-a1-written-production",
+    "version": 1
+  },
+  "session_id": 1,
+  "task": {
+    "content_points": [],
+    "min_words": null,
+    "prompt": "Write a note to a friend about the weekend.",
+    "prompt_id": null
+  }
+}

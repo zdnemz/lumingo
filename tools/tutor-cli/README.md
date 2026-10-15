@@ -128,7 +128,7 @@ probe: auth true, stream true, structured level Some(2), first token Some(1285) 
 ```
 
 Every command that makes structured calls (`chat --analysis`, `unit run` with a
-provider, `unit score-pending`, `unit practice`) runs the probe first for the same
+provider, `unit score-pending`, `unit practice`, `workshop`) runs the probe first for the same
 reason, so the calls start at the ladder level the provider really supports. Without
 the probe a gateway that silently ignores the native schema (found live on 2026-10-07)
 would fail every structured call at level 1. `TUTOR_LLM_FORCE_LEVEL=1..4` forces a
@@ -217,6 +217,59 @@ no level.
   what it is (`source`, `fallback`, `dropped`, `regenerated`) as JSON.
 * Exit codes are the same as `unit run`, except that there is no checkpoint: 0 when the
   run finished, 1 on a failure, 130 on Ctrl-C.
+
+## `workshop`: a writing round on the command line
+
+```
+tutor-cli workshop (--topic <text>|--prompt <id>) (--script <drafts.json>|--interactive)
+    [--level <a1..c2>] [--rubrics <path>] [--word-list <path>] [--db <file>] [--out <file>] [--offline]
+```
+
+`workshop` runs a two-draft round through `tutor_engine::Workshop` (S4-12): the
+task and the rubric are resolved first, then each draft is stored and checked by
+rules at once, and its structured errors (T2) and rubric bands (T3) follow when a
+provider is reachable. From the second draft on, the round classifies every error
+of the earlier draft as **fixed** or **remaining** and reports what the new
+analysis found that was not there before as **new**. A provider failure is not an
+error: the draft is stored as a turn and queued, and the round goes on, so a run
+that loses the provider halfway keeps what it has.
+
+```
+cargo run -p tutor-cli -- workshop --topic "Write a note to a friend about the weekend." \
+  --script tools/tutor-cli/scripts/a1-workshop-drafts.json --level a1 --out benchmarks/results/s4-12-workshop.json
+```
+
+* **The task.** `--topic` takes the learner's own subject (cleaned the way a
+  typed topic is in the app: one line, control characters and tag brackets
+  removed, cut to 80 characters) and has no content points, so the task's content
+  points are not checked. `--prompt <id>` takes a prompt of the topic bank
+  (`topics.json` next to the rubrics folder) with its content points, which X3
+  then checks against the draft. One of the two is required.
+* **The rubric.** `--rubrics` defaults to `curriculum/catalogs/rubrics`; the
+  written-production rubric of `--level` is used. Without one the round gives the
+  rule findings and the errors only and says so. `--level` is the level the task
+  is written at, the level the rubric is chosen from and the level the provider
+  is told — never a value a model produced.
+* **The drafts.** `--script` is a JSON file `{ "drafts": ["first", "revised"] }`,
+  in the order they were written. `--interactive` types them at the terminal: a
+  draft ends at a blank line, `/quit` (or an empty first line) ends the round.
+  A draft is the learner's own spelling, so the checker's spelling findings are
+  kept.
+* **`--out <file>`** writes the task, the rubric, every draft with its rule
+  findings, errors, comparison and bands, the flattened `fixed`/`remaining`/`new`
+  lists, `awaiting_feedback` and `counts_toward_estimate: false` as one JSON
+  object. Nothing in it names a level.
+* **Every draft is practice.** Its attempts carry the origin `free_mode` and
+  `counts_toward_estimate = false`, so nothing here can move a level estimate.
+* **Offline.** With `--offline`, or with no reachable provider, each draft is
+  stored as a turn and a `writing_draft` entry is queued for later; the run still
+  exits 0 and the result file says how many drafts wait. The queue is the
+  workshop's own kind, which `unit score-pending` does not drain (it scores
+  `rubric_response` entries). **There is no drain command yet**, so this command
+  never exits 3: that code is reserved for one.
+
+Exit codes: 0 when the round finished, offline and provider-failure-mid-run
+included, 1 on a bad input or a hard failure, 2 for a usage error, 130 on Ctrl-C.
 
 ## Scripts
 
@@ -358,6 +411,16 @@ By tests that run here without hardware or network (`cargo test -p app-core -p t
   the real binary offline (`tests/practice.rs`); the practice service's own fallback
   reasons, including the `NoProvider` client's answer, are covered in
   `crates/tutor-engine/tests/practice.rs`;
+* `workshop` (S4-12): a two-draft round through the real `tutor_engine::Workshop` with
+  a fake provider (test code only) — T2 then T3 per draft in order, draft 1 with no
+  comparison and draft 2 classified as 1 fixed / 1 remaining / 1 new, the flattened
+  lists carrying the same classification, the bands stored as `free_mode` attempts
+  with `counts_toward_estimate = false` and no estimate written; an offline round whose
+  drafts land in the `writing_draft` queue with `pending_llm` placeholder rows and
+  still exits 0; a provider that fails halfway queuing only the rest; the result file's
+  shape and that it names no level; the usage errors (no task, no draft source) exiting
+  2; the real binary offline (`tests/workshop.rs`). The engine's own layers, the
+  comparison and the queue drain are covered in `crates/tutor-engine/tests/workshop.rs`;
 * the sherpa feature compiles (`SHERPA_ONNX_LIB_DIR` pointing at an empty folder, so
   nothing is linked) and the cpal device code compiles for `x86_64-pc-windows-msvc`.
 
@@ -380,11 +443,26 @@ By live runs the owner did from the merged tree on 2026-10-10:
   T1+T2 path validated live (the 2026-10-08 run exercised the pre-merge
   implementation).
 
+By live runs from the merged tree on 2026-10-11:
+
+* `unit run` against the gateway (`cx/gpt-6-luna`): probe → level 2 (first token
+  1023 ms), the example unit played from its first activity to its checkpoint —
+  every objective item scored, the two productive items scored live by the rubric
+  (`a10-speak-introduce` 0.75 at confidence 0.60, `a12-write-introduce` 0.81 at
+  0.40, both two runs), the roleplay held four real T1 turns, and the checkpoint
+  **passed at mean 0.94** (pass mark 0.70, `unit status: Passed`). The result
+  file is `benchmarks/results/s4-08-unit-run.json`. This is the ADR-055 re-run
+  of the merged unit player; the same run also wrote the unit's six
+  `review_schedule` rows on completion (S4-08's enrolment).
+* `workshop` (S4-12) against the gateway: probe → level 2 (first token 3156 ms);
+  draft 1 got its rule finding, 4 errors (T2) and 4 bands (T3, confidence 0.50);
+  draft 2 got 1 error and the comparison **4 fixed / 0 remaining / 1 new**, bands
+  3/3/3/4; `2 draft(s); 0 wait for a provider`, exit 0. The result file is
+  `benchmarks/results/s4-12-workshop.json` (`awaiting_feedback: 0`,
+  `counts_toward_estimate: false`).
+
 ## UNVERIFIED
 
-* **`unit run` with a real provider.** Only a fake provider answered rubric and tutor calls.
-* **A two-draft workshop round** on the merged code (the owner's 2026-10-08 run
-  validated the pre-merge implementation; there is no CLI surface for it yet).
 * **Pronunciation drills with a real phoneme model** and any recording of a learner.
 
 Everything below needs hardware, a model or a provider that this container does not
@@ -395,12 +473,14 @@ have. None of it has run.
   backend only.
 * **Speech models** (`sherpa`): no model was loaded, no transcript or sound produced.
   The engines file is parsed by code that has only been compiled.
-* **A real provider beyond `probe`:** the probe's five steps have run live; no
-  tutor turn, analysis or rubric call has. Both protocols are otherwise tested
-  against recorded fixtures in `llm-client`.
+* **A real provider on a protocol other than `anthropic_messages`.** The gateway
+  speaks that one; `openai_chat` is otherwise tested against recorded fixtures in
+  `llm-client`. (The live runs above did make real tutor turns, analyses and rubric
+  calls — this bullet is only about the second protocol.)
 * **Any latency figure.** The tests use an injected clock and fakes; they show that the
   parts are measured and add up, not how fast anything is. The probe's first-token
-  number (1285 ms) is one observation on this gateway, not a benchmark.
+  numbers (1285 ms, 951 ms, 1023 ms, 3156 ms on different days) are observations on
+  this gateway, not a benchmark.
 * **A real conversation.** Whether it works, whether the endpointing cuts learner speech
   short and whether the tutor hears itself is for the owner to judge.
 * **S2-09 soak and stress** (zero dropped frames, zero underruns over 30 minutes) is not
