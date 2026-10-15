@@ -24,3 +24,4 @@ pub mod unit_script;
 pub mod unit_source;
 pub mod unit_view;
 pub mod wav;
+pub mod workshop;

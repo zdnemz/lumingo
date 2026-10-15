@@ -29,6 +29,10 @@ pub enum Command {
     /// Run the capability probe (the connection test) against the provider and
     /// print what it found. The live check for the gateway quirks of S4-06.
     Probe(ProbeArgs),
+    /// Write and revise one draft: rule findings at once, errors and rubric
+    /// bands when a provider is reachable, the second draft compared with the
+    /// first. Practice only (S4-12).
+    Workshop(WorkshopArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -181,6 +185,75 @@ pub struct ScorePendingArgs {
     pub data_dir: Option<PathBuf>,
     #[arg(long, default_value_t = 16_000)]
     pub provider_timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Args)]
+#[command(group(clap::ArgGroup::new("task").required(true).args(["topic", "prompt"])))]
+#[command(group(clap::ArgGroup::new("drafts").required(true).args(["script", "interactive"])))]
+pub struct WorkshopArgs {
+    /// What to write about, in the learner's own words. No content points come
+    /// with it, so the task's content points are not checked.
+    #[arg(long)]
+    pub topic: Option<String>,
+    /// A writing prompt of the topic bank (`topics.json` next to the rubrics
+    /// folder). The prompt's content points are checked against the draft.
+    #[arg(long)]
+    pub prompt: Option<String>,
+    /// A JSON file of drafts, `{ "drafts": ["first", "revised", ...] }`. The
+    /// second draft is compared with the first.
+    #[arg(long)]
+    pub script: Option<PathBuf>,
+    /// Type the drafts at the terminal. A draft ends at a blank line.
+    #[arg(long)]
+    pub interactive: bool,
+    /// The level the task is written at. It is the level the rubric is chosen
+    /// from and the level the provider is told, never a value a model produced.
+    #[arg(long, value_enum, default_value = "a1")]
+    pub level: LevelArg,
+    /// The folder of rubric files. Defaults to `curriculum/catalogs/rubrics`;
+    /// without a rubric the round gives the rule findings and the errors only.
+    #[arg(long)]
+    pub rubrics: Option<PathBuf>,
+    /// A word list, one `word,LEVEL` per line, for the range cross-check.
+    #[arg(long)]
+    pub word_list: Option<PathBuf>,
+    /// The database file the drafts are written to. A new file in the temporary
+    /// folder when not given; the run prints its path.
+    #[arg(long)]
+    pub db: Option<PathBuf>,
+    /// Write the drafts, their findings, their comparison and their bands as one
+    /// JSON file.
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+    /// The learner's first language, written in English.
+    #[arg(long, default_value = "Indonesian")]
+    pub first_language: String,
+    /// Do not look for a provider: the drafts are stored and queued for later.
+    #[arg(long)]
+    pub offline: bool,
+    /// The provider profile: `env` for the TUTOR_LLM_* variables or a `.env` file,
+    /// or the name of a profile in providers.toml. With one profile, that one.
+    #[arg(long)]
+    pub provider: Option<String>,
+    /// providers.toml. Defaults to the one in the data directory.
+    #[arg(long)]
+    pub providers_file: Option<PathBuf>,
+    /// The data directory (providers.toml).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+    /// The whole time, in milliseconds, the provider gets to start a reply.
+    #[arg(long, default_value_t = 16_000)]
+    pub provider_timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum LevelArg {
+    A1,
+    A2,
+    B1,
+    B2,
+    C1,
+    C2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
