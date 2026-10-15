@@ -581,7 +581,14 @@ pub async fn process_pending_drafts(
     env: &WorkshopEnv,
     cancel: &CancellationToken,
 ) -> Result<PendingReport> {
-    let entries = env.db.pending_scoring().oldest(PENDING_BATCH).await?;
+    // Only this service's own entries: several services queue here, and reading
+    // the oldest entries of every kind would let a run of another service's
+    // entries hide these behind the batch limit.
+    let entries = env
+        .db
+        .pending_scoring()
+        .oldest_of_kind(PENDING_KIND, PENDING_BATCH)
+        .await?;
     let mut completed = Vec::new();
     let mut remaining = entries.len();
     for entry in entries {
