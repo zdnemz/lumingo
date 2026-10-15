@@ -16,7 +16,10 @@ use curriculum::{Activity, Scoring, Unit};
 use llm_client::LlmClient;
 use pron_engine::{Mode, Outcome, UtteranceReport};
 use speech::{CancelFlag, EngineInfo};
-use storage::{AttemptOrigin, AttemptStatus, Database, EvidenceKind, Scorer, UnitStatus};
+use storage::{
+    AttemptOrigin, AttemptStatus, Database, EvidenceKind, NewReviewItem, ReviewKind, Scorer,
+    UnitStatus,
+};
 use tokio_util::sync::CancellationToken;
 use tutor_engine::{
     ActivityError, Clip, DrillError, DrillReport, DrillRequest, DrillScorer, EngineError,
@@ -412,6 +415,161 @@ async fn the_example_unit_is_played_from_the_first_activity_to_the_checkpoint() 
     // Two rubric runs for each of the two productive checkpoint items.
     assert_eq!(llm.rubric_calls(), 4);
     assert_eq!(drill.calls.load(Ordering::SeqCst), 1);
+}
+
+/// Every review item of the profile, due as far in the future as the test needs.
+async fn due_items(f: &Fixture) -> Vec<storage::ReviewItem> {
+    f.db.review_schedule()
+        .due(f.profile_id, &ts(10_000_000), 20)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_completed_run_enrols_the_units_review_items_due_now() {
+    let llm = ReactiveLlm::new();
+    let drill = FakeDrill::new(DrillMode::Score(0.8));
+    let f = fixture(&llm, Some(drill)).await;
+    let mut p = player(&f).await;
+    answer_all_but_roleplay(&mut p).await;
+    play_roleplay(&mut p).await;
+    p.finish().await.unwrap();
+
+    let ended =
+        f.db.sessions()
+            .get(p.session_id())
+            .await
+            .unwrap()
+            .unwrap()
+            .ended_at
+            .expect("the run was closed");
+    let due = due_items(&f).await;
+    let refs: Vec<&str> = due.iter().map(|r| r.item_ref.as_str()).collect();
+    assert_eq!(
+        refs,
+        [
+            "a1-u01/v-good-evening",
+            "a1-u01/v-nice-to-meet-you",
+            "a1-u01/v-from",
+            "a1-u01/v-see-you",
+            "a1-u01/g-be-i-am",
+            "a1-u01/p-th-voiceless",
+        ],
+        "the unit's items, in the order the file lists them"
+    );
+    let kinds: Vec<ReviewKind> = due.iter().map(|r| r.item_kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            ReviewKind::Vocab,
+            ReviewKind::Vocab,
+            ReviewKind::Vocab,
+            ReviewKind::Vocab,
+            ReviewKind::Grammar,
+            ReviewKind::Pron,
+        ]
+    );
+    for row in &due {
+        assert_eq!(row.profile_id, f.profile_id);
+        assert_eq!(row.due_at, ended, "{}", row.item_ref);
+        assert_eq!(row.interval_days, 0.0, "{}", row.item_ref);
+        assert_eq!(row.ease, 2.5, "{}", row.item_ref);
+        assert_eq!(row.reps, 0, "{}", row.item_ref);
+        assert_eq!(row.lapses, 0, "{}", row.item_ref);
+        assert_eq!(row.last_reviewed_at, None, "{}", row.item_ref);
+    }
+}
+
+#[tokio::test]
+async fn enrolling_an_item_that_was_reviewed_before_keeps_its_history() {
+    let llm = ReactiveLlm::new();
+    let f = fixture(&llm, None).await;
+    f.db.review_schedule()
+        .put(&NewReviewItem {
+            profile_id: f.profile_id,
+            item_kind: ReviewKind::Vocab,
+            item_ref: "a1-u01/v-from".to_owned(),
+            due_at: ts(60),
+            interval_days: 5.0,
+            ease: 2.1,
+            reps: 2,
+            lapses: 1,
+            last_reviewed_at: Some(ts(50)),
+        })
+        .await
+        .unwrap();
+
+    let mut p = player(&f).await;
+    answer_all_but_roleplay(&mut p).await;
+    play_roleplay(&mut p).await;
+    p.finish().await.unwrap();
+
+    let stored =
+        f.db.review_schedule()
+            .get(f.profile_id, ReviewKind::Vocab, "a1-u01/v-from")
+            .await
+            .unwrap()
+            .expect("the item is enrolled");
+    let ended =
+        f.db.sessions()
+            .get(p.session_id())
+            .await
+            .unwrap()
+            .unwrap()
+            .ended_at
+            .expect("the run was closed");
+    assert_eq!(stored.due_at, ended, "only the due date moved");
+    assert_eq!(stored.interval_days, 5.0);
+    assert_eq!(stored.ease, 2.1);
+    assert_eq!(stored.reps, 2);
+    assert_eq!(stored.lapses, 1);
+    assert_eq!(stored.last_reviewed_at, Some(ts(50)));
+    assert_eq!(due_items(&f).await.len(), 6, "the other five are new");
+}
+
+#[tokio::test]
+async fn only_a_completed_run_enrols_the_review_items() {
+    let llm = ReactiveLlm::new();
+    let f = fixture(&llm, None).await;
+
+    let mut aborted = player(&f).await;
+    aborted.abort().await.unwrap();
+    assert!(
+        due_items(&f).await.is_empty(),
+        "an aborted run enrols nothing"
+    );
+
+    let mut drill = UnitPlayer::start_as(
+        f.env.clone(),
+        UnitConfig {
+            profile_id: f.profile_id,
+            first_language: "Indonesian".into(),
+            app_version: "0.0.0-test".into(),
+        },
+        f.unit.clone(),
+        storage::SessionKind::Drill,
+    )
+    .await
+    .unwrap();
+    drill.finish_practice().await.unwrap();
+    assert!(
+        due_items(&f).await.is_empty(),
+        "a practice run enrols nothing"
+    );
+
+    let mut unfinished = player(&f).await;
+    unfinished
+        .submit("a02-greeting-by-time", Response::Choice(1), &cancel())
+        .await
+        .unwrap();
+    assert!(matches!(
+        unfinished.finish().await.unwrap_err(),
+        EngineError::Refused(_)
+    ));
+    assert!(
+        due_items(&f).await.is_empty(),
+        "an unfinished checkpoint enrols nothing"
+    );
 }
 
 #[tokio::test]

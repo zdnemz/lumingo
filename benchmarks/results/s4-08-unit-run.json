@@ -1,0 +1,147 @@
+{
+  "activities": [
+    {
+      "confidence": 1.0,
+      "id": "a01-listen-question",
+      "score": 1.0,
+      "skill": "listening",
+      "status": "scored",
+      "type": "mcq"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a02-greeting-by-time",
+      "score": 1.0,
+      "skill": "vocabulary",
+      "status": "scored",
+      "type": "mcq"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a03-gap-am",
+      "score": 1.0,
+      "skill": "grammar",
+      "status": "scored",
+      "type": "gap_fill"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a04-reorder-name",
+      "score": 1.0,
+      "skill": "grammar",
+      "status": "scored",
+      "type": "reorder"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a05-match-phrases",
+      "score": 1.0,
+      "skill": "vocabulary",
+      "status": "scored",
+      "type": "match"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a06-dictation-from",
+      "score": 1.0,
+      "skill": "listening",
+      "status": "scored",
+      "type": "dictation"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a08-pairs-th",
+      "score": 0.6666666666666666,
+      "skill": "listening",
+      "status": "scored",
+      "type": "minimal_pairs"
+    },
+    {
+      "confidence": null,
+      "id": "a09-shadow-dialogue",
+      "score": null,
+      "skill": "pronunciation",
+      "status": "unscored",
+      "type": "shadowing"
+    },
+    {
+      "confidence": 0.6,
+      "id": "a10-speak-introduce",
+      "score": 0.75,
+      "skill": "speaking",
+      "status": "scored",
+      "type": "guided_speaking"
+    },
+    {
+      "confidence": null,
+      "id": "a11-roleplay-classmate",
+      "score": null,
+      "skill": "speaking",
+      "status": "unscored",
+      "type": "roleplay"
+    },
+    {
+      "confidence": 0.4,
+      "id": "a12-write-introduce",
+      "score": 0.8125,
+      "skill": "writing",
+      "status": "scored",
+      "type": "guided_writing"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a13-read-budi",
+      "score": 1.0,
+      "skill": "reading",
+      "status": "scored",
+      "type": "mcq"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a14-read-set-class-chat",
+      "score": 1.0,
+      "skill": "reading",
+      "status": "scored",
+      "type": "reading_set"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a15-listen-set-putu",
+      "score": 1.0,
+      "skill": "listening",
+      "status": "scored",
+      "type": "listening_set"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a16-fix-missing-am",
+      "score": 1.0,
+      "skill": "writing",
+      "status": "scored",
+      "type": "error_correction"
+    },
+    {
+      "confidence": 1.0,
+      "id": "a17-fix-missing-from",
+      "score": 1.0,
+      "skill": "writing",
+      "status": "scored",
+      "type": "error_correction"
+    },
+    {
+      "id": "a07-read-aloud-thanks",
+      "score": null,
+      "status": "skipped"
+    }
+  ],
+  "checkpoint": {
+    "mean": 0.9375,
+    "pass_mark": 0.7,
+    "passed": true,
+    "provisional": false,
+    "unit_status": "Passed"
+  },
+  "database": "/var/tmp/lumingo-logs/s4-08-unit-run.sqlite",
+  "session_id": 1,
+  "unit": "a1-u01"
+}
