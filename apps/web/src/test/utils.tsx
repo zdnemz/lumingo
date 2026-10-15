@@ -4,7 +4,10 @@ import { expect, vi } from "vitest";
 import { ServerStateProvider } from "@/api/ServerState";
 import type { ApiClient, EventStreamHandlers } from "@/api/client";
 import { Providers } from "@/components/Providers";
+import type { ActivityBody } from "@/generated/ActivityBody";
+import type { ActivityPresentation } from "@/generated/ActivityPresentation";
 import type { DiagnosticsReport } from "@/generated/DiagnosticsReport";
+import type { NextActivity } from "@/generated/NextActivity";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
 import type { SessionSummary } from "@/generated/SessionSummary";
 import type { ProbeFailureKind } from "@/generated/ProbeFailureKind";
@@ -14,6 +17,10 @@ import type { ProviderInfo } from "@/generated/ProviderInfo";
 import type { ProviderList } from "@/generated/ProviderList";
 import type { ServerEvent } from "@/generated/ServerEvent";
 import type { StateSnapshot } from "@/generated/StateSnapshot";
+import type { Unit } from "@/generated/Unit";
+import type { UnitDetail } from "@/generated/UnitDetail";
+import type { UnitList } from "@/generated/UnitList";
+import type { UnitSummary } from "@/generated/UnitSummary";
 
 /** jsdom has no matchMedia. This installs one whose answers the test controls. */
 export function setSystem(options: { reduced?: boolean; dark?: boolean; language?: string }): void {
@@ -151,6 +158,73 @@ export function progressWith(sessions: SessionSummary[]): ProgressOverview {
   };
 }
 
+/** One unit of the list, with every field spelled out so a test only overrides what it cares about. */
+export function unitSummary(patch: Partial<UnitSummary> & { id: string }): UnitSummary {
+  return {
+    level: "A1",
+    sequence: 1,
+    title: { en: `Unit ${patch.id}` },
+    theme: "greetings",
+    estimated_minutes: 30,
+    skill_counts: { listening: 1, speaking: 1, reading: 1, writing: 1, mediation: 0, grammar: 0, vocabulary: 0, pronunciation: 0 },
+    objective_count: 1,
+    prerequisites: [],
+    ...patch,
+  };
+}
+
+/** A unit list from a few summaries, in the order they are given. */
+export function unitList(units: UnitSummary[]): UnitList {
+  return { content_version: "test", units, issues: [] };
+}
+
+/** A progress overview from the unit rows and the sessions a test needs. */
+export function progressOf(units: ProgressOverview["units"], sessions: SessionSummary[] = []): ProgressOverview {
+  return { ...progressWith(sessions), units };
+}
+
+/** The presentation of one activity, without the unit around it. */
+export function presented(id: string, body: ActivityBody, patch: Partial<ActivityPresentation> = {}): ActivityPresentation {
+  return {
+    id,
+    activity_type: "mcq",
+    skill: "reading",
+    instructions: { en: `Do ${id}.`, id: `Kerjakan ${id}.` },
+    body,
+    ...patch,
+  };
+}
+
+/** What `nextActivity` answers: one activity, or none with the run's counts. */
+export function nextActivity(step: Partial<NextActivity> & { session_id: number }): NextActivity {
+  return { answered: 0, total: 1, activity: null, unavailable: [], ...step };
+}
+
+/** A unit file, small enough to read in a test and complete enough for the screen. */
+export function unitDetail(unit: Partial<Unit> & { id: string }): UnitDetail {
+  return {
+    unit: {
+      schema_version: "1.0",
+      level: "A1",
+      sequence: 1,
+      title: { en: `Unit ${unit.id}`, id: `Unit ${unit.id}` },
+      theme: "greetings",
+      estimated_minutes: 30,
+      prerequisites: [],
+      objectives: [],
+      targets: { vocabulary: [], grammar: [], functions: [], pronunciation: [] },
+      presentation: [],
+      dialogues: [],
+      activities: [],
+      checkpoint: { pass_score: 0.7, activity_ids: [] },
+      generation_policy: { allowed_types: [], max_items_per_session: 0, max_level: "A1", allowed_grammar_ids: [] },
+      review_items: [],
+      provenance: { authored_by: "test", authoring_model: "test", review_status: "unreviewed", content_version: "1", sources: [], updated: "2026-01-01" },
+      ...unit,
+    },
+  };
+}
+
 export interface FakeApi extends ApiClient {
   emit: (event: ServerEvent) => void;
   open: () => void;
@@ -184,8 +258,17 @@ export function fakeApi(
     getDiagnostics: notStubbed("getDiagnostics"),
     getProgress: notStubbed("getProgress"),
     listUnits: notStubbed("listUnits"),
+    getUnit: notStubbed("getUnit"),
     getGame: notStubbed("getGame"),
     getAttemptEvidence: notStubbed("getAttemptEvidence"),
+    startSession: notStubbed("startSession"),
+    nextActivity: notStubbed("nextActivity"),
+    submitActivity: notStubbed("submitActivity"),
+    stopSession: notStubbed("stopSession"),
+    sendText: notStubbed("sendText"),
+    submitDraft: notStubbed("submitDraft"),
+    generateReading: notStubbed("generateReading"),
+    answerReading: notStubbed("answerReading"),
     deleteSession: notStubbed("deleteSession"),
     deleteAllData: notStubbed("deleteAllData"),
     exportData: notStubbed("exportData"),

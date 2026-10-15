@@ -64,8 +64,25 @@ describe("typed client requests", () => {
     await api.getDiagnostics();
     await api.getProgress();
     await api.listUnits();
+    await api.getUnit("a1-u01");
     await api.getGame();
     await api.getAttemptEvidence(12);
+    await api.startSession({
+      kind: "lesson",
+      unit_id: "a1-u01",
+      activity_id: null,
+      mode: null,
+      topic: null,
+      level: null,
+      speak: null,
+    });
+    await api.nextActivity(7);
+    await api.submitActivity({ session_id: 7, activity_id: "a1-u01-a1", answer: { kind: "choice", index: 1 } });
+    await api.stopSession(7);
+    await api.sendText(7, "selamat pagi");
+    await api.submitDraft(7, "saya suka kopi");
+    await api.generateReading({ session_id: 7, topic: { kind: "typed", text: "pasar" } });
+    await api.answerReading(7, { target: { kind: "generated", content_id: 12 }, answers: [1, null] });
     await api.deleteSession(7);
     await api.deleteAllData();
     await api.exportData();
@@ -82,8 +99,17 @@ describe("typed client requests", () => {
       "GET /api/diagnostics",
       "GET /api/progress",
       "GET /api/units",
+      "GET /api/units/a1-u01",
       "GET /api/game",
       "GET /api/attempts/12/evidence",
+      "POST /api/sessions",
+      "GET /api/sessions/7/next-activity",
+      "POST /api/activities/submit",
+      "POST /api/sessions/7/stop",
+      "POST /api/sessions/7/text",
+      "POST /api/writing/7/drafts",
+      "POST /api/reading/generate",
+      "POST /api/reading/7/answers",
       "DELETE /api/sessions/7",
       "DELETE /api/data",
       "GET /api/export",
@@ -95,6 +121,17 @@ describe("typed client requests", () => {
     }
   });
 
+  it("leaves the stop body out when the caller has nothing to say, and sends it when it does", async () => {
+    stubFetch(() => answer({}));
+    const api = createApiClient({ base: "" });
+
+    await api.stopSession(7);
+    expect(seen[0]?.body).toBeUndefined();
+
+    await api.stopSession(7, { cancel: true });
+    expect(seen[1]?.body).toBe(JSON.stringify({ cancel: true }));
+  });
+
   it("reads the error code and the details sentence of a refused request", async () => {
     stubFetch(() => answer({ error: "read_only", message: "the environment profile is read-only" }, { status: 409 }));
     const api = createApiClient({ base: "" });
@@ -102,6 +139,22 @@ describe("typed client requests", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ status: 409, code: "read_only", detail: "the environment profile is read-only" });
     expect(isUnreachable(error)).toBe(false);
+  });
+
+  it("turns a refusal of a free-mode route into an ApiError with its code", async () => {
+    stubFetch(() => answer({ error: "not_available", message: "no provider is configured" }, { status: 501 }));
+    const api = createApiClient({ base: "" });
+
+    const calls = [
+      () => api.submitDraft(7, "saya suka kopi"),
+      () => api.generateReading({ session_id: 7, topic: { kind: "bank", id: "pasar" } }),
+      () => api.answerReading(7, { target: { kind: "generated", content_id: 12 }, answers: [1] }),
+    ];
+    for (const call of calls) {
+      const error = await call().catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).toMatchObject({ status: 501, code: "not_available", detail: "no provider is configured" });
+    }
   });
 
   it("treats a failed fetch as an unreachable program", async () => {
