@@ -11,15 +11,22 @@ import type { SpriteName } from "@/sprites/data";
 import { useT } from "@/state/PreferencesProvider";
 import type { MessageKey } from "@/i18n";
 
-interface NavItem {
+export interface NavItem {
   href: string;
   label: MessageKey;
   icon: SpriteName;
 }
 
 // A screen appears here when it exists. Links to screens that are not built yet would be dead ends.
-const NAV: readonly NavItem[] = [
+// Exported so the test can check the routes in `src/app` against this list instead of copying it.
+export const NAV: readonly NavItem[] = [
   { href: "/", label: "nav.home", icon: "icon-map" },
+  { href: "/unit/", label: "nav.learn", icon: "icon-play" },
+  // The three free-practice screens, between the quest map and progress. Their icons
+  // come from the sprite set that already exists: the speech bubble, the pen and the book.
+  { href: "/talk/", label: "nav.talk", icon: "icon-chat" },
+  { href: "/write/", label: "nav.write", icon: "skill-writing" },
+  { href: "/read/", label: "nav.read", icon: "skill-reading" },
   { href: "/progress/", label: "nav.progress", icon: "icon-star" },
   { href: "/settings/", label: "nav.settings", icon: "icon-gear" },
 ];
