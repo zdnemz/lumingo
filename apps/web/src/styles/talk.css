@@ -1,0 +1,36 @@
+/* Styles for the talk screen. Imported from `app/globals.css`.
+ *
+ * The chat itself is drawn with the `.chat*` classes from `game.css` and the
+ * `px-*` helpers, so only what this screen adds is here: the end summary's
+ * mistake rows. Nothing has a width in text units, and long learner text wraps
+ * rather than pushing the page sideways.
+ */
+
+.talk-errors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.talk-errors__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.talk-errors__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+.talk-errors__quote {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: var(--px) solid var(--color-border);
+  white-space: pre-wrap;
+}

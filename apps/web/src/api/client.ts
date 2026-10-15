@@ -1,19 +1,35 @@
 // The only place the UI talks to the server. Everything else gets an
 // `ApiClient`, so screens can be tested against a fake one.
 
+import type { ActiveSessionView } from "@/generated/ActiveSessionView";
+import type { AnswerReadingRequest } from "@/generated/AnswerReadingRequest";
 import type { AttemptEvidence } from "@/generated/AttemptEvidence";
 import type { DeleteDataResult } from "@/generated/DeleteDataResult";
 import type { DeleteSessionResult } from "@/generated/DeleteSessionResult";
 import type { DiagnosticsReport } from "@/generated/DiagnosticsReport";
+import type { DraftAccepted } from "@/generated/DraftAccepted";
 import type { GameState } from "@/generated/GameState";
+import type { GenerateReadingRequest } from "@/generated/GenerateReadingRequest";
+import type { NextActivity } from "@/generated/NextActivity";
 import type { ProbeReport } from "@/generated/ProbeReport";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
 import type { ProviderInfo } from "@/generated/ProviderInfo";
 import type { ProviderList } from "@/generated/ProviderList";
+import type { ReadingAnswered } from "@/generated/ReadingAnswered";
+import type { ReadingOutcomeView } from "@/generated/ReadingOutcomeView";
 import type { SaveProviderRequest } from "@/generated/SaveProviderRequest";
+import type { SendTextRequest } from "@/generated/SendTextRequest";
 import type { ServerEvent } from "@/generated/ServerEvent";
+import type { SessionEnded } from "@/generated/SessionEnded";
 import type { Settings } from "@/generated/Settings";
+import type { StartSessionRequest } from "@/generated/StartSessionRequest";
 import type { StateSnapshot } from "@/generated/StateSnapshot";
+import type { StopRequest } from "@/generated/StopRequest";
+import type { SubmitActivityRequest } from "@/generated/SubmitActivityRequest";
+import type { SubmitActivityResponse } from "@/generated/SubmitActivityResponse";
+import type { SubmitDraftRequest } from "@/generated/SubmitDraftRequest";
+import type { TurnAccepted } from "@/generated/TurnAccepted";
+import type { UnitDetail } from "@/generated/UnitDetail";
 import type { UnitList } from "@/generated/UnitList";
 
 export class ApiError extends Error {
@@ -79,10 +95,28 @@ export interface ApiClient {
   getProgress: (signal?: AbortSignal) => Promise<ProgressOverview>;
   /** `GET /api/units` */
   listUnits: (signal?: AbortSignal) => Promise<UnitList>;
+  /** `GET /api/units/{id}` */
+  getUnit: (id: string, signal?: AbortSignal) => Promise<UnitDetail>;
   /** `GET /api/game`. Cosmetic state only: it holds no attempt, evidence or estimate. */
   getGame: (signal?: AbortSignal) => Promise<GameState>;
   /** `GET /api/attempts/{id}/evidence` */
   getAttemptEvidence: (attemptId: number, signal?: AbortSignal) => Promise<AttemptEvidence>;
+  /** `POST /api/sessions` */
+  startSession: (request: StartSessionRequest) => Promise<ActiveSessionView>;
+  /** `GET /api/sessions/{id}/next-activity` */
+  nextActivity: (sessionId: number) => Promise<NextActivity>;
+  /** `POST /api/activities/submit` */
+  submitActivity: (request: SubmitActivityRequest) => Promise<SubmitActivityResponse>;
+  /** `POST /api/sessions/{id}/stop`. Without a request the body is left out: that finishes the session. */
+  stopSession: (sessionId: number, request?: StopRequest) => Promise<SessionEnded>;
+  /** `POST /api/sessions/{id}/text`. The reply arrives on the event stream. */
+  sendText: (sessionId: number, text: string) => Promise<TurnAccepted>;
+  /** `POST /api/writing/{session}/drafts`. Layer one comes back at once, the rest arrives as a `FeedbackReady` event. */
+  submitDraft: (sessionId: number, text: string) => Promise<DraftAccepted>;
+  /** `POST /api/reading/generate` */
+  generateReading: (request: GenerateReadingRequest) => Promise<ReadingOutcomeView>;
+  /** `POST /api/reading/{session}/answers` */
+  answerReading: (sessionId: number, request: AnswerReadingRequest) => Promise<ReadingAnswered>;
   /** `DELETE /api/sessions/{id}` */
   deleteSession: (id: number) => Promise<DeleteSessionResult>;
   /** `DELETE /api/data` */
@@ -98,7 +132,17 @@ export function isUnreachable(error: unknown): boolean {
 }
 
 /** Everything the server may send on the event stream. */
-const EVENT_TYPES: ReadonlySet<string> = new Set<ServerEvent["type"]>(["Snapshot", "Heartbeat", "ProviderStatus"]);
+const EVENT_TYPES: ReadonlySet<string> = new Set<ServerEvent["type"]>([
+  "Snapshot",
+  "Heartbeat",
+  "ProviderStatus",
+  "SessionState",
+  "TurnState",
+  "TranscriptFinal",
+  "TutorTextDelta",
+  "FeedbackReady",
+  "Error",
+]);
 
 /** Accepts only messages that look like a known event, so a stray frame cannot crash a screen. */
 export function parseServerEvent(text: string): ServerEvent | null {
@@ -198,9 +242,22 @@ export function createApiClient(options: ClientOptions = {}): ApiClient {
     getDiagnostics: (signal) => json<DiagnosticsReport>("GET", "/api/diagnostics", { signal }),
     getProgress: (signal) => json<ProgressOverview>("GET", "/api/progress", { signal }),
     listUnits: (signal) => json<UnitList>("GET", "/api/units", { signal }),
+    getUnit: (id, signal) => json<UnitDetail>("GET", `/api/units/${encodeURIComponent(id)}`, { signal }),
     getGame: (signal) => json<GameState>("GET", "/api/game", { signal }),
     getAttemptEvidence: (attemptId, signal) =>
       json<AttemptEvidence>("GET", `/api/attempts/${encodeURIComponent(String(attemptId))}/evidence`, { signal }),
+    startSession: (request) => json<ActiveSessionView>("POST", "/api/sessions", { body: request }),
+    nextActivity: (sessionId) => json<NextActivity>("GET", `/api/sessions/${sessionId}/next-activity`),
+    submitActivity: (request) => json<SubmitActivityResponse>("POST", "/api/activities/submit", { body: request }),
+    // Without a request the body is left out, which the route reads as finishing.
+    stopSession: (sessionId, request) => json<SessionEnded>("POST", `/api/sessions/${sessionId}/stop`, { body: request }),
+    sendText: (sessionId, text) =>
+      json<TurnAccepted>("POST", `/api/sessions/${sessionId}/text`, { body: { text } satisfies SendTextRequest }),
+    submitDraft: (sessionId, text) =>
+      json<DraftAccepted>("POST", `/api/writing/${sessionId}/drafts`, { body: { text } satisfies SubmitDraftRequest }),
+    generateReading: (request) => json<ReadingOutcomeView>("POST", "/api/reading/generate", { body: request }),
+    answerReading: (sessionId, request) =>
+      json<ReadingAnswered>("POST", `/api/reading/${sessionId}/answers`, { body: request }),
     deleteSession: (id) => json<DeleteSessionResult>("DELETE", `/api/sessions/${id}`),
     deleteAllData: () => json<DeleteDataResult>("DELETE", "/api/data"),
     async exportData() {

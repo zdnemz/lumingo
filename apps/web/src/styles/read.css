@@ -1,0 +1,69 @@
+/* Styles for the read screen. Imported from `app/globals.css`.
+ *
+ * The passage and its questions already have their own styles in `game.css`
+ * (`.gloss*`, `.mcq*`). What is here is the shape of one offered text and the
+ * lines that belong to it: its title, the label of a generated text, and the
+ * score. Nothing has a fixed width in text units, so the screen stacks at
+ * 375 px and at 150 percent zoom.
+ */
+
+.read-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.read-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.read-text__title {
+  overflow-wrap: anywhere;
+}
+.read-text__labels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+.read-text__labels .px-hint {
+  margin-top: 0;
+}
+
+.read-questions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.read-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.read-question__why {
+  max-width: var(--measure);
+  padding-left: var(--space-3);
+  box-shadow: inset var(--px) 0 0 0 var(--color-skill-reading);
+}
+
+.read-score {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-bg-deep);
+  box-shadow: 0 0 0 var(--px) var(--color-border);
+  margin: var(--px);
+}
+.read-score__line {
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+  line-height: var(--leading-display);
+}

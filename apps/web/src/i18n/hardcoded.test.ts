@@ -1,39 +1,34 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 // Vitest runs from apps/web.
 const SRC = join(process.cwd(), "src") + "/";
 
-/** Folders and files written for setup, settings, privacy, diagnostics, progress and the game panel. Every learner-facing word in them comes from the dictionaries. */
-const CHECKED = [
-  "onboarding",
-  "settings",
-  "providers",
-  "progress",
-  "game/GamePanel.tsx",
-  "app/progress",
-  "app/onboarding",
-  "app/settings",
-  "components/ConnectionBanner.tsx",
-  "components/ErrorBanner.tsx",
-  "components/HardwareSummary.tsx",
-  "components/PrivacyStatements.tsx",
-  "components/UnavailableNote.tsx",
-  "ui/StatusBanner.tsx",
-  "ui/TextField.tsx",
-];
+/**
+ * `app/styleguide/page.tsx` is a component catalogue for developers: it is not
+ * a learner screen, it is never linked from the app, and its labels are the
+ * names of the components and the tokens it shows. Its 42 literals are the
+ * only literals in `src` today; everything else must come from the
+ * dictionaries, so this scan runs over the whole tree rather than a list that
+ * a new screen can be left out of.
+ */
+const SKIPPED = /^app[\\/]styleguide[\\/]/;
 
 /** Attributes whose text a learner or a screen reader reads. */
 const TEXT_ATTRIBUTES = new Set(["aria-label", "aria-description", "aria-placeholder", "aria-roledescription", "placeholder", "title", "alt", "label", "legend", "hint"]);
 
+/** Every `.ts`/`.tsx` file under `src` a learner can read text from. */
 function files(path: string): string[] {
   const full = join(SRC, path);
   if (statSync(full).isFile()) return [full];
   return readdirSync(full).flatMap((entry) => {
     const child = join(path, entry);
-    return statSync(join(SRC, child)).isDirectory() ? files(child) : /\.tsx$/.test(entry) && !/\.test\.tsx$/.test(entry) ? [join(SRC, child)] : [];
+    if (SKIPPED.test(child)) return [];
+    if (statSync(join(SRC, child)).isDirectory()) return files(child);
+    if (!/\.tsx?$/.test(entry) || /\.test\.tsx?$/.test(entry)) return [];
+    return [join(SRC, child)];
   });
 }
 
@@ -66,14 +61,15 @@ function scan(name: string, text: string): string[] {
 }
 
 describe("hard-coded user-facing text", () => {
-  const all = CHECKED.flatMap(files);
+  const all = files("");
 
   it("looks at the screens it is meant to look at", () => {
     expect(all.length).toBeGreaterThan(15);
   });
 
-  it("is not in any setup, settings, privacy or diagnostics component", () => {
-    expect(all.flatMap((file) => scan(file.replace(SRC, ""), readFileSync(file, "utf8")))).toEqual([]);
+  it("is not in any screen or component", () => {
+    const hits = all.flatMap((file) => scan(relative(SRC, file), readFileSync(file, "utf8")));
+    expect(hits).toEqual([]);
   });
 
   it("finds a literal word in text, in an expression and in a text attribute, and ignores symbols and class names", () => {

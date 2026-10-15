@@ -7,4 +7,8 @@
 @import "../styles/setup.css";
 @import "../styles/game.css";
 @import "../styles/progress.css";
+@import "../styles/unit.css";
 @import "../styles/motion.css";
+@import "../styles/talk.css";
+@import "../styles/write.css";
+@import "../styles/read.css";

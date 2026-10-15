@@ -1,0 +1,145 @@
+/* The unit screen: the picker and the lesson player.
+ *
+ * Nothing here has a fixed width in text units. Long instructions wrap, the
+ * checkpoint table scrolls inside its own wrapper, and the page itself never
+ * scrolls sideways at 375 px or at 150 percent zoom.
+ */
+
+.unit-issues,
+.unit-objectives,
+.unit-unavailable,
+.unit-questions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.unit-unavailable .unavailable {
+  margin: 0;
+}
+
+/* ---- The four skill sections -------------------------------------------- */
+
+.unit-skills {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unit-skill {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--color-bg-deep);
+}
+
+.unit-skill__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+}
+
+.unit-skill__progress {
+  margin: 0;
+}
+
+.unit-skill__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.unit-skill__list [data-answered="true"] {
+  color: var(--color-text-muted);
+}
+
+/* ---- Presentation blocks and the model dialogue ------------------------- */
+
+.unit-block,
+.unit-dialogue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.unit-block h3,
+.unit-dialogue h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--display-3);
+}
+
+.unit-block__examples {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.unit-dialogue__turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.unit-dialogue__turns li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.unit-dialogue__speaker {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Indonesian help is set apart from the English it helps with. */
+.unit-help {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+/* ---- The player --------------------------------------------------------- */
+
+.unit-sentence {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.unit-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unit-pairs__word {
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-deep);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+}
