@@ -433,6 +433,86 @@ async fn a_provider_that_is_still_away_is_asked_once_and_the_draft_stays_queued(
 }
 
 #[tokio::test]
+async fn a_draft_behind_a_full_batch_of_foreign_entries_is_still_drained() {
+    // The queue is shared by several services. A full batch of another
+    // service's older entries must not hide this service's work: the drain reads
+    // its own kind only (the `oldest_of_kind` fix).
+    let f = fixture().await;
+    let session =
+        f.db.sessions()
+            .get(f.workshop.session_id())
+            .await
+            .unwrap()
+            .expect("the workshop session");
+    let submission = f.workshop.submit_draft(DRAFT).await.unwrap();
+    f.llm
+        .queue_structured(Err(LlmError::Transport(TransportKind::Connect)));
+    f.workshop
+        .analyse_draft(&submission, &cancel())
+        .await
+        .unwrap();
+    for n in 0..50 {
+        let attempt =
+            f.db.attempts()
+                .insert(&storage::NewAttempt {
+                    profile_id: session.profile_id,
+                    session_id: None,
+                    unit_id: None,
+                    activity_id: format!("foreign-{n}"),
+                    activity_type: "guided_writing".into(),
+                    response_id: format!("resp-foreign-{n}"),
+                    origin: AttemptOrigin::Authored,
+                    level: storage::Level::A1,
+                    skill: "writing".into(),
+                    dimension: "task_achievement".into(),
+                    scorer: Scorer::RubricLlm,
+                    scorer_version: "v".into(),
+                    raw_score: None,
+                    max_score: None,
+                    normalized: None,
+                    confidence: None,
+                    status: AttemptStatus::PendingLlm,
+                    counts_toward_estimate: true,
+                    created_at: common::ts(1),
+                })
+                .await
+                .unwrap();
+        f.db.pending_scoring()
+            .enqueue(
+                attempt.id,
+                &json!({ "kind": "rubric_response", "n": n }),
+                &common::ts(1),
+            )
+            .await
+            .unwrap();
+    }
+
+    f.llm.queue_structured(Ok(t2(
+        submission.turn_seq,
+        vec![error("subject_verb_agreement", "I has", "I have")],
+    )));
+    f.llm.queue_structured(Ok(t3("Saturday at the lake")));
+    let report = process_pending_drafts(&f.env, &cancel()).await.unwrap();
+
+    assert_eq!(
+        report.completed.len(),
+        1,
+        "the draft was found behind the foreign batch"
+    );
+    assert_eq!(report.remaining, 0);
+    assert!(
+        f.db.analysis()
+            .get(submission.turn_id)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    let left = f.db.pending_scoring().oldest(100).await.unwrap();
+    assert_eq!(left.len(), 50, "the foreign entries are left alone");
+    assert!(left.iter().all(|e| e.payload["kind"] == "rubric_response"));
+}
+
+#[tokio::test]
 async fn when_only_the_rubric_fails_the_errors_are_kept_and_only_the_rubric_is_retried() {
     let f = fixture().await;
     let submission = f.workshop.submit_draft(DRAFT).await.unwrap();

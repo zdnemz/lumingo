@@ -197,6 +197,9 @@ pub(crate) struct Shared {
     pub engines: Engines,
     pub catalogs: Catalogs,
     pub shutdown: CancellationToken,
+    /// Serializes the workshop's pending-draft drains: a drain runs detached and
+    /// can outlive its session, so two finishing writing sessions can overlap.
+    pub drain: Arc<tokio::sync::Mutex<()>>,
     book: Mutex<EngineBook>,
     override_client: Mutex<Option<Arc<dyn LlmClient>>>,
 }
@@ -254,6 +257,7 @@ impl SessionManager {
                 engines,
                 catalogs,
                 shutdown: core.shutdown_token(),
+                drain: Arc::new(tokio::sync::Mutex::new(())),
                 book: Mutex::new(EngineBook::default()),
                 override_client: Mutex::new(None),
             }),

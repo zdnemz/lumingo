@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tutor_engine::{
     DraftSubmission, GeneratedReading, ReadingConfig, ReadingDeps, ReadingFallbackReason,
     ReadingOutcome, ReadingSession, ReadingTopicChoice, TaskFamily, Workshop, WorkshopConfig,
-    WorkshopEnv, WorkshopTask, authored_reading_sets, clean_topic,
+    WorkshopEnv, WorkshopTask, authored_reading_sets, clean_topic, process_pending_drafts,
 };
 
 use super::convert::{draft_feedback, reading_score};
@@ -63,6 +63,13 @@ pub(crate) struct WritingRun {
     analyses: std::sync::Mutex<JoinSet<()>>,
     drafts: std::sync::atomic::AtomicU64,
     token: CancellationToken,
+    /// What the drain needs after the session is gone: the workshop's own
+    /// environment, so the feedback of a queued draft can be finished without it.
+    env: WorkshopEnv,
+    /// Serializes the drains: a detached one can outlive its session, and two
+    /// passes over the queue at once could duplicate a rubric call or race the
+    /// removal of an entry.
+    drain: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// The task of a writing session: a prompt of the bank, or the learner's own.
@@ -123,17 +130,18 @@ pub(crate) async fn start_writing(
         .rubrics
         .for_family(level, TaskFamily::WrittenProduction)
         .map(|r| r.rubric.clone());
+    let workshop_env = WorkshopEnv {
+        client: env.llm.clone(),
+        db: env.db.clone(),
+        clock: env.clock.clone(),
+        model: env.model.clone(),
+        provider_profile_id: env.provider_profile_id,
+        grammar: shared.catalogs.grammar.clone(),
+        word_levels: shared.catalogs.word_levels.clone(),
+        provider_qualified: env.provider_qualified,
+    };
     let workshop = Workshop::start(
-        WorkshopEnv {
-            client: env.llm.clone(),
-            db: env.db.clone(),
-            clock: env.clock.clone(),
-            model: env.model.clone(),
-            provider_profile_id: env.provider_profile_id,
-            grammar: shared.catalogs.grammar.clone(),
-            word_levels: shared.catalogs.word_levels.clone(),
-            provider_qualified: env.provider_qualified,
-        },
+        workshop_env.clone(),
         WorkshopConfig {
             profile_id: env.profile_id,
             level,
@@ -160,6 +168,8 @@ pub(crate) async fn start_writing(
         analyses: std::sync::Mutex::new(JoinSet::new()),
         drafts: std::sync::atomic::AtomicU64::new(0),
         token: shared.shutdown.child_token(),
+        env: workshop_env,
+        drain: Arc::clone(&shared.drain),
     }))
 }
 
@@ -237,6 +247,30 @@ impl Run for WritingRun {
         }
         while analyses.join_next().await.is_some() {}
         self.workshop.finish(cancel).await.map_err(engine_error)?;
+        // The drafts that waited for a provider are drained here, at the end of
+        // the session: a learner who comes back to writing later finds the older
+        // feedback finished too, and this is the only moment a writing session is
+        // known to be over. The drain is detached, never awaited: up to fifty
+        // drafts with two provider calls each can take minutes, and the stop
+        // response must not wait on the provider. A session that was cancelled —
+        // an abort or the stop timeout — starts no drain: its token is already
+        // cancelled, so a spawned child would be dead on arrival.
+        if !self.token.is_cancelled() {
+            let env = self.env.clone();
+            let token = self.token.child_token();
+            let gate = Arc::clone(&self.drain);
+            tokio::spawn(async move {
+                let _one_at_a_time = gate.lock().await;
+                match process_pending_drafts(&env, &token).await {
+                    Ok(report) => tracing::info!(
+                        completed = report.completed.len(),
+                        remaining = report.remaining,
+                        "the drafts that waited for a provider were drained"
+                    ),
+                    Err(error) => tracing::warn!(%error, "the pending drafts could not be drained"),
+                }
+            });
+        }
         Ok(Ended {
             status: if cancel {
                 SessionStatus::Aborted

@@ -12,8 +12,8 @@ use app_core::api::{
 };
 use app_core::error::CoreError;
 use common::llm::{ContractLlm, reading_text};
-use common::sessions::{Setup, chat_request, request, rig};
-use storage::AttemptOrigin;
+use common::sessions::{SessionRig, Setup, chat_request, request, rig};
+use storage::{AttemptOrigin, AttemptStatus, TurnRole};
 
 fn typed(text: &str) -> Option<TopicChoice> {
     Some(TopicChoice::Typed {
@@ -26,6 +26,25 @@ fn writing(prompt: &str) -> app_core::api::StartSessionRequest {
         topic: typed(prompt),
         ..request(SessionKind::Writing)
     }
+}
+
+/// Waits (bounded) until the pending queue is empty: the drain runs detached, so
+/// a test polls instead of asserting right after the stop.
+async fn wait_for_the_queue_to_empty(r: &SessionRig) {
+    for _ in 0..2_000 {
+        let queue = r
+            .core()
+            .database()
+            .pending_scoring()
+            .oldest(10)
+            .await
+            .unwrap();
+        if queue.is_empty() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    panic!("the pending queue was not drained in time");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -137,6 +156,151 @@ async fn without_a_provider_a_draft_is_stored_checked_by_rules_and_kept_for_late
             .iter()
             .all(|a| a.origin == AttemptOrigin::FreeMode && !a.counts_toward_estimate),
         "nothing from a provider, so nothing is scored"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_provider_that_comes_back_drains_the_drafts_that_waited_before() {
+    // Session 1 runs with no provider at all: its draft is stored and queued.
+    let r = rig(Setup {
+        llm: false,
+        ..Setup::default()
+    })
+    .await;
+    let first = r.start(writing("Write about your morning.")).await;
+    r.core()
+        .submit_draft(
+            first.id,
+            "I am Dewi. I wake up at six. I like read books.".to_owned(),
+        )
+        .await
+        .expect("the draft is stored");
+    let ended = r
+        .core()
+        .stop_session(first.id, StopRequest::default())
+        .await
+        .unwrap();
+    assert_eq!(ended.status, SessionStatus::Completed);
+
+    // The provider arrives. The next writing session's end drains the queue,
+    // which is global and still holds the first session's draft.
+    r.manager.use_llm(ContractLlm::new(r.llm.clone()));
+    let second = r.start(writing("Write about your evening.")).await;
+    let ended = r
+        .core()
+        .stop_session(second.id, StopRequest::default())
+        .await
+        .unwrap();
+    assert_eq!(ended.status, SessionStatus::Completed);
+
+    // The drain runs detached, so the test waits for the queue to empty.
+    wait_for_the_queue_to_empty(&r).await;
+
+    let draft_turn = r
+        .core()
+        .database()
+        .turns()
+        .list(first.id)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|t| t.role == TurnRole::Learner)
+        .expect("the draft turn");
+    assert!(
+        r.core()
+            .database()
+            .analysis()
+            .get(draft_turn.id)
+            .await
+            .unwrap()
+            .is_some(),
+        "layer two was stored by the drain"
+    );
+    let attempts = r
+        .core()
+        .database()
+        .attempts()
+        .for_session(first.id)
+        .await
+        .unwrap();
+    assert!(!attempts.is_empty());
+    assert!(
+        attempts
+            .iter()
+            .all(|a| a.status == AttemptStatus::Scored && a.normalized.is_some()),
+        "{:?}",
+        attempts
+            .iter()
+            .map(|a| (a.dimension.clone(), a.status))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        attempts
+            .iter()
+            .all(|a| a.origin == AttemptOrigin::FreeMode && !a.counts_toward_estimate),
+        "practice work stays out of the estimate even once it is scored"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_a_provider_the_drain_leaves_the_draft_queued_after_the_session_ends() {
+    let r = rig(Setup {
+        llm: false,
+        ..Setup::default()
+    })
+    .await;
+    let view = r.start(writing("Write about your morning.")).await;
+    r.core()
+        .submit_draft(view.id, "I am Dewi.".to_owned())
+        .await
+        .expect("layer one needs no provider");
+    let ended = r
+        .core()
+        .stop_session(view.id, StopRequest::default())
+        .await
+        .unwrap();
+    assert_eq!(ended.status, SessionStatus::Completed);
+
+    let session = r
+        .core()
+        .database()
+        .sessions()
+        .get(view.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        session
+            .summary
+            .as_ref()
+            .and_then(|s| s["awaiting_feedback"].as_u64()),
+        Some(1),
+        "the draft is counted as waiting"
+    );
+    // The drain was asked once and left the entry where it was: the feedback
+    // waits for a provider instead of being lost.
+    let queue = r
+        .core()
+        .database()
+        .pending_scoring()
+        .oldest(10)
+        .await
+        .unwrap();
+    assert_eq!(queue.len(), 1);
+    let attempts = r
+        .core()
+        .database()
+        .attempts()
+        .for_session(view.id)
+        .await
+        .unwrap();
+    assert!(!attempts.is_empty());
+    assert!(
+        attempts
+            .iter()
+            .all(|a| a.status == AttemptStatus::PendingLlm),
+        "{:?}",
+        attempts.iter().map(|a| a.status).collect::<Vec<_>>()
     );
 }
 
