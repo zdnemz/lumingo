@@ -29,9 +29,15 @@ cargo build -p tutor-server
 # Absolute paths for everything the server reads: the working directory is a
 # temporary one, and `curriculum/units` is intentionally empty, so the example
 # unit is the curriculum the run indexes.
+#
+# The shipped manifest is named too, because the settings screen lists it: the
+# default would look for `models/manifest.toml` in the temporary working
+# directory and find nothing, and the model panel would be empty offline for
+# the wrong reason. The file is local; this adds no network destination.
 cd "$(mktemp -d)"
 exec "$root/target/debug/tutor-server" \
     --port "$port" \
     --no-open \
     --data-dir "$(mktemp -d)" \
-    --curriculum-dir "$root/curriculum/examples"
+    --curriculum-dir "$root/curriculum/examples" \
+    --models-manifest "$root/models/manifest.toml"
