@@ -9,12 +9,13 @@ import { useT } from "@/state/PreferencesProvider";
 import { LinkButton } from "@/ui/Button";
 import { Panel } from "@/ui/Panel";
 import { LearningSettings } from "./LearningSettings";
+import { ModelsPanel } from "./ModelsPanel";
 import { useLanguage } from "./useLanguage";
 
 /**
  * The general settings page: provider profiles, display, language and the
  * settings that work in this build. Parts whose route the program does not
- * have (audio devices, model manager, pronunciation timing, recordings) say so.
+ * have (audio devices, pronunciation timing) say so.
  */
 export function GeneralSettings() {
   const t = useT();
@@ -49,9 +50,7 @@ export function GeneralSettings() {
       <Panel title={t("settings.audio.title")}>
         <UnavailableNote feature="speech" />
       </Panel>
-      <Panel title={t("settings.models.title")}>
-        <UnavailableNote feature="models" />
-      </Panel>
+      <ModelsPanel />
       <Panel title={t("settings.timing.title")}>
         <UnavailableNote feature="speech" />
       </Panel>

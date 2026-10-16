@@ -21,11 +21,12 @@ function routes(overrides: Partial<ApiClient> = {}): Partial<ApiClient> {
     listProviders: () => Promise.resolve(providerList([FILE_PROVIDER])),
     getSettings: () => Promise.resolve(SETTINGS),
     updateSettings: vi.fn((settings: Settings) => Promise.resolve(settings)),
+    listModels: () => Promise.resolve({ models: [] }),
     ...overrides,
   };
 }
 
-async function open(overrides: Partial<ApiClient> = {}, unavailable: typeof SNAPSHOT.unavailable = ["speech", "models"]) {
+async function open(overrides: Partial<ApiClient> = {}, unavailable: typeof SNAPSHOT.unavailable = ["speech"]) {
   const api = fakeApi(undefined, routes(overrides));
   renderScreen(<GeneralSettings />, api);
   await connect(api, { ...SNAPSHOT, unavailable });
@@ -47,13 +48,13 @@ describe("GeneralSettings", () => {
     expect(await screen.findByLabelText("What the tutor calls you")).toHaveValue("Sari");
   });
 
-  it("says audio devices, the model manager and pronunciation timing are not available, with no fake control", async () => {
+  it("keeps the audio-devices and timing notes, and shows the real model list instead of a note", async () => {
     await open();
     const notes = await screen.findAllByRole("note");
-    expect(notes).toHaveLength(3);
+    expect(notes).toHaveLength(2);
     for (const note of notes) expect(note).toHaveTextContent("Not available in this build");
+    expect(await screen.findByText("The model list is empty.")).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.queryByRole("switch", { name: /recording/i })).toBeNull();
   });
 
   it("changes the language at once and saves it with the program", async () => {
