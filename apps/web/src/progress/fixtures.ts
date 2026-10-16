@@ -2,6 +2,8 @@
 // a change on the server side breaks these at compile time.
 
 import type { AttemptEvidence } from "@/generated/AttemptEvidence";
+import type { AttemptList } from "@/generated/AttemptList";
+import type { AttemptRowView } from "@/generated/AttemptRowView";
 import type { GameState } from "@/generated/GameState";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
 import type { SessionKind } from "@/generated/SessionKind";
@@ -66,6 +68,15 @@ export const FULL_PROGRESS: ProgressOverview = {
 
 /** Every session kind there is, for tests that must cover them all. */
 export const FREE_KINDS: readonly SessionKind[] = ["conversation", "text_chat", "writing", "reading"];
+
+/** A skill's counted attempts, newest first, as `GET /api/attempts?skill=reading` answers. */
+export const ATTEMPT_ROWS: AttemptRowView[] = [
+  { id: 31, activity_id: "a1-u01/read-budi", activity_type: "mcq", skill: "reading", dimension: "comprehension", normalized: 0.82, status: "scored", created_at: "2026-10-06T10:00:00Z" },
+  { id: 30, activity_id: "a1-u01/v-nice-to-meet-you", activity_type: "vocab", skill: "reading", dimension: "recall", normalized: null, status: "pending_llm", created_at: "2026-10-06T09:00:00Z" },
+  { id: 29, activity_id: "a1-u01/read-budi", activity_type: "short_answer", skill: "reading", dimension: "comprehension", normalized: 0.5, status: "needs_review", created_at: "2026-10-05T10:00:00Z" },
+];
+
+export const ATTEMPTS: AttemptList = { skill: "reading", attempts: ATTEMPT_ROWS, truncated: false };
 
 export const UNITS: UnitList = {
   content_version: "v1",
