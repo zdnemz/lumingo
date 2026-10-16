@@ -7,15 +7,12 @@ import { Sprite } from "@/sprites/Sprite";
 import { useT } from "@/state/PreferencesProvider";
 
 /** A part of the program that is not built yet, or a route without a control on this screen. */
-export type Missing = Feature | "inspector";
-
-const FEATURE_TEXT: Record<Missing, MessageKey> = {
+const FEATURE_TEXT: Record<Feature, MessageKey> = {
   sessions: "feature.sessions",
   activities: "feature.activities",
   free_modes: "feature.free_modes",
   speech: "feature.speech",
   models: "feature.models",
-  inspector: "feature.inspector",
 };
 
 /**
@@ -32,23 +29,18 @@ export function useIsUnavailable(feature: Feature): boolean {
 }
 
 export interface UnavailableNoteProps {
-  feature: Missing;
+  feature: Feature;
 }
 
 /**
  * The honest state of a screen part whose route is missing from this build.
- * It is text only: no disabled control pretends to work. The inspector has no
- * entry in the snapshot's list because the program has no route for it at all,
- * so it always shows the note.
+ * It is text only: no disabled control pretends to work.
  */
 export function UnavailableNote({ feature }: UnavailableNoteProps) {
   const t = useT();
   const unavailable = useUnavailable();
-  const name = t(FEATURE_TEXT[feature]);
-  if (feature === "inspector") {
-    return <Note title={t("unavailable.title")} body={t("unavailable.inspector")} />;
-  }
   if (unavailable === null) return <p className="px-hint">{t("state.loading")}</p>;
+  const name = t(FEATURE_TEXT[feature]);
   // The program now includes the feature, but this screen was built before it
   // did. Saying so is better than hiding the gap or showing a fake control.
   const body = unavailable.includes(feature) ? t("unavailable.body", { feature: name }) : t("unavailable.noui", { feature: name });

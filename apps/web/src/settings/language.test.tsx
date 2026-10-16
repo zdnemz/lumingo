@@ -42,6 +42,7 @@ const routes = (): Partial<ApiClient> => ({
   testProvider: vi.fn().mockResolvedValueOnce(PROBE_OK).mockResolvedValue(probeFailure("auth")),
   getDiagnostics: () => Promise.resolve(DIAGNOSTICS),
   getProgress: () => Promise.resolve(progressWith(SESSIONS)),
+  getInspector: () => Promise.resolve({ capacity: 50, max_body_bytes: 16 * 1024, dropped: 0, entries: [] }),
 });
 
 /** A value that is identical in both dictionaries is a name or a symbol, not a leak. */

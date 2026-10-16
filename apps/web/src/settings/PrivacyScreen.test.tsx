@@ -2,16 +2,20 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type ApiClient } from "@/api/client";
+import type { InspectorReport } from "@/generated/InspectorReport";
 import { DIAGNOSTICS, SESSIONS, SNAPSHOT, connect, fakeApi, progressWith, renderScreen, resetBrowserState, setSystem } from "@/test/utils";
 import { PrivacyScreen } from "./PrivacyScreen";
 import { saveTextFile } from "./download";
 
 vi.mock("./download", () => ({ saveTextFile: vi.fn() }));
 
+const INSPECTOR: InspectorReport = { capacity: 50, max_body_bytes: 16 * 1024, dropped: 0, entries: [] };
+
 function routes(overrides: Partial<ApiClient> = {}): Partial<ApiClient> {
   return {
     getDiagnostics: () => Promise.resolve(DIAGNOSTICS),
     getProgress: () => Promise.resolve(progressWith(SESSIONS)),
+    getInspector: () => Promise.resolve(INSPECTOR),
     ...overrides,
   };
 }
@@ -38,6 +42,13 @@ describe("PrivacyScreen: statements and locations", () => {
     expect(screen.getByText(/never leave this computer/)).toBeInTheDocument();
   });
 
+  it("shows the payload inspector's own panel, with the limits and the empty state", async () => {
+    await open();
+    expect(await screen.findByText(/The last requests the program sent to the AI provider/)).toBeInTheDocument();
+    expect(screen.getByText("Keeps the newest 50 entries, and cuts each request or response body at 16384 bytes.")).toBeInTheDocument();
+    expect(screen.getByText("Nothing has been sent to a provider yet. The first request the tutor makes appears here.")).toBeInTheDocument();
+  });
+
   it("shows the data locations from the diagnostics, and says when there is no log folder", async () => {
     await open();
     expect(await screen.findByText(DIAGNOSTICS.data_dir)).toBeInTheDocument();
@@ -58,12 +69,6 @@ describe("PrivacyScreen: statements and locations", () => {
     expect(screen.getByText(/Your voice stays on your device\./)).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(DIAGNOSTICS.data_dir)).toBeInTheDocument();
-  });
-
-  it("says the payload inspector is not available instead of showing a control", async () => {
-    await open();
-    const notes = await screen.findAllByRole("note");
-    expect(notes.some((note) => /payload inspector is not available/.test(note.textContent ?? ""))).toBe(true);
   });
 });
 
