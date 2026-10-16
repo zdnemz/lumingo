@@ -11,6 +11,7 @@ use app_core::api::{
 };
 use app_core::error::CoreError;
 use app_core::{AppCore, SessionService};
+use common::fake_provider::FakeProvider;
 use common::seed::{
     LEARNER_TEXT, seed_session_with_attempt, seed_turn_with_recording, test_core_with_unit,
 };
@@ -78,7 +79,20 @@ async fn deleting_a_session_removes_its_text_and_recording_and_keeps_the_numbers
         "the text is gone from the file too"
     );
 
-    // The scores stay and the text that backed them goes.
+    // The scores stay and the text that backed them goes: the attempt row
+    // survives with its numbers, its evidence keeps only the non-text parts,
+    // and its link to the deleted session is cut.
+    let row = t
+        .core
+        .database()
+        .attempts()
+        .get(attempt.id)
+        .await
+        .unwrap()
+        .expect("the attempt row survives the session delete");
+    assert_eq!(row.raw_score, Some(1.0));
+    assert_eq!(row.normalized, Some(1.0));
+    assert_eq!(row.session_id, None, "the scores outlive their session");
     let evidence = t.core.attempt_evidence(attempt.id).await.unwrap();
     assert!(
         evidence.evidence.iter().all(|e| e.content.is_none()),
@@ -248,6 +262,8 @@ async fn the_export_has_the_learners_data_and_no_key() {
     }))
     .unwrap();
     t.core.save_provider(provider).await.unwrap();
+    // A real estimate row per skill, so the estimates section has its history.
+    t.core.recompute_estimates().await.unwrap();
 
     let bundle = t.core.export().await.unwrap();
     assert_eq!(bundle.format_version, 1);
@@ -258,27 +274,74 @@ async fn the_export_has_the_learners_data_and_no_key() {
     assert!(!text.contains("has_key"));
 
     let data = &bundle.data;
+    // Every section is there, and the payload inspector is not one of them:
+    // it holds what was sent to a provider, so it never leaves in an export.
+    for section in [
+        "profile",
+        "settings",
+        "providers",
+        "sessions",
+        "attempts",
+        "progress",
+        "estimates",
+        "game",
+    ] {
+        assert!(
+            data.get(section).is_some(),
+            "the {section} section is there"
+        );
+    }
+    assert!(
+        data.get("inspector").is_none(),
+        "the inspector is not exported"
+    );
     assert_eq!(data["profile"]["display_name"], "Learner");
+    assert_eq!(data["settings"]["display_name"], "Learner");
     assert_eq!(data["providers"][0]["name"], "mine");
     assert_eq!(
         data["providers"][0]["base_url"],
         "https://api.example.test/v1"
     );
     assert_eq!(data["sessions"].as_array().unwrap().len(), 1);
+    assert!(data["sessions"][0]["turns"].is_array());
+    assert!(data["sessions"][0]["generated_content"].is_array());
     assert_eq!(
         data["sessions"][0]["turns"][0]["turn"]["text"],
         LEARNER_TEXT
     );
     assert_eq!(data["attempts"].as_array().unwrap().len(), 1);
     assert_eq!(data["attempts"][0]["attempt"]["id"], attempt.id);
+    assert!(data["attempts"][0]["pron_results"].is_array());
     assert!(
         data["attempts"][0]["evidence"][0]["content"]
             .as_str()
             .unwrap()
             .contains(LEARNER_TEXT)
     );
+    assert!(data["progress"]["units"].is_array());
+    assert!(data["progress"]["objective_mastery"].is_array());
+    assert!(data["progress"]["error_stats"].is_array());
+    assert!(data["progress"]["review_schedule"].is_array());
     assert_eq!(data["progress"]["units"][0]["unit_id"], "a1-u01");
     assert_eq!(data["game"]["xp"].as_array().unwrap().len(), 1);
+    assert!(data["game"]["unlocked"].is_array());
+    assert!(data["game"].get("equipped").is_some());
+
+    // The estimates: one entry per skill, each with its stored history.
+    let estimates = data["estimates"].as_array().unwrap();
+    assert_eq!(estimates.len(), 4, "one entry per skill: {estimates:?}");
+    let mut skills: Vec<&str> = estimates
+        .iter()
+        .map(|entry| entry["skill"].as_str().unwrap())
+        .collect();
+    skills.sort_unstable();
+    assert_eq!(skills, ["listening", "reading", "speaking", "writing"]);
+    assert!(
+        estimates
+            .iter()
+            .all(|entry| !entry["history"].as_array().unwrap().is_empty()),
+        "each estimate keeps its history: {estimates:?}"
+    );
 }
 
 #[tokio::test]
@@ -287,4 +350,102 @@ async fn an_empty_learner_exports_cleanly() {
     let bundle = t.core.export().await.unwrap();
     assert_eq!(bundle.data["sessions"], serde_json::json!([]));
     assert_eq!(bundle.data["providers"], serde_json::json!([]));
+    assert_eq!(bundle.data["attempts"], serde_json::json!([]));
+    assert_eq!(bundle.data["estimates"], serde_json::json!([]));
+    assert_eq!(bundle.data["progress"]["units"], serde_json::json!([]));
+    assert_eq!(
+        bundle.data["progress"]["objective_mastery"],
+        serde_json::json!([])
+    );
+    assert_eq!(bundle.data["game"]["xp"], serde_json::json!([]));
+}
+
+/// The point of a wipe: what was deleted cannot come back through the export.
+#[tokio::test]
+async fn after_delete_all_the_export_holds_no_learner_text_and_no_attempts() {
+    let t = test_core_with_unit().await;
+    let (session, attempt) =
+        seed_session_with_attempt(&t.core, storage::SessionKind::Writing).await;
+    seed_turn_with_recording(&t.core, session.id).await;
+    t.core
+        .record_practice(XpSourceKind::Writing, "session:1")
+        .await
+        .unwrap();
+    let before = t.core.export().await.unwrap();
+    let before_text = serde_json::to_string(&before).unwrap();
+    assert!(
+        before_text.contains(LEARNER_TEXT),
+        "the export holds the learner text before the wipe"
+    );
+    assert_eq!(before.data["attempts"].as_array().unwrap().len(), 1);
+
+    t.core.delete_all_data().await.unwrap();
+
+    assert!(
+        t.core
+            .database()
+            .attempts()
+            .get(attempt.id)
+            .await
+            .unwrap()
+            .is_none(),
+        "the attempt row is gone with its profile"
+    );
+    let after = t.core.export().await.unwrap();
+    let after_text = serde_json::to_string(&after).unwrap();
+    assert!(
+        !after_text.contains(LEARNER_TEXT),
+        "the learner's text is gone from the export too"
+    );
+    assert_eq!(after.data["attempts"], serde_json::json!([]));
+    assert_eq!(after.data["sessions"], serde_json::json!([]));
+    assert_eq!(after.data["game"]["xp"], serde_json::json!([]));
+    assert_eq!(after.data["profile"]["display_name"], "Learner");
+    assert_eq!(after.data["settings"]["display_name"], "Learner");
+}
+
+/// The inspector holds what was sent to a provider, learner text included, so it
+/// may never leave through the export. With entries in it, the bundle stays the
+/// same fixed set of sections.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_payload_inspector_is_not_part_of_the_export() {
+    const KEY: &str = "sk-inspector-SECRETMATERIAL-7777";
+    let provider = FakeProvider::start(KEY).await;
+    let t = test_core_with_unit().await;
+    let saved = t
+        .core
+        .save_provider(
+            serde_json::from_value(serde_json::json!({
+                "name": "inspector", "protocol": "openai_chat",
+                "base_url": provider.base_url, "model": "m", "api_key": KEY
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    // The probe goes through the real client and fills the inspector.
+    let _ = t.core.test_provider(saved.id).await;
+    let report = t.core.inspector();
+    assert!(!report.entries.is_empty(), "the probe was captured");
+    assert!(
+        serde_json::to_string(&report)
+            .unwrap()
+            .contains("schema_received"),
+        "the inspector keeps the provider's own response: {report:?}"
+    );
+
+    let bundle = t.core.export().await.unwrap();
+    assert!(
+        bundle.data.get("inspector").is_none(),
+        "the inspector has no section in the export"
+    );
+    let text = serde_json::to_string(&bundle).unwrap();
+    assert!(
+        !text.contains("schema_received") && !text.contains("probe_test"),
+        "no inspector body is in the export"
+    );
+    assert!(
+        text.contains("inspector"),
+        "while the provider profile itself is exported"
+    );
 }
