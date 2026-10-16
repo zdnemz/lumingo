@@ -179,8 +179,7 @@ is contacted.
 The payload inspector keeps the last 50 requests and responses (bodies over
 16 KiB are cut and flagged). It holds your words, because they are in the
 requests; it is local, and it is not part of the export. The app's Privacy and
-data screen says plainly that the inspector screen is not available yet, next
-to the export and the two deletes.
+data screen shows those entries, next to the export and the two deletes.
 
 ## Development
 
