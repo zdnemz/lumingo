@@ -48,13 +48,17 @@ describe("GeneralSettings", () => {
     expect(await screen.findByLabelText("What the tutor calls you")).toHaveValue("Sari");
   });
 
-  it("keeps the audio-devices and timing notes, and shows the real model list instead of a note", async () => {
+  it("keeps the honest audio-devices note, and shows the real model, timing and recordings controls", async () => {
     await open();
+    // Audio devices still have no route in the program, so that part still says so.
     const notes = await screen.findAllByRole("note");
-    expect(notes).toHaveLength(2);
-    for (const note of notes) expect(note).toHaveTextContent("Not available in this build");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toHaveTextContent("Not available in this build");
+    expect(notes[0]).toHaveTextContent("Speech: microphone, speakers and voices");
+    // The parts that do have a route have real controls, not notes.
     expect(await screen.findByText("The model list is empty.")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByRole("group", { name: "Pronunciation timing" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Recordings" })).toBeInTheDocument();
   });
 
   it("changes the language at once and saves it with the program", async () => {
