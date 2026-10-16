@@ -34,6 +34,7 @@ fn route_groups(cookie: &str) -> Vec<Req> {
         Req::delete("/api/providers/1"),
         // Progress
         Req::get("/api/progress"),
+        Req::get("/api/attempts?skill=reading"),
         Req::get("/api/attempts/1/evidence"),
         // Game
         Req::get("/api/game"),

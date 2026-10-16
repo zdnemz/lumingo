@@ -68,6 +68,7 @@ pub fn api() -> Router<Arc<AppState>> {
         .route("/api/models/{id}/cancel", post(models::cancel))
         // Progress
         .route("/api/progress", get(progress::overview))
+        .route("/api/attempts", get(progress::attempts))
         .route("/api/attempts/{id}/evidence", get(progress::evidence))
         // Game
         .route("/api/game", get(game::get))
