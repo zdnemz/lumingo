@@ -50,12 +50,17 @@ const ROUTES: readonly { method: string; pattern: RegExp }[] = [
   { method: "GET", pattern: /^\/api\/progress$/ },
   { method: "GET", pattern: /^\/api\/game$/ },
   { method: "GET", pattern: /^\/api\/attempts\/\d+\/evidence$/ },
+  { method: "GET", pattern: /^\/api\/attempts\?skill=(listening|speaking|reading|writing)$/ },
   { method: "GET", pattern: /^\/api\/settings$/ },
   { method: "PUT", pattern: /^\/api\/settings$/ },
   { method: "DELETE", pattern: /^\/api\/sessions\/\d+$/ },
   { method: "DELETE", pattern: /^\/api\/data$/ },
   { method: "GET", pattern: /^\/api\/export$/ },
   { method: "GET", pattern: /^\/api\/diagnostics$/ },
+  { method: "GET", pattern: /^\/api\/inspector$/ },
+  { method: "GET", pattern: /^\/api\/models$/ },
+  { method: "POST", pattern: /^\/api\/models\/[\w-]+\/download$/ },
+  { method: "POST", pattern: /^\/api\/models\/[\w-]+\/cancel$/ },
 ];
 
 interface Seen {
@@ -82,6 +87,9 @@ function backend(url: string, init?: RequestInit): Response {
   if (method === "GET" && url === "/api/units") return json(showProgress ? UNITS : { content_version: "v1", units: [], issues: [] });
   if (method === "GET" && url === "/api/game") return json(GAME);
   if (method === "GET" && url === `/api/attempts/${EVIDENCE.attempt_id}/evidence`) return json(EVIDENCE);
+  if (method === "GET" && /^\/api\/attempts\?skill=(listening|speaking|reading|writing)$/.test(url)) {
+    return json({ skill: url.slice(url.indexOf("=") + 1), attempts: [], truncated: false });
+  }
   if (method === "GET" && url === "/api/providers") return json(providerList(providers));
   if (method === "POST" && url === "/api/providers") {
     const request = body as SaveProviderRequest;
@@ -121,6 +129,10 @@ function backend(url: string, init?: RequestInit): Response {
     return json({ format_version: 1, exported_at: "2026-10-06T00:00:00Z", app_version: "9.9.9", data: {} }, { headers: { "Content-Type": "application/json", "Content-Disposition": 'attachment; filename="lumingo-export-2026-10-06.json"' } });
   }
   if (method === "GET" && url === "/api/diagnostics") return json(DIAGNOSTICS);
+  if (method === "GET" && url === "/api/inspector") return json({ capacity: 50, max_body_bytes: 16 * 1024, dropped: 0, entries: [] });
+  if (method === "GET" && url === "/api/models") return json({ models: [] });
+  if (method === "POST" && /^\/api\/models\/[\w-]+\/download$/.test(url)) return json({ model_id: url.split("/")[3] ?? "", files: 0 });
+  if (method === "POST" && /^\/api\/models\/[\w-]+\/cancel$/.test(url)) return json({ ok: true });
   return json({ error: "not_found", message: "there is no such API route" }, { status: 404 });
 }
 

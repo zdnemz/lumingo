@@ -6,6 +6,8 @@ import type { ApiClient, EventStreamHandlers } from "@/api/client";
 import { Providers } from "@/components/Providers";
 import type { ActivityBody } from "@/generated/ActivityBody";
 import type { ActivityPresentation } from "@/generated/ActivityPresentation";
+import type { AttemptList } from "@/generated/AttemptList";
+import type { AttemptRowView } from "@/generated/AttemptRowView";
 import type { DiagnosticsReport } from "@/generated/DiagnosticsReport";
 import type { NextActivity } from "@/generated/NextActivity";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
@@ -181,6 +183,25 @@ export function unitList(units: UnitSummary[]): UnitList {
 /** A progress overview from the unit rows and the sessions a test needs. */
 export function progressOf(units: ProgressOverview["units"], sessions: SessionSummary[] = []): ProgressOverview {
   return { ...progressWith(sessions), units };
+}
+
+/** One counted attempt of a skill, with every field spelled out so a test only overrides what it cares about. */
+export function attemptRow(patch: Partial<AttemptRowView> & { id: number }): AttemptRowView {
+  return {
+    activity_id: `a1-u01-a${patch.id}`,
+    activity_type: "mcq",
+    skill: "reading",
+    dimension: "comprehension",
+    normalized: 1,
+    status: "scored",
+    created_at: "2026-10-05T09:00:00Z",
+    ...patch,
+  };
+}
+
+/** The answer of `listAttempts`: a skill's rows, in the order they are given. */
+export function attemptList(rows: AttemptRowView[], truncated = false): AttemptList {
+  return { skill: rows[0]?.skill ?? "reading", attempts: rows, truncated };
 }
 
 /** The presentation of one activity, without the unit around it. */
