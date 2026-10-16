@@ -142,6 +142,7 @@ const EVENT_TYPES: ReadonlySet<string> = new Set<ServerEvent["type"]>([
   "TutorTextDelta",
   "FeedbackReady",
   "Error",
+  "DownloadProgress",
 ]);
 
 /** Accepts only messages that look like a known event, so a stray frame cannot crash a screen. */
