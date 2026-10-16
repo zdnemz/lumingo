@@ -144,6 +144,46 @@ async fn progress_shows_stored_rows_and_the_evidence_behind_an_attempt() {
 }
 
 #[tokio::test]
+async fn attempts_of_a_skill_are_listed_and_the_skill_must_be_known() {
+    let h = harness_with_unit().await;
+    let (_, attempt, _) = seed(&h).await;
+
+    let (status, list) = h.get_json("/api/attempts?skill=listening").await;
+    assert_eq!(status, 200);
+    assert_eq!(list["skill"], "listening");
+    assert_eq!(list["truncated"], false);
+    assert_eq!(list["attempts"].as_array().unwrap().len(), 1);
+    let row = &list["attempts"][0];
+    assert_eq!(row["id"], attempt);
+    assert_eq!(row["activity_id"], "act-1");
+    assert_eq!(row["activity_type"], "mcq");
+    assert_eq!(row["skill"], "listening");
+    assert_eq!(row["dimension"], "accuracy");
+    assert_eq!(row["normalized"], 1.0);
+    assert_eq!(row["status"], "scored");
+    assert_eq!(row["created_at"], "2026-10-05T08:00:00.000Z");
+
+    // A valid skill with no attempts is an empty list.
+    let (status, empty) = h.get_json("/api/attempts?skill=reading").await;
+    assert_eq!(status, 200);
+    assert_eq!(empty["attempts"], json!([]));
+
+    // Missing, empty and unknown skills are refused.
+    for uri in [
+        "/api/attempts",
+        "/api/attempts?skill=",
+        "/api/attempts?skill=grammar",
+    ] {
+        let (status, error) = h.get_json(uri).await;
+        assert_eq!(
+            (status, error["error"].as_str()),
+            (400, Some("invalid_input")),
+            "{uri}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn game_state_is_read_and_cosmetics_are_equipped_but_xp_cannot_be_claimed() {
     let h = harness(false).await;
     let (status, game) = h.get_json("/api/game").await;

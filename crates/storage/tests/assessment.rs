@@ -158,6 +158,112 @@ async fn skill_reads_are_windowed_and_ordered_by_time() {
     assert_eq!(responses, ["middle", "late"]);
 }
 
+/// `counted_for_skill`: the list behind one skill's estimate.
+#[tokio::test]
+async fn counted_attempts_of_a_skill_are_newest_first_and_only_mine() {
+    let (_dir, db) = temp_db().await;
+    let profile = make_profile(&db).await;
+    let other = make_profile(&db).await;
+    for (response, at) in [("late", 300), ("early", 100), ("middle", 200)] {
+        let row = storage::NewAttempt {
+            created_at: ts(at),
+            ..new_attempt(profile.id, response, "task")
+        };
+        db.attempts().insert(&row).await.expect("insert");
+    }
+    // Same instant: the newest row wins the tie.
+    for response in ["tie-first", "tie-second"] {
+        let row = storage::NewAttempt {
+            created_at: ts(300),
+            ..new_attempt(profile.id, response, "task")
+        };
+        db.attempts().insert(&row).await.expect("insert");
+    }
+    let other_skill = storage::NewAttempt {
+        skill: "listening".to_owned(),
+        ..new_attempt(profile.id, "other-skill", "task")
+    };
+    db.attempts().insert(&other_skill).await.expect("insert");
+    db.attempts()
+        .insert(&new_attempt(other.id, "theirs", "task"))
+        .await
+        .expect("insert");
+
+    let rows = db
+        .attempts()
+        .counted_for_skill(profile.id, "writing", 10)
+        .await
+        .expect("rows");
+    let responses: Vec<&str> = rows.iter().map(|a| a.response_id.as_str()).collect();
+    assert_eq!(
+        responses,
+        ["tie-second", "tie-first", "late", "middle", "early"]
+    );
+}
+
+#[tokio::test]
+async fn counted_attempts_leave_out_rows_that_do_not_count() {
+    let (_dir, db) = temp_db().await;
+    let profile = make_profile(&db).await;
+    db.attempts()
+        .insert(&new_attempt(profile.id, "counts", "task"))
+        .await
+        .expect("insert");
+    let off = storage::NewAttempt {
+        counts_toward_estimate: false,
+        ..new_attempt(profile.id, "off", "task")
+    };
+    db.attempts().insert(&off).await.expect("insert");
+    let free = storage::NewAttempt {
+        origin: storage::AttemptOrigin::FreeMode,
+        counts_toward_estimate: false,
+        ..new_attempt(profile.id, "free", "task")
+    };
+    db.attempts().insert(&free).await.expect("insert");
+
+    let rows = db
+        .attempts()
+        .counted_for_skill(profile.id, "writing", 10)
+        .await
+        .expect("rows");
+    let responses: Vec<&str> = rows.iter().map(|a| a.response_id.as_str()).collect();
+    assert_eq!(responses, ["counts"]);
+}
+
+#[tokio::test]
+async fn counted_attempts_are_cut_at_the_limit_and_an_unknown_skill_is_empty() {
+    let (_dir, db) = temp_db().await;
+    let profile = make_profile(&db).await;
+    for n in 0..3 {
+        let row = storage::NewAttempt {
+            created_at: ts(100 + n),
+            ..new_attempt(profile.id, &format!("resp-{n}"), "task")
+        };
+        db.attempts().insert(&row).await.expect("insert");
+    }
+    let two = db
+        .attempts()
+        .counted_for_skill(profile.id, "writing", 2)
+        .await
+        .expect("rows");
+    assert_eq!(two.len(), 2);
+    assert_eq!(two[0].response_id, "resp-2");
+    // The caller asking for one more than it shows sees the cut.
+    let three = db
+        .attempts()
+        .counted_for_skill(profile.id, "writing", 3)
+        .await
+        .expect("rows");
+    assert_eq!(three.len(), 3);
+
+    let none = db
+        .attempts()
+        .counted_for_skill(profile.id, "reading", 10)
+        .await
+        .expect("an unknown skill is not an error");
+    assert!(none.is_empty());
+}
+
 #[tokio::test]
 async fn a_pending_score_is_filled_in_later() {
     let (_dir, db) = temp_db().await;

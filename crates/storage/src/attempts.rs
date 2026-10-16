@@ -293,6 +293,31 @@ impl Attempts<'_> {
         rows.iter().map(Attempt::from_row).collect()
     }
 
+    /// The attempts of one skill that count toward its estimate, newest first
+    /// (`created_at DESC, id DESC`), at most `limit`.
+    ///
+    /// This is the list behind one skill's estimate: rows with
+    /// `counts_toward_estimate` set only, so free-mode work, rejected scores
+    /// and rows turned off for low confidence never appear.
+    pub async fn counted_for_skill(
+        &self,
+        profile_id: i64,
+        skill: &str,
+        limit: u32,
+    ) -> Result<Vec<Attempt>> {
+        let rows = sqlx::query(
+            "SELECT * FROM assessment_attempts \
+             WHERE profile_id = ?1 AND skill = ?2 AND counts_toward_estimate = 1 \
+             ORDER BY created_at DESC, id DESC LIMIT ?3",
+        )
+        .bind(profile_id)
+        .bind(skill)
+        .bind(i64::from(limit))
+        .fetch_all(self.db.reader())
+        .await?;
+        rows.iter().map(Attempt::from_row).collect()
+    }
+
     /// Writes the result of a score that was waiting for the provider.
     pub async fn update_score(&self, id: i64, update: &ScoreUpdate) -> Result<()> {
         let result = sqlx::query(
