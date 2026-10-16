@@ -2,8 +2,9 @@
 //! nothing derives a level, a score or a mastery value.
 
 use crate::api::{
-    AttemptEvidence, AttemptList, AttemptRowView, ErrorStatView, EvidenceView, ObjectiveMasteryView,
-    ProgressOverview, ReviewDueView, SessionSummary, SkillEstimateView, UnitProgressView,
+    AttemptEvidence, AttemptList, AttemptRowView, ErrorStatView, EvidenceView,
+    ObjectiveMasteryView, ProgressOverview, ReviewDueView, SessionSummary, SkillEstimateView,
+    UnitProgressView,
 };
 use crate::core::AppCore;
 use crate::data::ESTIMATE_SKILLS;

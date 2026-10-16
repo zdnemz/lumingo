@@ -332,10 +332,7 @@ async fn a_completed_unit_run_enrols_its_review_items_and_they_are_due() {
     // public API. The two productive answers wait for a provider: the scripted
     // model answers nothing, so they are stored as pending.
     let answers: Vec<(&str, ActivityAnswer)> = vec![
-        (
-            "a02-greeting-by-time",
-            ActivityAnswer::Choice { index: 1 },
-        ),
+        ("a02-greeting-by-time", ActivityAnswer::Choice { index: 1 }),
         (
             "a03-gap-am",
             ActivityAnswer::Gaps {
