@@ -6,7 +6,7 @@
 
 mod common;
 
-use app_core::api::{PayloadOutcomeView, ServerEvent, SessionKind, StopRequest};
+use app_core::api::{PayloadOutcomeView, ProbeFailureKind, ServerEvent, SessionKind, StopRequest};
 use common::fake_provider::FakeProvider;
 use common::sessions::{Setup, chat_request, rig};
 use serde_json::json;
@@ -199,6 +199,161 @@ async fn a_refused_key_shows_in_the_inspector_as_an_http_error_without_the_key()
         .stop_session(view.id, StopRequest { cancel: true })
         .await
         .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_request_that_never_got_an_answer_is_failed_with_no_status_and_no_key() {
+    // A loopback port with nothing listening: the connection is refused, with no
+    // answer at all. The port is picked and closed before the test binds it.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+    let r = rig(Setup {
+        llm: false,
+        ..Setup::default()
+    })
+    .await;
+    let saved = r
+        .core()
+        .save_provider(
+            serde_json::from_value(json!({
+                "name": "closed",
+                "protocol": "openai_chat",
+                "base_url": format!("http://127.0.0.1:{port}"),
+                "model": "gpt-test",
+                "api_key": KEY,
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let report = r.core().test_provider(saved.id).await.unwrap();
+    assert!(!report.ok, "{report:?}");
+    assert_eq!(
+        report.failure.as_ref().unwrap().kind,
+        ProbeFailureKind::Network,
+        "{report:?}"
+    );
+    let inspection = r.core().inspector();
+    assert!(
+        !inspection.entries.is_empty(),
+        "the attempts that never got an answer are shown"
+    );
+    for entry in &inspection.entries {
+        assert_eq!(entry.outcome, PayloadOutcomeView::Failed, "{entry:#?}");
+        assert_eq!(entry.status, None, "{entry:#?}");
+        assert!(entry.response_body.is_none(), "{entry:#?}");
+    }
+    let said = serde_json::to_string(&json!({"probe": report, "inspector": inspection})).unwrap();
+    assert!(!said.contains(KEY) && !said.contains(MIDDLE), "{said}");
+    assert!(!said.to_ascii_lowercase().contains("bearer"), "{said}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_probe_shows_in_the_inspector_as_an_http_error_without_the_key() {
+    let provider = FakeProvider::start("a-different-key").await;
+    let r = rig(Setup {
+        llm: false,
+        ..Setup::default()
+    })
+    .await;
+    let saved = r
+        .core()
+        .save_provider(
+            serde_json::from_value(json!({
+                "name": "fake",
+                "protocol": "openai_chat",
+                "base_url": provider.base_url,
+                "model": "gpt-test",
+                "api_key": KEY,
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let report = r.core().test_provider(saved.id).await.unwrap();
+    assert!(!report.ok, "{report:?}");
+    assert_eq!(
+        report.failure.as_ref().unwrap().kind,
+        ProbeFailureKind::Auth,
+        "{report:?}"
+    );
+    let inspection = r.core().inspector();
+    let refused = inspection
+        .entries
+        .iter()
+        .find(|e| e.status == Some(401))
+        .expect("the refused probe is shown");
+    assert_eq!(refused.outcome, PayloadOutcomeView::HttpError);
+    assert!(
+        refused
+            .response_body
+            .as_deref()
+            .unwrap()
+            .contains("Incorrect API key provided."),
+        "the entry holds the provider's own error text: {refused:#?}"
+    );
+    let said = serde_json::to_string(&json!({"probe": report, "inspector": inspection})).unwrap();
+    assert!(!said.contains(KEY) && !said.contains(MIDDLE), "{said}");
+    assert!(!said.to_ascii_lowercase().contains("bearer"), "{said}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_export_taken_over_a_full_inspector_contains_none_of_its_entries() {
+    let provider = FakeProvider::start(KEY).await;
+    let r = rig(Setup {
+        llm: false,
+        ..Setup::default()
+    })
+    .await;
+    let saved = r
+        .core()
+        .save_provider(
+            serde_json::from_value(json!({
+                "name": "fake",
+                "protocol": "openai_chat",
+                "base_url": provider.base_url,
+                "model": "gpt-test",
+                "api_key": KEY,
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    // The probe fills the inspector. Its own answer carries the canary that only
+    // a provider honouring the schema can produce (`schema_received`), so that
+    // word proves the held entry is the inspector's and nothing else.
+    let report = r.core().test_provider(saved.id).await.unwrap();
+    assert!(report.ok, "{report:?}");
+    let inspection = r.core().inspector();
+    assert!(
+        !inspection.entries.is_empty(),
+        "the probe left entries behind"
+    );
+    let held = serde_json::to_string(&inspection).unwrap();
+    assert!(
+        held.contains("schema_received"),
+        "the inspector holds the provider's own answer: {held}"
+    );
+
+    let exported = serde_json::to_string(&r.core().export().await.unwrap()).unwrap();
+    assert!(
+        !exported.contains("schema_received"),
+        "the inspector is in memory and is not exported"
+    );
+    for entry in &inspection.entries {
+        assert!(
+            !exported.contains(&entry.endpoint),
+            "{} is in the export",
+            entry.endpoint
+        );
+    }
+    assert!(
+        !exported.contains(KEY) && !exported.contains(MIDDLE),
+        "{exported}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

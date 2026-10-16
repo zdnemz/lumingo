@@ -12,8 +12,9 @@ use common::{
     Reply, TEST_KEY, anthropic_rig, client_for, collect, openai_rig, sample, text_request,
 };
 use llm_client::{
-    Capabilities, ChatMessage, Contract, LlmClient, LlmError, ProfileSource, Protocol,
-    ProviderClient, ProviderProfile, StructuredRequest,
+    Capabilities, ChatMessage, CompletionRequest, Contract, Format, LlmClient, LlmError,
+    PayloadLog, ProfileSource, Protocol, ProtocolAdapter, ProviderClient, ProviderProfile,
+    StructuredRequest,
 };
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::fmt::MakeWriter;
@@ -244,4 +245,83 @@ async fn no_log_line_error_or_debug_print_contains_the_key() {
     );
     assert_clean("captured tracing output", &logs);
     assert!(shown.len() > 15);
+}
+
+/// Over one protocol: one answer whose text quotes the key the learner pasted
+/// into the request, and one refusal whose body quotes it too. Both bodies are
+/// recorded by the payload log, so the caller can scan what was kept.
+async fn one_answering_call_and_one_refusal(
+    adapter: &impl ProtocolAdapter,
+    server: &common::TestServer,
+    answer: Reply,
+) {
+    let messages = [ChatMessage::user(format!("my key is {TEST_KEY}"))];
+    let request = CompletionRequest {
+        system: "s",
+        messages: &messages,
+        max_tokens: 50,
+        temperature: None,
+        format: Format::Plain,
+    };
+    server.enqueue(answer);
+    adapter
+        .complete(&request, &CancellationToken::new())
+        .await
+        .expect("the echoing answer arrives");
+    server.enqueue(echo_error(401, "auth"));
+    let refused = adapter.complete(&request, &CancellationToken::new()).await;
+    assert!(
+        matches!(refused, Err(LlmError::Auth { status: 401 })),
+        "{refused:?}"
+    );
+}
+
+// The payload log reads back the request and the response bodies of both
+// protocols, so the scan covers what the inspector would show.
+#[tokio::test(flavor = "current_thread")]
+async fn both_protocols_request_and_response_bodies_hold_no_key() {
+    let openai_log = PayloadLog::new(4);
+    let (rig, adapter) = openai_rig().await;
+    let adapter = adapter.with_payload_log(openai_log.clone());
+    one_answering_call_and_one_refusal(
+        &adapter,
+        &rig.server,
+        common::openai_reply(&format!("you wrote {TEST_KEY}")),
+    )
+    .await;
+
+    let anthropic_log = PayloadLog::new(4);
+    let (arig, aadapter) = anthropic_rig().await;
+    let aadapter = aadapter.with_payload_log(anthropic_log.clone());
+    one_answering_call_and_one_refusal(
+        &aadapter,
+        &arig.server,
+        common::anthropic_text_reply(&format!("you wrote {TEST_KEY}")),
+    )
+    .await;
+
+    for (protocol, log) in [
+        ("openai_chat", &openai_log),
+        ("anthropic_messages", &anthropic_log),
+    ] {
+        let snap = log.snapshot();
+        assert_eq!(snap.entries.len(), 2, "{protocol}: an answer and a refusal");
+        let shown = format!("{snap:?} {}", serde_json::to_string(&snap).expect("json"));
+        assert_clean(&format!("{protocol} request and response bodies"), &shown);
+        assert!(
+            snap.entries[0].request_body.contains("my key is"),
+            "{protocol}: the request was recorded: {shown}"
+        );
+        assert!(
+            snap.entries[0].request_body.contains("[redacted]"),
+            "{protocol}: the pasted key is scrubbed from the request: {shown}"
+        );
+        assert!(
+            snap.entries[1]
+                .response_body
+                .as_deref()
+                .is_some_and(|b| b.contains("[redacted]")),
+            "{protocol}: the echoed key is scrubbed from the refusal: {shown}"
+        );
+    }
 }
