@@ -39,6 +39,23 @@ describe("parseServerEvent", () => {
     for (const event of events) expect(parseServerEvent(JSON.stringify(event))).toEqual(event);
   });
 
+  it("accepts a download progress frame, which the models screen reads", () => {
+    const event = {
+      type: "DownloadProgress",
+      seq: 7,
+      model_id: "sense-voice",
+      file: "sense-voice.onnx",
+      file_index: 0,
+      file_count: 2,
+      bytes_done: 1024,
+      bytes_total: 4096,
+      state: "running",
+      message: null,
+    } satisfies ServerEvent;
+
+    expect(parseServerEvent(JSON.stringify(event))).toEqual(event);
+  });
+
   it("ignores anything else", () => {
     expect(parseServerEvent("not json")).toBeNull();
     expect(parseServerEvent("42")).toBeNull();

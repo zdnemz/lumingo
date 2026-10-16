@@ -6,6 +6,8 @@ import type { ApiClient, EventStreamHandlers } from "@/api/client";
 import { Providers } from "@/components/Providers";
 import type { ActivityBody } from "@/generated/ActivityBody";
 import type { ActivityPresentation } from "@/generated/ActivityPresentation";
+import type { AttemptList } from "@/generated/AttemptList";
+import type { AttemptRowView } from "@/generated/AttemptRowView";
 import type { DiagnosticsReport } from "@/generated/DiagnosticsReport";
 import type { NextActivity } from "@/generated/NextActivity";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
@@ -183,6 +185,25 @@ export function progressOf(units: ProgressOverview["units"], sessions: SessionSu
   return { ...progressWith(sessions), units };
 }
 
+/** One counted attempt of a skill, with every field spelled out so a test only overrides what it cares about. */
+export function attemptRow(patch: Partial<AttemptRowView> & { id: number }): AttemptRowView {
+  return {
+    activity_id: `a1-u01-a${patch.id}`,
+    activity_type: "mcq",
+    skill: "reading",
+    dimension: "comprehension",
+    normalized: 1,
+    status: "scored",
+    created_at: "2026-10-05T09:00:00Z",
+    ...patch,
+  };
+}
+
+/** The answer of `listAttempts`: a skill's rows, in the order they are given. */
+export function attemptList(rows: AttemptRowView[], truncated = false): AttemptList {
+  return { skill: rows[0]?.skill ?? "reading", attempts: rows, truncated };
+}
+
 /** The presentation of one activity, without the unit around it. */
 export function presented(id: string, body: ActivityBody, patch: Partial<ActivityPresentation> = {}): ActivityPresentation {
   return {
@@ -256,7 +277,12 @@ export function fakeApi(
     getSettings: notStubbed("getSettings"),
     updateSettings: notStubbed("updateSettings"),
     getDiagnostics: notStubbed("getDiagnostics"),
+    getInspector: notStubbed("getInspector"),
+    listModels: notStubbed("listModels"),
+    downloadModel: notStubbed("downloadModel"),
+    cancelModel: notStubbed("cancelModel"),
     getProgress: notStubbed("getProgress"),
+    listAttempts: notStubbed("listAttempts"),
     listUnits: notStubbed("listUnits"),
     getUnit: notStubbed("getUnit"),
     getGame: notStubbed("getGame"),
