@@ -1,4 +1,4 @@
-import { test } from "@e2e-dev/web";
+import { afterEach, test, type Browser } from "@e2e-dev/web";
 import { expect, type Locator, type Screen } from "e2e";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -166,6 +166,46 @@ async function tapAt(screen: Screen, locator: Locator): Promise<void> {
 }
 
 /**
+ * The id of the session the server is holding, read through the page's own state
+ * route. `null` means the server has no session, which is the state every spec
+ * has to leave it in: the server runs one session at a time and refuses a second
+ * start with `Conflict`.
+ */
+async function activeSessionId(browser: Browser): Promise<number | null> {
+  return (await browser.evaluate(async () => {
+    const state = await (await fetch("/api/state")).json();
+    return state.active_session === null ? null : state.active_session.id;
+  })) as number | null;
+}
+
+/**
+ * Whatever this spec did, the next one must find the server's single session
+ * slot free. The walk below settles its own run at the checkpoint, and this is
+ * the belt to that brace: an assertion that fails half way through the walk
+ * must not leave a session running for the reading or conversation spec to trip
+ * over. A page that never reached the app — a failure on the very first step —
+ * has no origin to ask, and then there is nothing this spec could have started
+ * either.
+ */
+afterEach(async ({ browser }) => {
+  try {
+    const running = await activeSessionId(browser);
+    if (running === null) return;
+    // The status is returned rather than dropped: `browser.evaluate` carries
+    // JSON-safe values across, and a `void` is not one.
+    await browser.evaluate(async (sessionId) => {
+      const response = await fetch(`/api/sessions/${sessionId}/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      return response.status;
+    }, running);
+  } catch {
+    // The page never reached the app, so it holds no session of this spec's.
+  }
+});
+
+/**
  * Answers the activity on screen with the answer the unit file authored, using
  * the control that body is drawn with. The run only offers bodies this screen
  * can answer, so anything else is a body this spec does not know and it fails
@@ -248,9 +288,13 @@ test("the example unit is played to its checkpoint in a browser", { timeout: 240
   await expect(unitLink).toHaveAttribute("href", `/unit/?id=${unit.id}`);
 
   // 2. The player. It mounts no first-run gate, so a learner who opened a unit
-  //    gets the lesson even with no provider set up.
+  //    gets the lesson even with no provider set up. The heading is drawn from
+  //    the unit alone; the run itself starts a session and only then reports the
+  //    first activity and the server's unavailable list, so wait for the run's
+  //    own progress line before reading what the run reported.
   await app.open(`/unit/?id=${unit.id}`);
   await expect(screen.getByRole("heading", { level: 1, name: unit.title.en })).toBeVisible();
+  await expect(screen.getByText(TEXT.runProgress)).toBeVisible({ timeout: 15_000 });
 
   // 3. What the run will not do is the server's own list, with the server's own
   //    sentences: every entry names an activity of this unit and gives a reason.
