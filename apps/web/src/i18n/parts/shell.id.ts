@@ -70,13 +70,11 @@ export const shellId = {
   "unavailable.title": "Belum tersedia di versi ini",
   "unavailable.body": "{feature}: belum menjadi bagian dari versi program ini, jadi belum ada kontrolnya di sini.",
   "unavailable.noui": "{feature}: versi ini sudah memuatnya, tetapi layar ini belum punya kontrol untuk itu.",
-  "unavailable.inspector": "Pemeriksa muatan belum tersedia di versi ini. Program belum punya jalurnya.",
   "feature.sessions": "Sesi belajar",
   "feature.activities": "Aktivitas latihan",
   "feature.free_modes": "Percakapan, bacaan dan tulisan bebas",
   "feature.speech": "Suara: mikrofon, pengeras suara dan suara tutor",
   "feature.models": "Unduhan model suara",
-  "feature.inspector": "Pemeriksa muatan",
 
   "hardware.ram": "Memori",
   "hardware.cores": "Prosesor logis",

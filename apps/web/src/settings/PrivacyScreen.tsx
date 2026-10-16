@@ -4,7 +4,6 @@ import { useCallback, useState } from "react";
 import { useApi } from "@/api/ApiProvider";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PrivacyStatements } from "@/components/PrivacyStatements";
-import { UnavailableNote } from "@/components/UnavailableNote";
 import type { DiagnosticsReport } from "@/generated/DiagnosticsReport";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
 import type { SessionSummary } from "@/generated/SessionSummary";
@@ -15,6 +14,7 @@ import { Button } from "@/ui/Button";
 import { Panel } from "@/ui/Panel";
 import { StatusBanner } from "@/ui/StatusBanner";
 import { saveTextFile } from "./download";
+import { InspectorPanel } from "./InspectorPanel";
 import { TypedConfirm } from "./TypedConfirm";
 
 /** The privacy page: what leaves the computer, where the data is, export, and the two deletes. */
@@ -38,7 +38,7 @@ export function PrivacyScreen() {
         <DeleteEverything />
       </Panel>
       <Panel title={t("data.inspector.title")}>
-        <UnavailableNote feature="inspector" />
+        <InspectorPanel />
       </Panel>
     </div>
   );

@@ -21,11 +21,12 @@ function routes(overrides: Partial<ApiClient> = {}): Partial<ApiClient> {
     listProviders: () => Promise.resolve(providerList([FILE_PROVIDER])),
     getSettings: () => Promise.resolve(SETTINGS),
     updateSettings: vi.fn((settings: Settings) => Promise.resolve(settings)),
+    listModels: () => Promise.resolve({ models: [] }),
     ...overrides,
   };
 }
 
-async function open(overrides: Partial<ApiClient> = {}, unavailable: typeof SNAPSHOT.unavailable = ["speech", "models"]) {
+async function open(overrides: Partial<ApiClient> = {}, unavailable: typeof SNAPSHOT.unavailable = ["speech"]) {
   const api = fakeApi(undefined, routes(overrides));
   renderScreen(<GeneralSettings />, api);
   await connect(api, { ...SNAPSHOT, unavailable });
@@ -47,13 +48,17 @@ describe("GeneralSettings", () => {
     expect(await screen.findByLabelText("What the tutor calls you")).toHaveValue("Sari");
   });
 
-  it("says audio devices, the model manager and pronunciation timing are not available, with no fake control", async () => {
+  it("keeps the honest audio-devices note, and shows the real model, timing and recordings controls", async () => {
     await open();
+    // Audio devices still have no route in the program, so that part still says so.
     const notes = await screen.findAllByRole("note");
-    expect(notes).toHaveLength(3);
-    for (const note of notes) expect(note).toHaveTextContent("Not available in this build");
-    expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.queryByRole("switch", { name: /recording/i })).toBeNull();
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toHaveTextContent("Not available in this build");
+    expect(notes[0]).toHaveTextContent("Speech: microphone, speakers and voices");
+    // The parts that do have a route have real controls, not notes.
+    expect(await screen.findByText("The model list is empty.")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Pronunciation timing" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Recordings" })).toBeInTheDocument();
   });
 
   it("changes the language at once and saves it with the program", async () => {

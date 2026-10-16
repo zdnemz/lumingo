@@ -65,11 +65,6 @@ describe("UnavailableNote", () => {
     await connect(api, { ...SNAPSHOT, unavailable: [] });
     expect(await screen.findByRole("note")).toHaveTextContent("has no control for it yet");
   });
-
-  it("always says the inspector is not available, because the program has no route for it", async () => {
-    renderScreen(<UnavailableNote feature="inspector" />, fakeApi());
-    expect(await screen.findByRole("note")).toHaveTextContent("payload inspector is not available");
-  });
 });
 
 describe("ConnectionBanner", () => {

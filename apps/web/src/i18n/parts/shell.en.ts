@@ -70,13 +70,11 @@ export const shellEn = {
   "unavailable.title": "Not available in this build",
   "unavailable.body": "{feature}: not part of this version of the program yet, so there is no control for it here.",
   "unavailable.noui": "{feature}: this build includes it, but this screen has no control for it yet.",
-  "unavailable.inspector": "The payload inspector is not available in this build. The program has no route for it yet.",
   "feature.sessions": "Learning sessions",
   "feature.activities": "Practice activities",
   "feature.free_modes": "Free conversation, reading and writing",
   "feature.speech": "Speech: microphone, speakers and voices",
   "feature.models": "Speech model downloads",
-  "feature.inspector": "The payload inspector",
 
   "hardware.ram": "Memory",
   "hardware.cores": "Logical processors",
