@@ -137,6 +137,12 @@ const ALLOWED: readonly Allowed[] = [
   { source: "ASSESSMENT_SPEC 9.3: confidence word medium", key: "skill.confidence.medium", en: "medium", id: "sedang" },
   { source: "ASSESSMENT_SPEC 9.3: confidence word high", key: "skill.confidence.high", en: "high", id: "tinggi" },
   { source: "ASSESSMENT_SPEC 12: a list of the attempts and quotes behind an estimate", key: "skill.evidence", en: "See the work behind this estimate", id: "Lihat hasil kerja di balik perkiraan ini" },
+  {
+    source: 'ASSESSMENT_SPEC 12: "A list of the attempts and quotes behind any estimate" (the list itself)',
+    key: "progress.drill.attempts.intro",
+    en: "Every counted attempt behind this estimate",
+    id: "Setiap percobaan yang dihitung di balik perkiraan ini",
+  },
   { source: 'PRD 12.4: "Your voice stays on your device."', key: "privacy.voice", en: "Your voice stays on your device.", id: "Suaramu tetap di perangkatmu." },
   { source: 'PRD 12.4: "Text is sent to the AI provider you choose."', key: "privacy.text", en: "Text is sent to the AI provider you choose.", id: "Teks dikirim ke penyedia AI yang kamu pilih." },
   {
@@ -144,6 +150,12 @@ const ALLOWED: readonly Allowed[] = [
     key: "privacy.key",
     en: "Your API key is saved in plain text in a file on this computer",
     id: "Kunci API-mu disimpan sebagai teks biasa di sebuah berkas di komputer ini",
+  },
+  {
+    source: 'PRD 12.4: "Raw audio is not kept unless you switch on recordings in Settings."',
+    key: "privacy.audio",
+    en: "Raw audio is not kept unless you switch on recordings in Settings.",
+    id: "Audio mentah tidak disimpan kecuali kamu menyalakan rekaman di Pengaturan.",
   },
   { source: 'PRD 12.4: "Runs on your own computer and opens in your browser."', key: "privacy.local", en: "Runs on your own computer and opens in your browser.", id: "Berjalan di komputermu sendiri dan terbuka di peramban." },
 ];
