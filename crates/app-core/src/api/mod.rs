@@ -59,9 +59,10 @@ pub use models::{
     ModelList, ModelRoleView, ModelView,
 };
 pub use progress::{
-    AttemptEvidence, ErrorStatView, EstimateLevel, EstimateStatus, EvidenceKind, EvidenceView,
-    ObjectiveMasteryView, ProgressOverview, ReviewDueView, ReviewItemKind, SessionKind,
-    SessionStatus, SessionSummary, SkillEstimateView, UnitProgressView, UnitStatus,
+    AttemptEvidence, AttemptList, AttemptRowView, AttemptStatusView, ErrorStatView, EstimateLevel,
+    EstimateStatus, EvidenceKind, EvidenceView, ObjectiveMasteryView, ProgressOverview,
+    ReviewDueView, ReviewItemKind, SessionKind, SessionStatus, SessionSummary, SkillEstimateView,
+    UnitProgressView, UnitStatus,
 };
 pub use providers::{
     ProbeFailure, ProbeFailureKind, ProbeReport, ProviderCapabilities, ProviderInfo, ProviderList,

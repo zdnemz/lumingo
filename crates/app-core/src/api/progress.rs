@@ -85,6 +85,17 @@ api_enum! {
     }
 }
 
+api_enum! {
+    /// State of one counted attempt.
+    AttemptStatusView <=> storage::AttemptStatus {
+        Scored => "scored",
+        PendingLlm => "pending_llm",
+        Insufficient => "insufficient",
+        NeedsReview => "needs_review",
+        Rejected => "rejected",
+    }
+}
+
 /// A unit the learner has a progress row for. Units without a row are not here.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -189,4 +200,30 @@ pub struct AttemptEvidence {
     pub skill: String,
     pub dimension: String,
     pub evidence: Vec<EvidenceView>,
+}
+
+/// One counted attempt of a skill.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AttemptRowView {
+    pub id: i64,
+    pub activity_id: String,
+    pub activity_type: String,
+    pub skill: String,
+    pub dimension: String,
+    /// Score scaled to 0..=1, absent while no score is known.
+    pub normalized: Option<f64>,
+    pub status: AttemptStatusView,
+    pub created_at: String,
+}
+
+/// `GET /api/attempts?skill=...`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AttemptList {
+    pub skill: String,
+    /// Newest first, at most 50.
+    pub attempts: Vec<AttemptRowView>,
+    /// True when more than 50 attempts are counted.
+    pub truncated: bool,
 }

@@ -2,16 +2,19 @@
 //! nothing derives a level, a score or a mastery value.
 
 use crate::api::{
-    AttemptEvidence, ErrorStatView, EvidenceView, ObjectiveMasteryView, ProgressOverview,
-    ReviewDueView, SessionSummary, SkillEstimateView, UnitProgressView,
+    AttemptEvidence, AttemptList, AttemptRowView, ErrorStatView, EvidenceView, ObjectiveMasteryView,
+    ProgressOverview, ReviewDueView, SessionSummary, SkillEstimateView, UnitProgressView,
 };
 use crate::core::AppCore;
+use crate::data::ESTIMATE_SKILLS;
 use crate::error::{CoreError, CoreResult};
 
 /// How many review items the overview lists.
 const REVIEW_DUE_LIMIT: u32 = 50;
 /// How many recent sessions the overview lists.
 const RECENT_SESSIONS: u32 = 50;
+/// How many counted attempts one skill's list shows.
+const ATTEMPT_LIMIT: u32 = 50;
 
 impl AppCore {
     /// The learner's progress: units, mastery, error counts, due reviews, the
@@ -114,6 +117,43 @@ impl AppCore {
             reviews_due_truncated,
             estimates,
             recent_sessions,
+        })
+    }
+
+    /// The attempts that count toward one skill's estimate, newest first, at
+    /// most 50. An unknown skill is refused; a valid skill with no attempts is
+    /// an empty list.
+    pub async fn skill_attempts(&self, skill: &str) -> CoreResult<AttemptList> {
+        if !ESTIMATE_SKILLS.contains(&skill) {
+            return Err(CoreError::InvalidInput(
+                "the skill is not one of listening, speaking, reading or writing".to_owned(),
+            ));
+        }
+        // One more than the limit tells whether the list was cut.
+        let mut rows = self
+            .db
+            .attempts()
+            .counted_for_skill(self.profile_id(), skill, ATTEMPT_LIMIT + 1)
+            .await?;
+        let truncated = rows.len() > usize::try_from(ATTEMPT_LIMIT).unwrap_or(0);
+        rows.truncate(usize::try_from(ATTEMPT_LIMIT).unwrap_or(0));
+        let attempts = rows
+            .into_iter()
+            .map(|row| AttemptRowView {
+                id: row.id,
+                activity_id: row.activity_id,
+                activity_type: row.activity_type,
+                skill: row.skill,
+                dimension: row.dimension,
+                normalized: row.normalized,
+                status: row.status.into(),
+                created_at: row.created_at.to_string(),
+            })
+            .collect();
+        Ok(AttemptList {
+            skill: skill.to_owned(),
+            attempts,
+            truncated,
         })
     }
 
