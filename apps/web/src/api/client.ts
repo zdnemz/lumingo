@@ -1,15 +1,21 @@
 // The only place the UI talks to the server. Everything else gets an
 // `ApiClient`, so screens can be tested against a fake one.
 
+import type { Ack } from "@/generated/Ack";
 import type { ActiveSessionView } from "@/generated/ActiveSessionView";
 import type { AnswerReadingRequest } from "@/generated/AnswerReadingRequest";
 import type { AttemptEvidence } from "@/generated/AttemptEvidence";
+import type { AttemptList } from "@/generated/AttemptList";
 import type { DeleteDataResult } from "@/generated/DeleteDataResult";
 import type { DeleteSessionResult } from "@/generated/DeleteSessionResult";
 import type { DiagnosticsReport } from "@/generated/DiagnosticsReport";
+import type { DownloadRequest } from "@/generated/DownloadRequest";
+import type { DownloadStarted } from "@/generated/DownloadStarted";
 import type { DraftAccepted } from "@/generated/DraftAccepted";
 import type { GameState } from "@/generated/GameState";
 import type { GenerateReadingRequest } from "@/generated/GenerateReadingRequest";
+import type { InspectorReport } from "@/generated/InspectorReport";
+import type { ModelList } from "@/generated/ModelList";
 import type { NextActivity } from "@/generated/NextActivity";
 import type { ProbeReport } from "@/generated/ProbeReport";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
@@ -91,8 +97,18 @@ export interface ApiClient {
   updateSettings: (settings: Settings) => Promise<Settings>;
   /** `GET /api/diagnostics` */
   getDiagnostics: (signal?: AbortSignal) => Promise<DiagnosticsReport>;
+  /** `GET /api/inspector` */
+  getInspector: (signal?: AbortSignal) => Promise<InspectorReport>;
+  /** `GET /api/models` */
+  listModels: (signal?: AbortSignal) => Promise<ModelList>;
+  /** `POST /api/models/{id}/download`. Progress arrives as `DownloadProgress` events. */
+  downloadModel: (id: string, request: DownloadRequest) => Promise<DownloadStarted>;
+  /** `POST /api/models/{id}/cancel` */
+  cancelModel: (id: string) => Promise<Ack>;
   /** `GET /api/progress` */
   getProgress: (signal?: AbortSignal) => Promise<ProgressOverview>;
+  /** `GET /api/attempts?skill=...`. One skill's counted attempts, newest first, at most 50. */
+  listAttempts: (skill: string, signal?: AbortSignal) => Promise<AttemptList>;
   /** `GET /api/units` */
   listUnits: (signal?: AbortSignal) => Promise<UnitList>;
   /** `GET /api/units/{id}` */
@@ -241,7 +257,14 @@ export function createApiClient(options: ClientOptions = {}): ApiClient {
     getSettings: (signal) => json<Settings>("GET", "/api/settings", { signal }),
     updateSettings: (settings) => json<Settings>("PUT", "/api/settings", { body: settings }),
     getDiagnostics: (signal) => json<DiagnosticsReport>("GET", "/api/diagnostics", { signal }),
+    getInspector: (signal) => json<InspectorReport>("GET", "/api/inspector", { signal }),
+    listModels: (signal) => json<ModelList>("GET", "/api/models", { signal }),
+    downloadModel: (id, request) =>
+      json<DownloadStarted>("POST", `/api/models/${encodeURIComponent(id)}/download`, { body: request }),
+    cancelModel: (id) => json<Ack>("POST", `/api/models/${encodeURIComponent(id)}/cancel`),
     getProgress: (signal) => json<ProgressOverview>("GET", "/api/progress", { signal }),
+    listAttempts: (skill, signal) =>
+      json<AttemptList>("GET", `/api/attempts?skill=${encodeURIComponent(skill)}`, { signal }),
     listUnits: (signal) => json<UnitList>("GET", "/api/units", { signal }),
     getUnit: (id, signal) => json<UnitDetail>("GET", `/api/units/${encodeURIComponent(id)}`, { signal }),
     getGame: (signal) => json<GameState>("GET", "/api/game", { signal }),

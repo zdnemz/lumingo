@@ -62,7 +62,12 @@ describe("typed client requests", () => {
       keep_recordings: false,
     });
     await api.getDiagnostics();
+    await api.getInspector();
+    await api.listModels();
+    await api.downloadModel("sense-voice", { accept_licence: true, license: "MIT", license_url: "https://example.test/mit" });
+    await api.cancelModel("sense-voice");
     await api.getProgress();
+    await api.listAttempts("reading");
     await api.listUnits();
     await api.getUnit("a1-u01");
     await api.getGame();
@@ -97,7 +102,12 @@ describe("typed client requests", () => {
       "GET /api/settings",
       "PUT /api/settings",
       "GET /api/diagnostics",
+      "GET /api/inspector",
+      "GET /api/models",
+      "POST /api/models/sense-voice/download",
+      "POST /api/models/sense-voice/cancel",
       "GET /api/progress",
+      "GET /api/attempts?skill=reading",
       "GET /api/units",
       "GET /api/units/a1-u01",
       "GET /api/game",
@@ -130,6 +140,26 @@ describe("typed client requests", () => {
 
     await api.stopSession(7, { cancel: true });
     expect(seen[1]?.body).toBe(JSON.stringify({ cancel: true }));
+  });
+
+  it("sends the licence the learner accepted with a download, and no body with a cancel", async () => {
+    stubFetch(() => answer({}));
+    const api = createApiClient({ base: "" });
+
+    await api.listModels();
+    expect(seen[0]?.body).toBeUndefined();
+
+    await api.downloadModel("sense-voice", {
+      accept_licence: true,
+      license: "MIT",
+      license_url: "https://example.test/mit",
+    });
+    expect(seen[1]?.body).toBe(
+      JSON.stringify({ accept_licence: true, license: "MIT", license_url: "https://example.test/mit" }),
+    );
+
+    await api.cancelModel("sense-voice");
+    expect(seen[2]?.body).toBeUndefined();
   });
 
   it("reads the error code and the details sentence of a refused request", async () => {
