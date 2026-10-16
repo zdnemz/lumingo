@@ -35,6 +35,7 @@ async fn everything_readable(h: &Harness) -> String {
         "/api/diagnostics",
         "/api/export",
         "/api/units",
+        "/api/attempts?skill=reading",
     ] {
         let (_, body) = h.get_json(uri).await;
         all.push_str(&body.to_string());

@@ -648,6 +648,7 @@ async fn the_key_is_in_no_answer_no_event_and_no_inspector_entry() {
         "/api/progress",
         "/api/settings",
         "/api/units",
+        "/api/attempts?skill=reading",
     ] {
         let (_, body) = h.get_json(uri).await;
         said.push_str(&body.to_string());
