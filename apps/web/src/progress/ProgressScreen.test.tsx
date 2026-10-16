@@ -5,8 +5,8 @@ import { ApiError, type ApiClient } from "@/api/client";
 import type { AttemptEvidence } from "@/generated/AttemptEvidence";
 import type { GameState } from "@/generated/GameState";
 import type { ProgressOverview } from "@/generated/ProgressOverview";
-import { fakeApi, renderApp, resetBrowserState, setSystem, visibleStrings } from "@/test/utils";
-import { EMPTY_PROGRESS, EVIDENCE, FREE_KINDS, FULL_PROGRESS, GAME, UNITS, estimateOf } from "./fixtures";
+import { attemptList, attemptRow, fakeApi, renderApp, resetBrowserState, setSystem, visibleStrings } from "@/test/utils";
+import { ATTEMPTS, ATTEMPT_ROWS, EMPTY_PROGRESS, EVIDENCE, FREE_KINDS, FULL_PROGRESS, GAME, UNITS, estimateOf } from "./fixtures";
 import { ProgressScreen } from "./ProgressScreen";
 
 beforeEach(() => {
@@ -20,6 +20,7 @@ function routes(overrides: Partial<ApiClient> = {}): Partial<ApiClient> {
     listUnits: () => Promise.resolve(UNITS),
     getGame: () => Promise.resolve(GAME),
     getAttemptEvidence: () => Promise.resolve(EVIDENCE),
+    listAttempts: () => Promise.resolve(attemptList([])),
     ...overrides,
   };
 }
@@ -36,6 +37,13 @@ function profileRow(name: string): HTMLElement {
     .getAllByRole("listitem")
     .find((item) => within(item).queryByRole("heading", { name }) !== null);
   if (!row) throw new Error(`no profile row for ${name}`);
+  return row;
+}
+
+/** One list row a test is sure is there, without an unchecked index. */
+function rowAt(rows: HTMLElement[], index: number): HTMLElement {
+  const row = rows[index];
+  if (!row) throw new Error(`no row at ${index}`);
   return row;
 }
 
@@ -222,6 +230,37 @@ describe("pronunciation, history, errors, reviews, units", () => {
     expect(within(panel).getByText("More than 50 items are due. The 50 most overdue are shown.")).toBeInTheDocument();
   });
 
+  it("leaves the review queue's cut-off line out when the server sent every item", async () => {
+    await open({ getProgress: () => Promise.resolve({ ...FULL_PROGRESS, reviews_due_truncated: false }) });
+    const panel = (await screen.findByRole("heading", { name: "Review queue" })).closest("section") as HTMLElement;
+    expect(await within(panel).findByText("a1-u01/v3")).toBeInTheDocument();
+    expect(within(panel).queryByText("More than 50 items are due. The 50 most overdue are shown.")).toBeNull();
+  });
+
+  it("draws the queue from the server's own rows, with unit ids when the unit list fails", async () => {
+    const due: ProgressOverview["reviews_due"] = [
+      { item_kind: "grammar", item_ref: "a1-u02/g-be-i-am", due_at: "2026-10-04T08:00:00Z", interval_days: 7, reps: 2, lapses: 0 },
+      { item_kind: "vocab", item_ref: "a1-u02/v-from", due_at: "2026-10-05T08:00:00Z", interval_days: 1, reps: 1, lapses: 3 },
+    ];
+    await open({
+      getProgress: () => Promise.resolve({ ...EMPTY_PROGRESS, reviews_due: due, reviews_due_truncated: false }),
+      listUnits: () => Promise.reject(new TypeError("network")),
+    });
+    const panel = (await screen.findByRole("heading", { name: "Review queue" })).closest("section") as HTMLElement;
+    const rows = await within(panel).findAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    // The server's own rows, in its own order, with its own numbers.
+    expect(within(rowAt(rows, 0)).getByText("a1-u02/g-be-i-am")).toBeInTheDocument();
+    expect(within(rowAt(rows, 0)).getByText("Grammar")).toBeInTheDocument();
+    expect(within(rowAt(rows, 0)).getByText("7")).toBeInTheDocument();
+    expect(within(rowAt(rows, 0)).getByText("2")).toBeInTheDocument();
+    expect(within(rowAt(rows, 1)).getByText("a1-u02/v-from")).toBeInTheDocument();
+    expect(within(rowAt(rows, 1)).getByText("Vocabulary")).toBeInTheDocument();
+    expect(within(rowAt(rows, 1)).getByText("3")).toBeInTheDocument();
+    // The unit list failed, so the unit id stands in for the unit's title.
+    expect(within(rowAt(rows, 0)).getByText("a1-u02")).toBeInTheDocument();
+  });
+
   it("shows units with their status and best checkpoint result", async () => {
     await open();
     const panel = (await screen.findByRole("heading", { name: "Units" })).closest("section") as HTMLElement;
@@ -273,9 +312,10 @@ describe("free-mode and generated work is never evidence of level", () => {
 });
 
 describe("drill-down from a skill to its evidence", () => {
-  it("opens from the keyboard, names the skill, and says the attempt list is not available", async () => {
+  it("opens from the keyboard, names the skill, and lists the counted attempts behind it", async () => {
     const user = userEvent.setup();
-    await open();
+    const listAttempts = vi.fn(() => Promise.resolve(attemptList([attemptRow({ id: 31, skill: "speaking", activity_id: "a1-u01/v3" })])));
+    await open({ listAttempts });
     await screen.findByRole("list", { name: "Your four skills" });
     const trigger = screen.getByRole("button", { name: /See the work behind this estimate \(Speaking\)/ });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -288,8 +328,10 @@ describe("drill-down from a skill to its evidence", () => {
     expect(within(panel).getByText("Estimation rule version").nextElementSibling).toHaveTextContent("est/1");
     expect(within(panel).getByText("Scored tasks counted").nextElementSibling).toHaveTextContent("14");
     expect(within(panel).getByText("Confidence").nextElementSibling).toHaveTextContent("medium");
-    expect(within(panel).getByText(/does not list the attempts of a skill yet/)).toBeInTheDocument();
     expect(within(panel).getByText(/Only authored lesson, checkpoint and placement tasks count toward an estimate/)).toBeInTheDocument();
+    expect(await within(panel).findByText("Every counted attempt behind this estimate, newest first. Open one to see its stored evidence and quotes.")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Open the evidence for attempt 31" })).toBeInTheDocument();
+    expect(listAttempts).toHaveBeenCalledWith("speaking", expect.any(AbortSignal));
     await user.click(within(panel).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("heading", { name: "The work behind Speaking" })).toBeNull();
     expect(trigger).toHaveFocus();
@@ -413,6 +455,98 @@ describe("drill-down from a skill to its evidence", () => {
   });
 });
 
+describe("the counted attempts behind a skill", () => {
+  it("lists them newest first with their facts, and opens one attempt's evidence from its row", async () => {
+    const user = userEvent.setup();
+    const listAttempts = vi.fn(() => Promise.resolve(ATTEMPTS));
+    const getAttemptEvidence = vi.fn(() => Promise.resolve(EVIDENCE));
+    await open({ listAttempts, getAttemptEvidence });
+    await user.click(await screen.findByRole("button", { name: /See the work behind this estimate \(Reading\)/ }));
+    const panel = (await screen.findByRole("heading", { name: "The work behind Reading" })).closest("section") as HTMLElement;
+    await within(panel).findByText("Every counted attempt behind this estimate, newest first. Open one to see its stored evidence and quotes.");
+    expect(listAttempts).toHaveBeenCalledWith("reading", expect.any(AbortSignal));
+    const rows = within(panel).getAllByRole("listitem");
+    expect(rows).toHaveLength(ATTEMPT_ROWS.length);
+    // The server's own order, and one control per row.
+    expect(rows.map((row) => row.querySelector("button")?.getAttribute("aria-label"))).toEqual([
+      "Open the evidence for attempt 31",
+      "Open the evidence for attempt 30",
+      "Open the evidence for attempt 29",
+    ]);
+    const first = rowAt(rows, 0);
+    expect(first.querySelector(".rows__text")?.textContent ?? "").toMatch(/^Attempt 31: a1-u01\/read-budi, scored, .+/);
+    expect(within(first).getByText("mcq")).toBeInTheDocument();
+    expect(within(first).getByText("comprehension")).toBeInTheDocument();
+    expect(within(first).getByText("0.82")).toBeInTheDocument();
+    // One panel: no level, no percentage, no CEFR label anywhere in it.
+    expect(panel.textContent).not.toMatch(LEVEL);
+    expect(panel.textContent).not.toMatch(/\d\s?%|percent|\bcefr\b/i);
+    // The row opens the stored evidence without typing a number.
+    await user.click(within(first).getByRole("button", { name: "Open the evidence for attempt 31" }));
+    expect(getAttemptEvidence).toHaveBeenCalledWith(31, expect.any(AbortSignal));
+    await within(panel).findByText("The sentence is complete and correct.");
+  });
+
+  it("says the attempts are loading while the list is on its way", async () => {
+    const user = userEvent.setup();
+    const never = new Promise<never>(() => undefined);
+    await open({ listAttempts: () => never });
+    await user.click(await screen.findByRole("button", { name: /See the work behind this estimate \(Reading\)/ }));
+    const panel = (await screen.findByRole("heading", { name: "The work behind Reading" })).closest("section") as HTMLElement;
+    expect(within(panel).getByRole("status")).toHaveTextContent("Loading the attempts");
+  });
+
+  it("says the attempts could not be loaded, and loads them again on retry", async () => {
+    const user = userEvent.setup();
+    const listAttempts = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("network"))
+      .mockResolvedValueOnce(attemptList([attemptRow({ id: 31 })]));
+    await open({ listAttempts });
+    await user.click(await screen.findByRole("button", { name: /See the work behind this estimate \(Reading\)/ }));
+    const panel = (await screen.findByRole("heading", { name: "The work behind Reading" })).closest("section") as HTMLElement;
+    await within(panel).findByText("The attempts could not be loaded.");
+    await user.click(within(panel).getByRole("button", { name: "Try again" }));
+    await within(panel).findByRole("button", { name: "Open the evidence for attempt 31" });
+    expect(listAttempts).toHaveBeenCalledTimes(2);
+  });
+
+  it("says there are no counted attempts for this skill yet, and why free work never appears", async () => {
+    const user = userEvent.setup();
+    await open();
+    await user.click(await screen.findByRole("button", { name: /See the work behind this estimate \(Writing\)/ }));
+    const panel = (await screen.findByRole("heading", { name: "The work behind Writing" })).closest("section") as HTMLElement;
+    expect(
+      await within(panel).findByText(
+        "No counted attempts for this skill yet. Only authored lesson, checkpoint and placement tasks count; free practice and generated items never appear here.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: /Open the evidence for attempt/ })).toBeNull();
+  });
+
+  it("says the 50 newest are shown when the server cut the list", async () => {
+    const user = userEvent.setup();
+    const rows = [attemptRow({ id: 60 }), attemptRow({ id: 59 }), attemptRow({ id: 58 })];
+    await open({ listAttempts: () => Promise.resolve(attemptList(rows, true)) });
+    await user.click(await screen.findByRole("button", { name: /See the work behind this estimate \(Reading\)/ }));
+    const panel = (await screen.findByRole("heading", { name: "The work behind Reading" })).closest("section") as HTMLElement;
+    expect(await within(panel).findByText("More than 50 attempts are stored. The 50 newest are shown.")).toBeInTheDocument();
+    expect(within(panel).getAllByRole("listitem")).toHaveLength(3);
+  });
+
+  it("shows an attempt waiting for the provider as waiting, never as a score", async () => {
+    const user = userEvent.setup();
+    const pending = attemptRow({ id: 41, status: "pending_llm", normalized: 0.5 });
+    await open({ listAttempts: () => Promise.resolve(attemptList([pending])) });
+    await user.click(await screen.findByRole("button", { name: /See the work behind this estimate \(Reading\)/ }));
+    const panel = (await screen.findByRole("heading", { name: "The work behind Reading" })).closest("section") as HTMLElement;
+    const row = (await within(panel).findByRole("button", { name: "Open the evidence for attempt 41" })).closest("li") as HTMLElement;
+    expect(within(row).getByText("Waiting for the AI provider to score this attempt.")).toBeInTheDocument();
+    // Even a number the server may carry is never drawn as this attempt's score.
+    expect(row.textContent).not.toContain("0.5");
+  });
+});
+
 describe("game panel", () => {
   it("shows sparks, rank, streak, rest tokens and unlockables", async () => {
     await open();
@@ -492,11 +626,14 @@ describe("what the screen asks the server for", () => {
     const getProgress = vi.spyOn(api, "getProgress");
     const getGame = vi.spyOn(api, "getGame");
     const listUnits = vi.spyOn(api, "listUnits");
+    const listAttempts = vi.spyOn(api, "listAttempts");
     renderApp(<ProgressScreen />, api);
     await screen.findByText("Sparks in total");
     expect(getProgress).toHaveBeenCalledTimes(1);
     expect(getGame).toHaveBeenCalledTimes(1);
     expect(listUnits).toHaveBeenCalledTimes(1);
+    // The attempts of a skill are read only once its estimate is opened.
+    expect(listAttempts).not.toHaveBeenCalled();
   });
 });
 

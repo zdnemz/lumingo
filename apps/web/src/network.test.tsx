@@ -303,9 +303,10 @@ describe("requests made by the setup, settings, privacy and diagnostics screens"
 
     expectOnlyOwnOriginAndRealRoutes();
     expect(sockets).toHaveLength(1);
-    // Four reads, one each for the screen's data, and nothing that changes anything.
+    // Five reads: the screen's data, the opened skill's attempts, and the evidence
+    // of the attempt that was then opened. Nothing here changes anything.
     const seen = requests.filter((r) => r.url !== "/api/state").map((r) => `${r.method} ${r.url}`).sort();
-    expect(seen).toEqual(["GET /api/attempts/12/evidence", "GET /api/game", "GET /api/progress", "GET /api/units"]);
+    expect(seen).toEqual(["GET /api/attempts/12/evidence", "GET /api/attempts?skill=writing", "GET /api/game", "GET /api/progress", "GET /api/units"]);
     expect(requests.every((r) => r.method === "GET")).toBe(true);
     // Not even the learner's text left the page as a link or a resource.
     expect(externalResources()).toEqual([]);
