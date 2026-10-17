@@ -1,6 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
+import { EngineStatusSection } from "@/components/EngineStatusPanel";
 import { DiagnosticsScreen } from "@/settings/DiagnosticsScreen";
 import { SettingsNav } from "@/settings/SettingsNav";
 import { useT } from "@/state/PreferencesProvider";
@@ -13,6 +14,7 @@ export default function DiagnosticsPage() {
         <h1>{t("diag.title")}</h1>
         <SettingsNav current="diagnostics" />
         <DiagnosticsScreen />
+        <EngineStatusSection />
       </div>
     </AppShell>
   );

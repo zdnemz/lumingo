@@ -218,3 +218,29 @@
   color: var(--color-text-muted);
   font-weight: 400;
 }
+
+/* ---- Engines (diagnostics) ---------------------------------------------- */
+
+.engine-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.engine-list__item {
+  padding: var(--space-3);
+  background: var(--color-bg-deep);
+  overflow-wrap: anywhere;
+}
+.engine-list__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: none;
+}
+.engine-list__detail {
+  margin: 0;
+}
