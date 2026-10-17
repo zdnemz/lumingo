@@ -94,6 +94,18 @@ describe("the main menu", () => {
   });
 });
 
+describe("the banners", () => {
+  it("renders with no snapshot yet, and shows no engine banner before there is one", () => {
+    // `openShell` uses `fakeApi()` and never emits a snapshot: the shell must
+    // render, and the engine banner must stay away rather than read a state
+    // that does not exist.
+    openShell();
+    expect(screen.getByRole("main")).toHaveTextContent("Screen");
+    expect(screen.queryByText(label("engine.fault.title"))).toBeNull();
+    expect(screen.queryByRole("link", { name: label("engine.fault.action") })).toBeNull();
+  });
+});
+
 // Vitest runs from apps/web, as the other tree walks in this repo assume.
 const APP_DIR = join(process.cwd(), "src", "app");
 
