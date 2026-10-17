@@ -30,14 +30,14 @@
   --font-body: "Pixelify Sans", "Noto Sans Mono", ui-monospace, monospace;
   --font-phonetic: "Noto Sans Mono", "Pixelify Sans", ui-monospace, monospace;
 
-  --text-xs: 16px;
-  --text-sm: 18px;
-  --text-md: 20px;
-  --text-lg: 24px;
-  --text-xl: 32px;
-  --display-3: 16px;
-  --display-2: 24px;
-  --display-1: 32px;
+  --text-xs: 1rem;
+  --text-sm: 1.125rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5rem;
+  --text-xl: 2rem;
+  --display-3: 1rem;
+  --display-2: 1.5rem;
+  --display-1: 2rem;
   --leading-body: 1.5;
   --leading-display: 1.6;
   --measure: 62ch;

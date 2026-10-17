@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+const STYLES_DIR = new URL("./", import.meta.url);
 const css = readFileSync(new URL("./tokens.css", import.meta.url), "utf8");
 
 /** Every `--name: value;` declaration inside the first block that matches the selector. */
@@ -128,5 +129,52 @@ describe("theme list", () => {
   it("has one CSS block for each theme the preferences know", async () => {
     const { THEMES: known } = await import("@/state/preferences");
     expect([...known].sort()).toEqual(Object.keys(THEMES).sort());
+  });
+});
+
+/** The old px scale, kept here as the size-neutrality reference. */
+const TYPE_SCALE: Record<string, number> = {
+  "--text-xs": 16,
+  "--text-sm": 18,
+  "--text-md": 20,
+  "--text-lg": 24,
+  "--text-xl": 32,
+  "--display-3": 16,
+  "--display-2": 24,
+  "--display-1": 32,
+};
+
+describe("type scale", () => {
+  it("is rem, and renders at the px size the old scale had at a 16px root", () => {
+    // rem, not px, so a learner who raises the browser text size gets bigger
+    // text. The numeric equivalence is what keeps this a refactor and not a
+    // redesign: 1rem=16, 1.125rem=18, 1.25rem=20, 1.5rem=24, 2rem=32.
+    const found = [...primitives.keys()].filter((name) => /^--(?:text|display)-/.test(name));
+    expect(found.sort()).toEqual(Object.keys(TYPE_SCALE).sort());
+    for (const [token, px] of Object.entries(TYPE_SCALE)) {
+      const value = primitives.get(token) ?? "";
+      expect(value, token).toMatch(/^[0-9.]+rem$/);
+      expect(Number.parseFloat(value) * 16, token).toBe(px);
+    }
+  });
+
+  it("never hard-codes a px font size in the stylesheets", () => {
+    const offenders: string[] = [];
+    for (const file of readdirSync(STYLES_DIR).filter((name) => name.endsWith(".css"))) {
+      const sheet = readFileSync(new URL(file, STYLES_DIR), "utf8");
+      for (const [index, line] of sheet.split("\n").entries()) {
+        if (/font-size:\s*[0-9.]+px/.test(line)) offenders.push(`${file}:${index + 1} ${line.trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("leaves the two deliberate px exceptions alone", () => {
+    // --px is the art-pixel grid: every border, shadow and gap is a multiple of
+    // it, so it stays a fixed 4px. Scaling it with text size would break the art.
+    expect(primitives.get("--px")).toBe("4px");
+    // --control-h is a touch-target floor, not text. 48px keeps every control
+    // above the 44px minimum whatever the root font size is.
+    expect(primitives.get("--control-h")).toBe("48px");
   });
 });
