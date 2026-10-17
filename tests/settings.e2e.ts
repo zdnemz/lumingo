@@ -373,11 +373,72 @@ interface ProgressReport {
   recent_sessions: { id: number; kind: string }[];
 }
 
-/** The middle of a node: the point a learner's finger lands on. */
+/**
+ * The middle of a node: the point a learner's finger lands on.
+ *
+ * The box is read again a moment later, and only a box that did not move is
+ * tapped. The shell draws in stages — the header and the heading first, then the
+ * banners once the server snapshot arrives, and a banner pushes everything below
+ * it down by its own height — and every panel under it swaps its own "Loading..."
+ * line for the data it fetched, which moves what is below it again. A point
+ * measured during one of those stages is a point somewhere else by the time the
+ * finger lands, which is how a tap aimed at a timing radio or a sub-navigation
+ * link can miss it entirely.
+ *
+ * `locator.tap` cannot be used for this at all: it waits for the node to hold
+ * still across animation frames, and this headless browser stops producing
+ * frames once the page settles, so that wait never ends.
+ */
 async function tapAt(screen: Screen, locator: Locator): Promise<void> {
-  const box = await locator.boundingBox();
+  let box = await locator.boundingBox();
   if (box === null) throw new Error("the node has no box to tap");
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const again = await locator.boundingBox();
+    if (again === null) throw new Error("the node has no box to tap");
+    const steady =
+      again.x === box.x && again.y === box.y && again.width === box.width && again.height === box.height;
+    box = again;
+    if (steady) break;
+  }
   await screen.tapAt({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+}
+
+/**
+ * Waits until the shell has finished drawing, which is when nothing above the
+ * page's own content is still moving.
+ *
+ * Every page mounts its own `AppShell`, and the export ships nothing but the
+ * boot screen, so a navigation replaces the document and the shell is drawn
+ * after it: the header and the heading first, then the banners once the server
+ * snapshot arrives, and a banner pushes everything below it down by its own
+ * height. Waiting for that region is waiting for the last thing above the
+ * content to stop moving, and it is what keeps the next measurement from being
+ * taken against a page that is still arriving.
+ *
+ * `tests/a11y.e2e.ts` waits for `.shell__banners:not(:empty)` there, because
+ * offline the no-provider banner is always drawn and is the shell's own signal.
+ * This spec saves a provider profile half way through the walk, and from that
+ * moment the shell honestly draws no banner at all: an empty region is then the
+ * settled state, so waiting for content would never end. The wait is therefore
+ * for the shell to be drawn and for the content under its banners to hold still,
+ * which is the same fact the banner stood for and holds in both halves of the
+ * walk.
+ */
+async function shellSettled(browser: Browser): Promise<void> {
+  await browser.locator(".shell__banners").waitFor({ state: "attached", timeout: 15_000 });
+  const main = browser.locator(".shell__main");
+  let box = await main.boundingBox();
+  if (box === null) throw new Error("the shell has no content region to measure");
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const again = await main.boundingBox();
+    if (again === null) throw new Error("the shell's content region went away");
+    const steady =
+      again.x === box.x && again.y === box.y && again.width === box.width && again.height === box.height;
+    box = again;
+    if (steady) break;
+  }
 }
 
 /**
@@ -533,8 +594,10 @@ test("the settings screens show the offline state and delete what this spec crea
   // 1. The screen is reached through the menu, which is what proves the nav
   //    entry end to end, and the three settings pages are linked from it.
   await app.open("/unit/");
+  await shellSettled(browser);
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navSettings }));
   await expect(browser).toHaveURL("/settings/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.title })).toBeVisible();
   const subnav = screen.getByRole("navigation", { name: TEXT.navLabel });
   await expect(subnav.getByRole("link", { name: TEXT.navGeneral })).toBeVisible();
@@ -666,6 +729,7 @@ test("the settings screens show the offline state and delete what this spec crea
   //     one unit file; and the five latency rows with no samples.
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navDiagnostics }));
   await expect(browser).toHaveURL("/settings/diagnostics/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.diagTitle })).toBeVisible();
   const report = await apiGet<DiagnosticsReport>(browser, "/api/diagnostics");
 
@@ -746,6 +810,7 @@ test("the settings screens show the offline state and delete what this spec crea
   // 11. Privacy: the statements PRD 12.4 wants, in the learner's language.
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navPrivacy }));
   await expect(browser).toHaveURL("/settings/privacy/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.dataTitle })).toBeVisible();
   for (const statement of [TEXT.privacyVoice, TEXT.privacyText, TEXT.privacyKey, TEXT.privacyAudio, TEXT.privacyLocal]) {
     await expect(screen.getByText(statement)).toBeVisible();
@@ -802,8 +867,10 @@ test("the settings screens show the offline state and delete what this spec crea
   //     finished through the screen's own control, so the server's single
   //     session slot is free afterwards.
   await app.open("/unit/");
+  await shellSettled(browser);
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navWrite }));
   await expect(browser).toHaveURL("/write/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.writeTitle })).toBeVisible();
   await screen.getByLabel(TEXT.writePrompt).fill(PROMPT);
   await tapAt(screen, screen.getByRole("button", { name: TEXT.writeStart }));
@@ -819,6 +886,7 @@ test("the settings screens show the offline state and delete what this spec crea
   //     needs the session's own number typed. The row is gone afterwards and the
   //     outcome banner names what was removed.
   await app.open("/settings/privacy/");
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.dataTitle })).toBeVisible();
   const progress = await apiGet<ProgressReport>(browser, "/api/progress");
   const created = progress.recent_sessions.find((session) => session.kind === "writing");
@@ -832,7 +900,13 @@ test("the settings screens show the offline state and delete what this spec crea
   const confirmSession = screen.getByRole("button", { name: TEXT.confirmYes });
   await expect(confirmSession).toBeEnabled();
   await tapAt(screen, confirmSession);
-  await expect(screen.getByText(TEXT.sessionDone(created.id))).toBeVisible({ timeout: 15_000 });
+  // The delete is answered only after the program has compacted the database —
+  // `delete_session` folds the write-ahead log and vacuums so the deleted text
+  // does not linger in free pages. That is the same work the wipe below does, and
+  // it is bounded by the disk rather than by the screen: on a loaded machine it
+  // has been measured at 22s, so it gets the same 30s the wipe's outcome gets
+  // instead of the 15s a screen-local step would need.
+  await expect(screen.getByText(TEXT.sessionDone(created.id))).toBeVisible({ timeout: 30_000 });
   await expect(screen.getByText(TEXT.audioRemoved(0)).first()).toBeVisible();
   await expect(screen.getByRole("button", { name: TEXT.sessionDelete(created.id) })).toHaveCount(0);
 
@@ -856,6 +930,7 @@ test("the settings screens show the offline state and delete what this spec crea
   // 19. The progress page is back to the state a fresh data directory has.
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navProgress }));
   await expect(browser).toHaveURL("/progress/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.progressTitle })).toBeVisible();
   await expect(screen.getByText(TEXT.progressEmpty)).toBeVisible({ timeout: 15_000 });
 
@@ -863,6 +938,7 @@ test("the settings screens show the offline state and delete what this spec crea
   //     with no provider at all — the state `tests/talk.e2e.ts` asserts.
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navSettings }));
   await expect(browser).toHaveURL("/settings/", { timeout: 15_000 });
+  await shellSettled(browser);
   const savedCard = screen.getByRole("article", { name: PROVIDER.name });
   await expect(savedCard).toBeVisible({ timeout: 15_000 });
   await tapAt(screen, savedCard.getByRole("button", { name: TEXT.providerDelete }));
