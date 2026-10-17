@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { ServerStateProvider } from "@/api/ServerState";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
+import { EngineFaultNotice } from "@/components/EngineFaultBanner";
 import { Mascot } from "@/sprites/Mascot";
 import { Sprite } from "@/sprites/Sprite";
 import type { SpriteName } from "@/sprites/data";
@@ -80,6 +81,7 @@ function Frame({ children }: { children: ReactNode }) {
       </header>
       <div className="px-container shell__banners">
         <ConnectionBanner />
+        <EngineFaultNotice />
       </div>
       <main id="main" className="px-container shell__main" tabIndex={-1}>
         {children}
