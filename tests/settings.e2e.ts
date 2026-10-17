@@ -473,9 +473,19 @@ function gigabytes(bytes: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-/** One panel of the current page, found by the title text it carries. */
+/**
+ * One panel of the current page, found by the title in its own heading.
+ *
+ * The match is on the heading, never the panel's body: `filter({ hasText })`
+ * reads the whole text content as a case-insensitive substring, so a sentence
+ * in one panel's prose that happens to use another panel's title word would
+ * match both. `Panel` renders its title in `h2.px-panel__title`, so scoping the
+ * filter to that heading keeps a body sentence out of the match.
+ */
 function panel(browser: Browser, title: string): Locator {
-  return browser.locator("section.px-panel").filter({ hasText: title });
+  return browser.locator("section.px-panel").filter({
+    has: browser.locator(".px-panel__title").filter({ hasText: title }),
+  });
 }
 
 /**
