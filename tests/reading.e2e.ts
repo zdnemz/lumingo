@@ -2,6 +2,7 @@ import { afterEach, test, type Browser } from "@e2e-dev/web";
 import { expect, type Locator, type Screen } from "e2e";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { shellSettled } from "./shell";
 
 /**
  * Graded reading, end to end, against the offline server `pnpm test:e2e` starts
@@ -193,8 +194,10 @@ test("the authored reading set is offered offline and every authored answer scor
 
   // 1. The screen is reached through the menu.
   await app.open("/unit/");
+  await shellSettled(browser);
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navRead }));
   await expect(browser).toHaveURL("/read/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.title })).toBeVisible();
 
   // 2. A level and a topic. The level the session starts at is the unit file's

@@ -1,5 +1,6 @@
 import { afterEach, test, type Browser } from "@e2e-dev/web";
 import { expect, type Locator, type Screen } from "e2e";
+import { shellSettled } from "./shell";
 
 /**
  * The writing workshop, end to end, against the offline server
@@ -157,8 +158,10 @@ test("a draft is checked by rules offline and its provider feedback is honestly 
 
   // 1. The screen is reached through the menu.
   await app.open("/unit/");
+  await shellSettled(browser);
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navWrite }));
   await expect(browser).toHaveURL("/write/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.title })).toBeVisible();
 
   // 2. The learner sets the task and starts. A session with the learner's own

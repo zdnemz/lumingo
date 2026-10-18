@@ -1,5 +1,6 @@
 import { test, type Browser } from "@e2e-dev/web";
 import { expect, type Locator, type Screen } from "e2e";
+import { shellSettled } from "./shell";
 
 /**
  * The conversation screen, end to end, against the offline server
@@ -105,8 +106,10 @@ test("the conversation screen refuses the offline start with the server's own co
   //    with no first-run gate, so a learner who has set nothing up still has the
   //    menu in front of them.
   await app.open("/unit/");
+  await shellSettled(browser);
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navTalk }));
   await expect(browser).toHaveURL("/talk/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.title })).toBeVisible();
 
   // 2. The typing half: the channel switch, the feedback-mode switch and the
