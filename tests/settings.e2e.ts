@@ -422,6 +422,40 @@ async function apiGet<T>(browser: Browser, path: string): Promise<T> {
   return JSON.parse(body) as T;
 }
 
+/** How long the server is given to report the profile a save wrote, and the pause between polls. */
+const SAVE_REPORT_BUDGET_MS = 30_000;
+const SAVE_REPORT_PAUSE_MS = 100;
+
+/**
+ * Waits until the server itself reports the profile this spec saves.
+ *
+ * Saving a profile is a **write**, and the card is only drawn once that write
+ * has answered: the form stays on "Saving" with the button disabled while the
+ * `POST /api/providers` is in flight, and on a loaded machine that can outlast
+ * any wall-clock wait for the card. Waiting longer for the node would be waiting
+ * for the wrong fact — the node is absent because the state change has not
+ * happened, not because the document is slow to answer.
+ *
+ * So the wait is on the state change: `GET /api/providers` is the route the card
+ * is drawn from, so the moment it lists this profile is the moment the card has
+ * something to draw. The budget bounds that polling, never a DOM read. A profile
+ * that is listed with the wrong fields is not retried: the assertions after this
+ * wait read the same values and fail as themselves.
+ */
+async function waitForSavedProvider(browser: Browser): Promise<void> {
+  const deadline = Date.now() + SAVE_REPORT_BUDGET_MS;
+  for (;;) {
+    const { providers } = await apiGet<{ providers: ProviderReport[] }>(browser, "/api/providers");
+    if (providers.some((provider) => provider.name === PROVIDER.name)) return;
+    if (Date.now() + SAVE_REPORT_PAUSE_MS >= deadline) {
+      throw new Error(
+        `the server never reported the saved profile ${PROVIDER.name}; it lists ${JSON.stringify(providers.map((p) => p.name))}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, SAVE_REPORT_PAUSE_MS));
+  }
+}
+
 /**
  * Sends a state-changing request through the page's own origin and cookie. The
  * body is `{}` because the server refuses a state-changing request without a
@@ -671,6 +705,12 @@ test("the settings screens show the offline state and delete what this spec crea
   const saveProfile = screen.getByRole("button", { name: TEXT.providerSave });
   await expect(saveProfile).toBeEnabled();
   await tapAt(screen, saveProfile);
+  // The card is drawn from the server's list, so wait for the save to be
+  // observable there rather than for the node on a wall-clock budget: on a
+  // loaded machine the write itself is what is slow, and the node cannot exist
+  // before the server has the profile. The card and its four facts are then
+  // asserted as before, on the state the save produced.
+  await waitForSavedProvider(browser);
   const card = screen.getByRole("article", { name: PROVIDER.name });
   await expect(card).toBeVisible({ timeout: 15_000 });
   await expect(card.getByText(TEXT.keySaved(PROVIDER.last4))).toBeVisible();
