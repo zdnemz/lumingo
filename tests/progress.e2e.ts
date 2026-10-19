@@ -2,6 +2,7 @@ import { afterEach, test, type Browser } from "@e2e-dev/web";
 import { expect, type Locator, type Screen } from "e2e";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { shellSettled } from "./shell";
 
 /**
  * The progress screen, end to end, against the offline server `pnpm test:e2e`
@@ -456,6 +457,7 @@ test("the progress screen shows the empty state, then real work and its evidence
   //    own delete control calls, after a leftover session — which the server
   //    refuses that delete for — is stopped.
   await app.open("/unit/");
+  await shellSettled(browser);
   const leftover = await activeSessionId(browser);
   if (leftover !== null) await stopSession(browser, leftover);
   expect(await clearLearnerRecord(browser)).toBe(200);
@@ -463,6 +465,7 @@ test("the progress screen shows the empty state, then real work and its evidence
   // 2. The screen is reached through the menu.
   await tapAt(screen, screen.getByRole("link", { name: TEXT.navProgress }));
   await expect(browser).toHaveURL("/progress/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.title })).toBeVisible();
 
   // 3. The empty state. The banner is the page's own title and sentence for it,
@@ -490,6 +493,7 @@ test("the progress screen shows the empty state, then real work and its evidence
   //    its own sequence and title, and the run's own progress line renders only
   //    once the run has a step, so waiting for it is waiting for the run.
   await app.open("/unit/");
+  await shellSettled(browser);
   const unitLink = screen.getByRole("link", { name: `Unit ${unit.sequence}: ${unit.title.en}` });
   await expect(unitLink).toBeVisible();
   await expect(unitLink).toHaveAttribute("href", `/unit/?id=${unit.id}`);
@@ -553,6 +557,7 @@ test("the progress screen shows the empty state, then real work and its evidence
   //    sent: the overview and the skill's attempts are read back through the
   //    page's own routes, and the numbers on screen are checked against them.
   await app.open("/progress/");
+  await shellSettled(browser);
   const overview = await readProgress(browser);
   const readingAttempts = await listAttempts(browser, "reading");
 
@@ -705,6 +710,7 @@ test("the progress screen shows the empty state, then real work and its evidence
   //     waiting, never as a score. The skill is still short of the evidence rule,
   //     so no level appears either.
   await app.open("/progress/");
+  await shellSettled(browser);
   await tapAt(screen, screen.getByRole("button", { name: TEXT.evidence("Writing") }));
   const writingDrill = screen.getByRole("region", { name: TEXT.drillTitle("Writing") });
   await expect(writingDrill.getByRole("heading", { name: TEXT.drillTitle("Writing") })).toBeVisible({ timeout: 15_000 });

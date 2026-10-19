@@ -2,6 +2,7 @@ import { afterEach, test, type Browser } from "@e2e-dev/web";
 import { expect, type Locator, type Screen } from "e2e";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { shellSettled } from "./shell";
 
 /**
  * The lesson player, end to end, against the offline server `pnpm test:e2e`
@@ -283,6 +284,7 @@ test("the example unit is played to its checkpoint in a browser", { timeout: 240
 
   // 1. The picker lists the unit. The link's accessible name is the map's own: "Unit N: title".
   await app.open("/unit/");
+  await shellSettled(browser);
   const unitLink = screen.getByRole("link", { name: `Unit ${unit.sequence}: ${unit.title.en}` });
   await expect(unitLink).toBeVisible();
   await expect(unitLink).toHaveAttribute("href", `/unit/?id=${unit.id}`);
@@ -293,6 +295,7 @@ test("the example unit is played to its checkpoint in a browser", { timeout: 240
   //    first activity and the server's unavailable list, so wait for the run's
   //    own progress line before reading what the run reported.
   await app.open(`/unit/?id=${unit.id}`);
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: unit.title.en })).toBeVisible();
   await expect(screen.getByText(TEXT.runProgress)).toBeVisible({ timeout: 15_000 });
 

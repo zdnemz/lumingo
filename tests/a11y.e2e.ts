@@ -1,5 +1,6 @@
 import { afterEach, test, type Browser } from "@e2e-dev/web";
 import { expect, type Locator, type Screen } from "e2e";
+import { readSettled, shellSettled } from "./shell";
 
 /**
  * The shell's keyboard path, its type scale, and the engines panel, end to end,
@@ -105,19 +106,6 @@ async function tapAt(screen: Screen, locator: Locator): Promise<void> {
     if (steady) break;
   }
   await screen.tapAt({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
-}
-
-/**
- * Waits until the shell has finished drawing, which is when the banners are in.
- *
- * Every page mounts its own `AppShell`, so a navigation starts a new shell with
- * an empty `.shell__banners`; the banner the offline snapshot brings then
- * arrives and pushes the page below it down. Waiting for that region to be drawn
- * is waiting for the last thing above the content to stop moving. Offline the
- * no-provider banner is always there, so this is the shell's own signal.
- */
-async function shellSettled(browser: Browser): Promise<void> {
-  await browser.locator(".shell__banners:not(:empty)").waitFor({ state: "visible", timeout: 15_000 });
 }
 
 /**
@@ -271,6 +259,7 @@ test("the menu reaches diagnostics, then keyboard focus and 150 percent text hol
   await expect(diagnosticsLink).toBeVisible();
   await tapAt(screen, diagnosticsLink);
   await expect(browser).toHaveURL("/settings/diagnostics/", { timeout: 15_000 });
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.diagTitle })).toBeVisible();
 
   // 2. Reloaded fresh, so focus starts on the body and the walk below starts
@@ -278,6 +267,7 @@ test("the menu reaches diagnostics, then keyboard focus and 150 percent text hol
   //    the first focusable node in the document — and it must be a real anchor
   //    to `#main`, not a button that runs script.
   await app.open("/settings/diagnostics/");
+  await shellSettled(browser);
   await expect(screen.getByRole("heading", { level: 1, name: TEXT.diagTitle })).toBeVisible();
   await browser.keyboard.press("Tab");
   const skip = await focusReport(browser);
@@ -361,26 +351,40 @@ test("the engines panel shows every engine and its state, offline", async ({ app
 
   // 1. The panel is the diagnostics page's own section, mounted after the
   //    diagnostics report. Its title is the `h2` `Panel` draws.
+  //
+  //    Every read in this block goes through `readSettled`, one at a time, not
+  //    just the block's opening. The measured failure is the reason: the page
+  //    answered `Microphone` in 29 ms and then `Speaker` burned its whole 5 s
+  //    timeout in the *same* block, so a settle taken before the block cannot
+  //    reach a read that stalls after it. Each retry builds a fresh locator
+  //    against the document that is current now, which is what escapes a read
+  //    aimed into a document swap. A wrong value or a wrong count still throws
+  //    its comparison error and is never retried.
   await app.open("/settings/diagnostics/");
-  await expect(screen.getByRole("heading", { level: 2, name: TEXT.panelTitle })).toBeVisible();
-  await expect(screen.getByText(TEXT.panelIntro)).toBeVisible();
+  await shellSettled(browser);
+  await readSettled("the engines panel heading", () =>
+    expect(screen.getByRole("heading", { level: 2, name: TEXT.panelTitle })).toBeVisible(),
+  );
+  await readSettled("the engines panel intro", () => expect(screen.getByText(TEXT.panelIntro)).toBeVisible());
 
   // 2. Every engine the program reports is named in the list, so a new engine on
   //    the server cannot arrive as a blank row.
   for (const name of TEXT.engines) {
-    await expect(screen.getByText(name)).toBeVisible();
+    await readSettled(`the "${name}" row`, () => expect(screen.getByText(name)).toBeVisible());
   }
 
   // 3. Every one of them says the same thing offline, and the anchored pattern
   //    is what makes that a real count: `/Not available/` would also swallow
   //    "Not available in this build", while `/^Not available$/` cannot. Six
   //    nodes is six engines, one state word each.
-  await expect(screen.getByText(/^Not available$/)).toHaveCount(6);
+  await readSettled("the six engine states", () => expect(screen.getByText(/^Not available$/)).toHaveCount(6));
 
   // 4. Under each name is the program's own sentence, rendered as it came and
   //    never paraphrased. Six of them, and none blank: an empty detail would be
   //    a row that says nothing about why the engine is missing.
-  const details = await browser.locator(".engine-list__detail").allTextContents();
+  const details = await readSettled("the six engine detail sentences", () =>
+    browser.locator(".engine-list__detail").allTextContents(),
+  );
   expect(details, `the panel drew ${details.length} detail sentences, not six`).toHaveLength(6);
   for (const detail of details) {
     expect(detail.trim(), "an engine row carries a blank detail sentence").not.toBe("");
@@ -388,7 +392,9 @@ test("the engines panel shows every engine and its state, offline", async ({ app
 
   // 5. The recovery action is offered: the panel's retry re-reads the snapshot,
   //    which is the only thing a learner can do about a missing engine.
-  await expect(screen.getByRole("button", { name: TEXT.retry })).toBeVisible();
+  await readSettled("the engines panel retry button", () =>
+    expect(screen.getByRole("button", { name: TEXT.retry })).toBeVisible(),
+  );
 
   // 6. And no control promises something this build cannot do. Offline nothing
   //    can be downloaded or installed, so the panel must not offer either — a
