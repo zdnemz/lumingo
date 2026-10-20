@@ -87,8 +87,10 @@ Four things are not in the zip, on purpose:
   enabled, so the speaking parts do not work.
 - **The curriculum.** No units are in this zip, so you cannot finish a unit
   with it. What you can do is check that the program runs and set it up.
-- **The speech models.** The file that lists them has no entry that can be
-  downloaded yet, so there is nothing for the program to fetch.
+- **The speech models.** The list of them is not in this zip. The program
+  looks for `models/manifest.toml` next to `lumingo.exe`, and this build has
+  none, so the speech-model list in Settings cannot be loaded and there is
+  nothing for the program to fetch.
 - **A signature.** The program is not code-signed. That is why Windows shows
   the SmartScreen warning.
 
