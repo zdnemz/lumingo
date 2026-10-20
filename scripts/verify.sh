@@ -67,6 +67,12 @@ node scripts/check-case-collisions.mjs
 step "the web export must not need a server feature"
 node scripts/check-export-only.mjs
 
+# The release documents state facts about the code, so they must still say the
+# truth. This runs in the quick mode too: it is a second of work, and a
+# document that has drifted from the code is a document that lies.
+step "the release documents match the code"
+node scripts/check-docs.mjs
+
 step "cargo fmt --all -- --check"
 cargo fmt --all -- --check
 
