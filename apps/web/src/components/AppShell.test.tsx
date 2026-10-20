@@ -135,7 +135,7 @@ function coveredBy(route: string, href: string): boolean {
 }
 
 /**
- * The two screens that are reached without the menu, and the only ones allowed
+ * The three screens that are reached without the menu, and the only ones allowed
  * to be missing from it:
  *
  * - `/onboarding/` is the first-run setup. `FirstRunGate` sends a learner who
@@ -144,11 +144,13 @@ function coveredBy(route: string, href: string): boolean {
  *   into a wizard they do not need.
  * - `/styleguide/` is the developer's catalogue of components and tokens. It is
  *   never linked from the app, as the note in `i18n/hardcoded.test.ts` also says.
+ * - `/about/` says what this build is made of. It is reached from the settings
+ *   navigation, so it is a page of the settings, not a screen of the main menu.
  *
- * The test checks below that both of these still exist, so the list cannot rot
+ * The test checks below that all of these still exist, so the list cannot rot
  * into a hiding place for a screen that simply forgot its entry.
  */
-const REACHED_ANOTHER_WAY = ["/onboarding/", "/styleguide/"] as const;
+const REACHED_ANOTHER_WAY = ["/onboarding/", "/styleguide/", "/about/"] as const;
 
 describe("routes and the main menu", () => {
   const routes = pageRoutes();
