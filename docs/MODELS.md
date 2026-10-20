@@ -40,7 +40,8 @@ tutor's own text. The tutor's text — the scenario, the learner's message, the
 tutor's reply — is sent to the AI provider the user has chosen, over that
 provider's own connection. Nothing on this page is involved in that. The
 models listed here would sit on the learner's machine and do the listening,
-the speaking and the scoring; the provider does the talking.
+the speaking and the scoring: the provider supplies the tutor's text, and the
+text-to-speech model is what would speak that text aloud.
 
 ## The candidate models
 
@@ -105,12 +106,14 @@ repository and the Kitten TTS repository; `huggingface.co` carries the Whisper
 model cards, the Parakeet model card, the Kokoro model card and the wav2vec2
 model card. The two entries with no source name no host at all.
 
-Those two are the only hosts a model download would ever go to. The downloader
-takes the URL from the manifest and nothing else: it refuses a URL whose
-scheme is not `https` (plain `http` is accepted for the loopback address
-only), it refuses a URL that carries credentials, and it follows no location
-that the manifest does not name. There is no fallback host, no mirror and no
-other address in the code.
+Those two are the hosts the manifest names, and the manifest is where a
+download starts from. The rule the download path enforces is on the URL, not on
+the host: every URL, and every redirect target, must be `https` (plain `http` is
+accepted for the loopback address only), and a URL that carries credentials is
+refused. A redirect is checked with that same rule and then followed, so the
+path does not pin the host: a redirect may reach another `https` host than the
+one the manifest named. There is no fallback host, no mirror and no other
+address in the code.
 
 A provider's own host is a separate thing and is not in that list. When the
 tutor's text goes to the AI provider the user has chosen, that request goes to
