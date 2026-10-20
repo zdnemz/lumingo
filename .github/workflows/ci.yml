@@ -94,6 +94,13 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-export-only.mjs
 
+      # The release documents state facts about the code, so they must still
+      # say the truth. The check reads the documents and the code the facts
+      # come from, and reports where the two disagree.
+      - name: The release documents match the code
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-docs.mjs
+
       - name: Static export builds
         run: pnpm build
 
