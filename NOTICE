@@ -67,6 +67,9 @@ Rust crates in this build (345):
 - clap_lex — MIT OR Apache-2.0
 - colorchoice — MIT OR Apache-2.0
 - colored — MPL-2.0
+  Unmodified, used as a dependency of harper-core 0.68.0. Its source
+  is at https://crates.io/crates/colored and the Mozilla Public
+  License 2.0 text is at https://www.mozilla.org/MPL/2.0/
 - const-oid — Apache-2.0 OR MIT
 - convert_case — MIT
 - cpufeatures — MIT OR Apache-2.0
@@ -77,6 +80,9 @@ Rust crates in this build (345):
 - crossbeam-utils — MIT OR Apache-2.0
 - crypto-common — MIT OR Apache-2.0
 - cssparser — MPL-2.0
+  Unmodified, used as a dependency of harper-core 0.68.0. Its source
+  is at https://crates.io/crates/cssparser and the Mozilla Public
+  License 2.0 text is at https://www.mozilla.org/MPL/2.0/
 - cubecl-common — MIT OR Apache-2.0
 - darling — MIT
 - darling_core — MIT
@@ -90,6 +96,9 @@ Rust crates in this build (345):
 - displaydoc — MIT OR Apache-2.0
 - dtoa — MIT OR Apache-2.0
 - dtoa-short — MPL-2.0
+  Unmodified, used as a dependency of harper-core 0.68.0. Its source
+  is at https://crates.io/crates/dtoa-short and the Mozilla Public
+  License 2.0 text is at https://www.mozilla.org/MPL/2.0/
 - either — MIT OR Apache-2.0
 - email_address — MIT
 - embassy-futures — MIT OR Apache-2.0
@@ -388,6 +397,10 @@ JavaScript packages in this build (51):
 - baseline-browser-mapping — Apache-2.0
 - browserslist — MIT
 - caniuse-lite — CC-BY-4.0
+  caniuse-lite, browser support data used by the Next.js build, is
+  licensed under CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/). It is not part of
+  the shipped application.
 - client-only — MIT
 - convert-source-map — MIT
 - debug — MIT

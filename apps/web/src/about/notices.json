@@ -267,7 +267,8 @@
     {
       "name": "colored",
       "kind": "crate",
-      "licence": "MPL-2.0"
+      "licence": "MPL-2.0",
+      "attribution": "Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/colored and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/"
     },
     {
       "name": "const-oid",
@@ -317,7 +318,8 @@
     {
       "name": "cssparser",
       "kind": "crate",
-      "licence": "MPL-2.0"
+      "licence": "MPL-2.0",
+      "attribution": "Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/cssparser and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/"
     },
     {
       "name": "cubecl-common",
@@ -382,7 +384,8 @@
     {
       "name": "dtoa-short",
       "kind": "crate",
-      "licence": "MPL-2.0"
+      "licence": "MPL-2.0",
+      "attribution": "Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/dtoa-short and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/"
     },
     {
       "name": "either",
@@ -1857,7 +1860,8 @@
     {
       "name": "caniuse-lite",
       "kind": "package",
-      "licence": "CC-BY-4.0"
+      "licence": "CC-BY-4.0",
+      "attribution": "caniuse-lite, browser support data used by the Next.js build, is licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). It is not part of the shipped application."
     },
     {
       "name": "client-only",
