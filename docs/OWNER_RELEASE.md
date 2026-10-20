@@ -8,10 +8,10 @@ for, and what to write down. Nothing below has been done for you.
 - **The run pushed nothing, tagged nothing, and created no release.** There is
   no `v1.0.0` tag and no draft release anywhere. The four steps below are
   yours to run.
-- The local `development` branch is **5 commits ahead of `origin/development`**:
-  the local tip is `22f2123`, and `origin/development` is at `b6102bf`. Those
+- The local `development` branch is **15 commits ahead of `origin/development`**:
+  the local tip is `6d7b91c`, and `origin/development` is at `b6102bf`. Those
   are the numbers as of writing — check your own clone before you trust them.
-- **Pushing is the owner's decision**, so the run did not push. The five
+- **Pushing is the owner's decision**, so the run did not push. The fifteen
   commits sit on this machine until you push them.
 - **The Windows build has never been executed by an agent.** The release
   workflow runs on `windows-latest` in GitHub CI, and this run could not run
@@ -29,7 +29,7 @@ happened in this work, and none of the four steps below has been carried out.
 
 ## Step 1 — push
 
-Push the five commits that are sitting on this machine.
+Push the **fifteen** commits that are sitting on this machine.
 
 ```sh
 git push origin development
@@ -43,7 +43,7 @@ Look for:
   ahead count.
 
 Write down: the commit you pushed (`git rev-parse --short HEAD`, expect
-`22f2123`) and the date.
+`6d7b91c`) and the date.
 
 ## Step 2 — tag v1.0.0
 
