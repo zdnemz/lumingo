@@ -65,9 +65,12 @@ performance number is claimed. Features are listed here only when they work.
 Text chat, the unit player, the writing workshop, and graded reading are
 implemented and tested in the engine, and are reachable through the server API;
 text chat and the unit player also through the command-line client. In the
-browser, the home screen, the setup wizard, the progress screen, and the
-settings screens are routed today; the quest map, chat, reading, and writing
-pieces exist as components and are not routed yet.
+browser, every screen of the interface is a route today: the home screen plus
+`/onboarding/`, `/unit/`, `/talk/`, `/write/`, `/read/`, `/progress/`,
+`/settings/`, `/settings/privacy/`, `/settings/diagnostics/` and `/styleguide/`,
+with the quest map on `/unit/`. The voice half — the microphone and the speech
+engines — and the model downloads are what the browser does not have yet; the
+next paragraph gives the limit on each.
 
 The speech engines sit behind off-by-default cargo features and have not been
 run on real hardware. The model download path is not behind a cargo feature: it
