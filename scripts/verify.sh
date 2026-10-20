@@ -61,6 +61,12 @@ fi
 step "no two tracked paths differ only in case"
 node scripts/check-case-collisions.mjs
 
+# The web app is a static export and the Rust server embeds it, so nothing in
+# apps/web may need a Node server at run time. This runs in the quick mode too:
+# it is a second or two of work and it catches a break before the build does.
+step "the web export must not need a server feature"
+node scripts/check-export-only.mjs
+
 step "cargo fmt --all -- --check"
 cargo fmt --all -- --check
 

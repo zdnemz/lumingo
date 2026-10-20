@@ -85,6 +85,15 @@ jobs:
       - name: Tests
         run: pnpm test
 
+      # The web app is a static export and the Rust server embeds it, so
+      # nothing in apps/web may need a Node server at run time: no route
+      # handlers, no server actions, no middleware, no rewrites, no redirects
+      # and no image optimiser. The build below is the export that must not
+      # need one.
+      - name: The web export must not need a server feature
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-export-only.mjs
+
       - name: Static export builds
         run: pnpm build
 
