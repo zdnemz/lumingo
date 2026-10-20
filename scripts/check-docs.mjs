@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Fails when the release documents stop matching the code.
 //
-// The six documents under check — docs/PRIVACY.md, docs/MODELS.md,
-// docs/LIMITATIONS.md, docs/INSTALL.md, docs/RELEASE_NOTES.md and
-// CONTRIBUTING.md — state facts about the program: where the data folder is,
-// which hosts a download starts from, what the release zip holds, which names
-// a provider needs. A document that drifts from the code is a document that
-// lies, and a learner reads it before the program ever runs.
+// The seven documents under check — README.md, docs/PRIVACY.md,
+// docs/MODELS.md, docs/LIMITATIONS.md, docs/INSTALL.md, docs/RELEASE_NOTES.md
+// and CONTRIBUTING.md — state facts about the program: where the data folder
+// is, which hosts a download starts from, what the release zip holds, which
+// names a provider needs. A document that drifts from the code is a document
+// that lies, and a learner reads it before the program ever runs.
 //
 // What this script IS: a comparison. It reads the documents, reads the code
 // the facts come from, and reports where the two disagree. Every fact is
@@ -30,8 +30,13 @@ import { fileURLToPath } from "node:url";
 // from any working directory.
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
+// The manifest path. It is the file that names the download hosts, so a
+// document that names it names the hosts too.
+const MANIFEST_PATH = "models/manifest.toml";
+
 // The documents, in the order they are reported.
 const DOCUMENTS = [
+  "README.md",
   "docs/PRIVACY.md",
   "docs/MODELS.md",
   "docs/LIMITATIONS.md",
@@ -41,6 +46,13 @@ const DOCUMENTS = [
 ];
 
 // The headings each document must carry, in the order they must carry them.
+//
+// A document with no list here is checked for its facts, its links and its
+// wording only — its headings are not pinned. README.md is such a document:
+// it is the owner's living front page, its sections change as the project
+// changes, and its fenced code blocks carry lines that begin with `#`, so a
+// heading list would read the code as headings and hold the front page
+// hostage to a script update.
 const HEADINGS = {
   "docs/PRIVACY.md": [
     "# Privacy",
@@ -123,6 +135,17 @@ const PLACEHOLDERS = [
   { pattern: /\blorem\b/i, token: "lorem" },
 ];
 
+// The over-claims about the download path (PRD section 12.4). The path checks
+// the URL, not the host: a redirect may reach another host. A document that
+// names a download host may not say that the host set is the whole truth.
+// These are wording patterns, like the banned words above, and they are
+// checked in the paragraph that names the host — see `checkOverClaims`.
+const OVER_CLAIMS = [
+  { pattern: /\bcontact(?:s|ed|ing)?\s+only\b[^.]{0,60}\bhosts?\b/i, wording: '"contacts only ... hosts"' },
+  { pattern: /\bcontact(?:s|ed|ing)?\s+only\s+[a-z0-9][a-z0-9.-]*\.[a-z]{2,}\b/i, wording: '"contacts only <host>"' },
+  { pattern: /\bnothing\s+else\s+is\s+contacted\b/i, wording: '"nothing else is contacted"' },
+];
+
 /** A file's text, read from the repository root. */
 function read(path) {
   return readFileSync(join(ROOT, path), "utf8");
@@ -175,7 +198,8 @@ function deriveFacts() {
   const inspector = read("crates/llm-client/src/inspector.rs");
   const packaging = read("scripts/package-release.mjs");
   const envTemplate = read(".env.example");
-  const manifest = read("models/manifest.toml");
+  const manifest = read(MANIFEST_PATH);
+  const urlPolicy = read("crates/model-manager/src/manifest.rs");
   const ownerRelease = read("docs/OWNER_RELEASE.md");
   const hook = read(".husky/pre-commit");
 
@@ -294,6 +318,21 @@ function deriveFacts() {
     ...new Set([...manifest.matchAll(/^\s*source\s*=\s*"https?:\/\/([^/"]+)/gm)].map((match) => match[1])),
   ];
 
+  // The transport rule the download path enforces, from `url_problem` in the
+  // model manager: the scheme it allows, and the word the code uses for the
+  // follow-up request. A document that names a download host has to state
+  // this rule, in the code's own words.
+  const scheme = matches(
+    urlPolicy,
+    /match url\.scheme\(\) \{\s*"([^"]+)" => None,/,
+    "the allowed scheme from crates/model-manager/src/manifest.rs",
+  )[1];
+  const redirectWord = matches(
+    urlPolicy,
+    /every request and every ([a-z]+):/i,
+    "the word the code uses for a redirect in crates/model-manager/src/manifest.rs",
+  )[1];
+
   // The paths CONTRIBUTING.md must point at. The gate is the one the commit
   // hook runs, the licence register is the one the model manifest names, and
   // the environment record is the one the owner keeps the toolchain versions
@@ -340,7 +379,7 @@ function deriveFacts() {
     throw new Error("a derived list came out empty");
   }
 
-  return { facts, envNames, modelIds, zipMembers, downloadHosts };
+  return { facts, envNames, modelIds, zipMembers, downloadHosts, manifestPath: MANIFEST_PATH, scheme, redirectWord };
 }
 
 /** Which facts each document must state. The values live in `facts`. */
@@ -350,6 +389,22 @@ function requiredFacts(derived) {
   const members = derived.zipMembers.map((member) => `member:${member}`);
   const hosts = derived.downloadHosts.map((host) => `host:${host}`);
   return {
+    "README.md": [
+      "dataFolder",
+      "localAppData",
+      "providersFile",
+      "loopbackHost",
+      "defaultPort",
+      "inspectorCapacity",
+      "inspectorBodyLimit",
+      "checksumAlgorithm",
+      "envFile",
+      "verifyScript",
+      "licenseRegister",
+      "environmentRecord",
+      ...env,
+      ...hosts,
+    ],
     "docs/PRIVACY.md": [
       "dataFolder",
       "localAppData",
@@ -391,6 +446,7 @@ function requiredFacts(derived) {
 /** The violations in the headings of a document. */
 function checkHeadings(path, text, headings) {
   const violations = [];
+  if (!headings) return violations; // a document with no pinned heading list
   const lines = text.split(/\r?\n/).map((line) => line.trim());
   let previous = -1;
   for (const heading of headings) {
@@ -483,6 +539,79 @@ function checkFacts(path, text, facts, required) {
   return violations;
 }
 
+/**
+ * Whether a text names a download host.
+ *
+ * A host is one of the hosts the manifest names, or the manifest path itself
+ * — that file is what names those hosts, so a document that points at it
+ * speaks about the download path.
+ */
+function mentionsDownloadHost(text, derived) {
+  if (occurrences(text, derived.manifestPath).length > 0) return true;
+  return derived.downloadHosts.some((host) => occurrences(text, host).length > 0);
+}
+
+/** A regex that matches `value` as a word, whatever its case. */
+function wordPattern(value) {
+  return new RegExp(`(?<!\\w)${escapeRegExp(value)}(?!\\w)`, "i");
+}
+
+/**
+ * The redirect rule a document that names a download host has to state.
+ *
+ * The download path checks the URL, not the host: a redirect is checked with
+ * the same rule and then followed, so it may reach another host. A document
+ * that names the hosts and never says that is free to imply that the host set
+ * is the whole truth, so the rule has to be stated — with the word the code
+ * uses for it and with the scheme the code allows. The rule is positive, so
+ * it fires only when a document stops saying the rule, never on a change of
+ * wording around it.
+ */
+function checkRedirectRule(path, text, derived) {
+  const violations = [];
+  if (!mentionsDownloadHost(text, derived)) return violations;
+  if (!wordPattern(derived.redirectWord).test(text)) {
+    violations.push(
+      `${path}: names a download host but does not state the redirect rule (the word "${derived.redirectWord}")`,
+    );
+  }
+  if (!wordPattern(derived.scheme).test(text)) {
+    violations.push(
+      `${path}: names a download host but does not state the scheme rule (the word "${derived.scheme}")`,
+    );
+  }
+  return violations;
+}
+
+/** The paragraphs of a document: the blocks a blank line separates. */
+function paragraphs(text) {
+  return text.split(/\n\s*\n/).filter((block) => block.trim() !== "");
+}
+
+/**
+ * The over-claims in a paragraph that names a download host.
+ *
+ * The scope is the paragraph, not the document: `docs/PRIVACY.md` says "the
+ * browser tab contacts only the local server", which is true, is not about
+ * the download path, and must not be flagged. The ban is scoped to the
+ * download context so it cannot fire on a true statement about the provider
+ * path or the browser tab.
+ */
+function checkOverClaims(path, text, derived) {
+  const violations = [];
+  for (const paragraph of paragraphs(text)) {
+    if (!mentionsDownloadHost(paragraph, derived)) continue;
+    for (const claim of OVER_CLAIMS) {
+      if (claim.pattern.test(paragraph)) {
+        violations.push(
+          `${path}: says ${claim.wording}, which pins the host set the download path does not pin`,
+        );
+      }
+    }
+  }
+  return violations;
+}
+
 function main() {
   const derived = deriveFacts();
   const required = requiredFacts(derived);
@@ -494,6 +623,8 @@ function main() {
     violations.push(...checkPlaceholders(path, text));
     violations.push(...checkLinks(path, text));
     violations.push(...checkFacts(path, text, derived.facts, required[path]));
+    violations.push(...checkRedirectRule(path, text, derived));
+    violations.push(...checkOverClaims(path, text, derived));
   }
   if (violations.length > 0) {
     console.error("The release documents must match the code. These do not:");
