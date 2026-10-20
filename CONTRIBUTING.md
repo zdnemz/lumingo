@@ -62,6 +62,7 @@ node scripts/check-case-collisions.mjs
 node scripts/check-export-only.mjs
 node scripts/check-docs.mjs
 cargo fmt --all -- --check
+node scripts/check-license-register.mjs
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 git diff --quiet -- apps/web/src/generated
@@ -80,12 +81,13 @@ line is the check that the generated TypeScript types match what is committed,
 and the `cargo deny check licenses` line runs only when `cargo deny` is
 installed.
 
-`LUMINGO_PRECOMMIT=quick` runs six checks only:
+`LUMINGO_PRECOMMIT=quick` runs seven checks only:
 `scripts/check-case-collisions.mjs`, `scripts/check-export-only.mjs`,
 `scripts/check-docs.mjs`, `cargo fmt --all -- --check`,
-`pnpm --dir apps/web lint` and `pnpm --dir apps/web typecheck`. It is an
-iteration shortcut, not a way to skip CI, and CI still runs everything.
-`git commit --no-verify` skips the hook; CI still runs every check.
+`scripts/check-license-register.mjs`, `pnpm --dir apps/web lint` and
+`pnpm --dir apps/web typecheck`. It is an iteration shortcut, not a way to
+skip CI, and CI still runs everything. `git commit --no-verify` skips the hook;
+CI still runs every check.
 
 The browser suite, `pnpm test:e2e`, is manual. It never runs in the hook and
 never runs in CI, so a green commit does not mean the browser suite passed.
@@ -125,6 +127,11 @@ the release zip, the repository or a first-run download. A dependency's licence
 is checked at the source — the licence file in the package, the model card, the
 publisher's terms — before the dependency is added, and the row records the
 status and the date it was checked.
+
+The gate checks that the register and the build agree. It reads the
+dependencies the build ships and fails when one of them has no row, when a
+row's licence or status does not match the build, or when a row is for
+something the build does not ship.
 
 ## Writing documentation
 

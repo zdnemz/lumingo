@@ -9,8 +9,9 @@
 #   sh scripts/verify.sh                      # everything, like CI
 #   LUMINGO_PRECOMMIT=quick sh scripts/verify.sh
 #       the path case check, the export-only check, the document check,
-#       the format check, lint and typecheck only. clippy, the tests, the
-#       build and the license checks are skipped and CI may still fail.
+#       the format check, the license register check, lint and typecheck
+#       only. clippy, the tests, the build and the dependency license
+#       checks are skipped and CI may still fail.
 set -eu
 
 # Run from the repository root, whatever the caller's directory was. A clear
@@ -51,8 +52,8 @@ step() {
 }
 
 if [ "$quick" = 1 ]; then
-    printf 'pre-commit: LUMINGO_PRECOMMIT=quick — running the path case check, the export-only check, the document check, the format check, lint and typecheck.\n'
-    printf 'pre-commit: clippy, the tests, the build and the license checks are skipped.\n'
+    printf 'pre-commit: LUMINGO_PRECOMMIT=quick — running the path case check, the export-only check, the document check, the format check, the license register check, lint and typecheck.\n'
+    printf 'pre-commit: clippy, the tests, the build and the dependency license checks are skipped.\n'
 fi
 
 # First, because it is instant and because the mistake it catches is invisible
@@ -76,6 +77,13 @@ node scripts/check-docs.mjs
 
 step "cargo fmt --all -- --check"
 cargo fmt --all -- --check
+
+# The license register must name every dependency the build ships, with the
+# status `ok`. This runs in the quick mode too: it is a second or two of
+# work, and it catches a dependency that entered the build without a row
+# before the release does.
+step "the license register matches what the build ships"
+node scripts/check-license-register.mjs
 
 if [ "$quick" = 0 ]; then
     step "cargo clippy --workspace --all-targets -- -D warnings"
