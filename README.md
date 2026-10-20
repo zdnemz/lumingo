@@ -69,12 +69,15 @@ browser, the home screen, the setup wizard, the progress screen, and the
 settings screens are routed today; the quest map, chat, reading, and writing
 pieces exist as components and are not routed yet.
 
-The speech engines and model downloads are wired behind off-by-default cargo
-features and have not been run on real hardware. Windows 11 is the development
-and release target; the repository also builds on Linux, where the audio and
-speech pieces cannot be tested. `docs/ENVIRONMENT.md` records what has been
-built and tested on which machine, and each crate README states its own
-UNVERIFIED list.
+The speech engines sit behind off-by-default cargo features and have not been
+run on real hardware. The model download path is not behind a cargo feature: it
+is always compiled into the server build, and it is inert — no model can be
+downloaded yet, because every entry in `models/manifest.toml` is a `candidate`
+with an empty `files` list and such an entry is refused before any request is
+made. Windows 11 is the development and release target; the repository also
+builds on Linux, where the audio and speech pieces cannot be tested.
+`docs/ENVIRONMENT.md` records what has been built and tested on which machine,
+and each crate README states its own UNVERIFIED list.
 
 ## How it works
 
@@ -172,9 +175,17 @@ still a candidate, so no model can be downloaded yet. See `models/README.md`.
 | The key, to the provider's base URL, as its sign-in header | The API key, in a plain-text file you own |
 | Nothing else | The last 50 requests and responses, in the server's payload inspector |
 
-Model downloads, when they become available, will contact only the upstream
-hosts listed in `models/manifest.toml`, after showing the licence; nothing else
-is contacted.
+Model downloads start from the hosts the manifest names: `github.com` and
+`huggingface.co`, listed in `models/manifest.toml`. The rule the download path
+enforces is on the URL, not on the host: every URL, and every redirect target,
+must be HTTPS, plain HTTP is allowed only for the loopback address, and a URL
+that carries credentials is refused. A redirect is checked with that same rule
+and then followed, so the path does not pin the host: a redirect may reach
+another HTTPS host. The licence for the model is shown and accepted first, and
+each file is verified against the SHA-256 recorded in the manifest. The path is
+inert today: no model can be downloaded yet, because every entry in
+`models/manifest.toml` is a `candidate` with an empty `files` list, and such an
+entry is refused before any request is made.
 
 The payload inspector keeps the last 50 requests and responses (bodies over
 16 KiB are cut and flagged). It holds your words, because they are in the
