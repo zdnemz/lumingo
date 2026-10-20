@@ -206,15 +206,15 @@ pnpm install
 ```
 
 `sh scripts/verify.sh` runs the checks on demand. While iterating,
-`LUMINGO_PRECOMMIT=quick git commit ...` runs six checks only:
+`LUMINGO_PRECOMMIT=quick git commit ...` runs seven checks only:
 `scripts/check-case-collisions.mjs`, `scripts/check-export-only.mjs`,
 `scripts/check-docs.mjs`, `cargo fmt --all -- --check`,
-`pnpm --dir apps/web lint` and `pnpm --dir apps/web typecheck`. It leaves out
-clippy, the Rust tests, the interface tests, the interface build and the two
-licence checks, so a quick commit can still fail CI. `git commit --no-verify`
-skips the hook; CI still runs every check. Focused runs work too:
-`cargo test -p tutor-engine` for one crate, `pnpm --dir apps/web test` for the
-interface.
+`scripts/check-license-register.mjs`, `pnpm --dir apps/web lint` and
+`pnpm --dir apps/web typecheck`. It leaves out clippy, the Rust tests, the
+interface tests, the interface build and the two dependency licence checks, so
+a quick commit can still fail CI. `git commit --no-verify` skips the hook; CI
+still runs every check. Focused runs work too: `cargo test -p tutor-engine`
+for one crate, `pnpm --dir apps/web test` for the interface.
 
 Units are JSON files that must pass the content validator:
 
