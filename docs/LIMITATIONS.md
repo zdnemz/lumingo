@@ -61,8 +61,10 @@ The models are in neither the repository nor the release. Every entry in
 list, and the model manager refuses such an entry before it makes any network
 request. **No model can be downloaded yet**, and nothing has been downloaded
 from `github.com` or `huggingface.co`, the two hosts the manifest names as
-the sources for its candidates. The settings screen lists the manifest rows
-and shows the server's own reason that they cannot be fetched.
+the sources for its candidates. The download path checks the URL and not the
+host, so a redirect could reach another HTTPS host. The settings screen lists
+the manifest rows and shows the server's own reason that they cannot be
+fetched.
 
 ## The release build
 
