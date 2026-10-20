@@ -205,7 +205,9 @@ cargo run -p content-cli -- validate curriculum/units
 Deeper documents: `docs/ENVIRONMENT.md` (versions and the machines things were
 built and tested on), `docs/GRAMMAR_CHECK.md` (what the grammar checker catches
 and misses), `docs/OWNER_WALK.md` (the owner's checklist for the ten states, one
-section each, with what the screen must say), and `docs/LICENSE_REGISTER.md`
+section each, with what the screen must say), `docs/OWNER_RELEASE.md` (the
+owner's four release steps: push, tag, the draft release, the clean-account
+walk), and `docs/LICENSE_REGISTER.md`
 (every third-party item and its terms).
 
 ## Licenses
