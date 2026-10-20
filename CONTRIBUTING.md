@@ -55,24 +55,37 @@ every push.
 
 [scripts/verify.sh](scripts/verify.sh) is the gate. It runs the checks CI runs,
 on the machine that is committing, against the working tree. The commands it
-runs:
+runs, in order:
 
 ```sh
+node scripts/check-case-collisions.mjs
+node scripts/check-export-only.mjs
+node scripts/check-docs.mjs
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+git diff --quiet -- apps/web/src/generated
+cargo deny check licenses
+pnpm install --frozen-lockfile
+pnpm --dir apps/web install --frozen-lockfile
 pnpm --dir apps/web lint
+pnpm --dir apps/web typecheck
 pnpm --dir apps/web test
+pnpm --dir apps/web build
+pnpm --dir apps/web run check:licenses
 ```
 
-It also runs the path case check, the export-only check, the check that the
-generated TypeScript types match what is committed, the interface build and
-the JavaScript licence check. The Rust licence check runs when `cargo deny` is
+Two lines are not plain commands. The `git diff --quiet -- apps/web/src/generated`
+line is the check that the generated TypeScript types match what is committed,
+and the `cargo deny check licenses` line runs only when `cargo deny` is
 installed.
 
-`LUMINGO_PRECOMMIT=quick` runs the case check, the format, lint and typecheck
-only. It is an iteration shortcut, not a way to skip CI, and CI still runs
-everything. `git commit --no-verify` skips the hook; CI still runs every check.
+`LUMINGO_PRECOMMIT=quick` runs six checks only:
+`scripts/check-case-collisions.mjs`, `scripts/check-export-only.mjs`,
+`scripts/check-docs.mjs`, `cargo fmt --all -- --check`,
+`pnpm --dir apps/web lint` and `pnpm --dir apps/web typecheck`. It is an
+iteration shortcut, not a way to skip CI, and CI still runs everything.
+`git commit --no-verify` skips the hook; CI still runs every check.
 
 The browser suite, `pnpm test:e2e`, is manual. It never runs in the hook and
 never runs in CI, so a green commit does not mean the browser suite passed.
