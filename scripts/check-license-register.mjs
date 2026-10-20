@@ -203,7 +203,11 @@ function committed(path) {
   return readFileSync(full, "utf8");
 }
 
-/** The key a shipped component is looked up by: its kind and its name. */
+/**
+ * Whether a licence is one the register's rules name as needing a notice.
+ *
+ * The list is the register's own, so it cannot drift away from it.
+ */
 function needsNotice(licence, needing) {
   const alternatives = licenceAlternatives(licence);
   return [...needing].some((name) => alternatives.has(name));
