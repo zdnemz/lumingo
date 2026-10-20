@@ -48,6 +48,28 @@ jobs:
       - name: Licenses
         run: cargo deny check licenses
 
+      # The license register must name every dependency the build ships, with
+      # the status `ok`. The Rust side comes from the lockfile and needs no
+      # build and no network; the JavaScript side comes from the web app's
+      # lockfile and needs pnpm's metadata, so the web dependencies are
+      # installed here. The check goes in this job because the Rust tree is
+      # already here; the web job would have to download all of it.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - run: pnpm --dir apps/web install --frozen-lockfile
+
+      - name: License register
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-license-register.mjs
+
   web:
     runs-on: windows-latest
     defaults:
