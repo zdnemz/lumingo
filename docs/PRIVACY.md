@@ -90,21 +90,29 @@ for them is `.env.example`, which ships with empty values.
 
 ## Outbound hosts
 
-Every outbound request goes through one allowlist, and the allowlist holds:
+There are two kinds of outbound request, and two different sets of rules.
 
-- the `host:port` of the provider profile you are using, and nothing else, and
-- the model download hosts, `github.com` and `huggingface.co`, and only while
-  the setup guard is held — that is, only while the download is running. Drop
-  the guard and those hosts are refused again.
+**Talking to the AI provider.** Every provider request goes through one
+allowlist, and the allowlist holds the `host:port` of the provider profile you
+are using, and nothing else. A request to any other host is refused before a
+socket is opened, and so is a redirect to a host that is not on the list. The
+scheme is checked as well: HTTPS is required. Plain HTTP is allowed only for
+the loopback address, so that a provider running on this computer can be used.
+The client does not use the system's proxy settings, so there is no second
+destination outside the allowlist.
 
-A request to any other host is refused before a socket is opened, and so is a
-redirect to a host that is not on the list. The client does not use the
-system's proxy settings, so there is no second destination outside the
-allowlist.
+**Downloading a model.** This is a separate path with its own client, so the
+provider allowlist above does not govern it. The model manifest names
+`github.com` and `huggingface.co` as the hosts a download starts from. What
+that path enforces is the scheme and the credentials: every URL and every
+redirect must be HTTPS, plain HTTP is allowed only for the loopback address,
+and a URL that carries credentials is refused. It does not check the host, so
+a redirect may reach another HTTPS host.
 
-The scheme is checked as well: HTTPS is required. Plain HTTP is allowed only
-for the loopback address, so that a provider running on this computer can be
-used.
+That path is inert in this build. No model can be downloaded yet: every entry
+in the model manifest is a `candidate` with an empty file list, and such an
+entry is refused before any request is made. The rules above are what the code
+enforces once a downloadable entry exists.
 
 The browser tab contacts only the local server. It talks to the program on
 `http://127.0.0.1:8765` and to nothing else.
