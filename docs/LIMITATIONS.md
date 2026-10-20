@@ -62,9 +62,14 @@ list, and the model manager refuses such an entry before it makes any network
 request. **No model can be downloaded yet**, and nothing has been downloaded
 from `github.com` or `huggingface.co`, the two hosts the manifest names as
 the sources for its candidates. The download path checks the URL and not the
-host, so a redirect could reach another HTTPS host. The settings screen lists
-the manifest rows and shows the server's own reason that they cannot be
-fetched.
+host, so a redirect could reach another HTTPS host. In the release build the
+program looks for `models/manifest.toml` next to the executable, and the zip
+holds no `models/` folder, so the manifest is not found there. The server's
+own reason is that the model manifest cannot be read, and the settings screen
+lists no rows: it says the model list could not be loaded. In a source
+checkout the manifest is found in the working directory instead, the settings
+screen lists the ten manifest rows, and each row carries the server's own
+reason that it cannot be fetched.
 
 ## The release build
 
