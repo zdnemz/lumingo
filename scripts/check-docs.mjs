@@ -38,6 +38,19 @@ const MANIFEST_PATH = "models/manifest.toml";
 // the folder's path under the router is that screen's route.
 const APP_ROUTER = "apps/web/src/app";
 
+// The characters that may follow a route's name in a document: a letter, a
+// digit, `_`, `-` or `/`. A path character means the name is the front of a
+// longer path — a different route — so it does not name the route.
+const PATH_CHARACTER = /[A-Za-z0-9_\-\/]/;
+
+// A folder whose name is wrapped in parentheses is a route group: it is not a
+// segment of the URL, it only groups the folders beside it.
+const ROUTE_GROUP = /^\(.*\)$/;
+
+// A folder whose name is wrapped in brackets is a dynamic segment: it names a
+// parameter, not a path.
+const DYNAMIC_SEGMENT = /^\[.*\]$/;
+
 // The documents, in the order they are reported.
 const DOCUMENTS = [
   "README.md",
@@ -489,10 +502,11 @@ function deriveFacts() {
  *
  * A folder that holds a `page.tsx` is a screen, and the route's path is that
  * folder's path under the router — the router's own `page.tsx` is the root.
- * Two folder shapes are not part of a URL and are not walked: a route group,
- * a folder in parentheses, only groups the folders beside it, and a dynamic
- * segment, a folder in brackets, names a parameter rather than a fixed path,
- * so the screens below it have no URL a document could name.
+ * A route group, a folder in parentheses, is not a segment of the URL: it only
+ * groups the folders beside it, so the walk goes into it and the route is
+ * built from the segments around it. A dynamic segment, a folder in brackets,
+ * names a parameter rather than a path, so the screens below it are not
+ * routes this rule covers and it does not ask the README to name them.
  *
  * The list is derived from the filesystem and never written down here, so a
  * screen added to the app is a route the README has to name from that moment
@@ -510,8 +524,9 @@ function deriveRoutes() {
     }
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      if (entry.name.startsWith("(") || entry.name.startsWith("[")) continue;
-      walk(join(folder, entry.name), `${path}/${entry.name}`);
+      if (DYNAMIC_SEGMENT.test(entry.name)) continue; // a dynamic segment names no path to spell
+      const segment = ROUTE_GROUP.test(entry.name) ? "" : entry.name; // a group is no segment
+      walk(join(folder, entry.name), segment === "" ? path : `${path}/${segment}`);
     }
   };
   walk("", "");
@@ -1103,6 +1118,28 @@ function checkManifestState(path, text, derived) {
 }
 
 /**
+ * Whether a text names a path.
+ *
+ * The path is looked up as it is written — a plain text search, with no
+ * pattern that a folder name could break out of — and the character that
+ * follows it must not be a path character. So `/settings/` names the route
+ * `/settings/` when a backtick or a space follows it, and does not name it
+ * when it is the front of `/settings/privacy/`: that is a different route's
+ * name, and a rule that cannot tell the two apart cannot catch the next
+ * drift. A query string does not change that — `?` is not a path character,
+ * so `/unit/?id=1` still names `/unit/`.
+ */
+function namesPath(text, path) {
+  let at = text.indexOf(path);
+  while (at !== -1) {
+    const next = text.charAt(at + path.length);
+    if (next === "" || !PATH_CHARACTER.test(next)) return true;
+    at = text.indexOf(path, at + 1);
+  }
+  return false;
+}
+
+/**
  * The routes the README has to name.
  *
  * Every screen of the web app is a route, and the README is where a reader
@@ -1123,7 +1160,7 @@ function checkRoutes(path, text, derived) {
   for (const route of derived.routes) {
     if (route.route === "/") continue;
     const name = `${route.route}/`;
-    if (!text.includes(name)) {
+    if (!namesPath(text, name)) {
       violations.push(`${path}: does not name the route "${name}" (the page ${route.page})`);
     }
   }
