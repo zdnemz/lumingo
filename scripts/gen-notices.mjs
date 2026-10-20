@@ -55,13 +55,20 @@ function read(path) {
  *
  * The commands are run from the root on purpose: `cargo tree` reads the
  * workspace, and `pnpm --dir apps/web` reads the lockfile of the web app.
+ *
+ * Whether the command goes through a shell is the caller's decision, because
+ * the two commands need different things. `cargo` is a real executable and
+ * must not go through a shell: the format string holds a space, and a shell
+ * would split it into two arguments on Windows. `pnpm` is a `.cmd` file on
+ * Windows and cannot be spawned without a shell, so it takes one; none of
+ * its arguments holds a space, so the shell has nothing to split.
  */
-function run(command, args, what) {
+function run(command, args, what, options = {}) {
   try {
     return execFileSync(command, args, {
       cwd: ROOT,
       encoding: "utf8",
-      shell: process.platform === "win32",
+      shell: options.shell === true,
       stdio: ["ignore", "pipe", "inherit"],
     });
   } catch (error) {
@@ -119,10 +126,13 @@ function parseCrateLine(line) {
  * states on its own.
  */
 function deriveCrates() {
+  // No shell, on any platform: the format string holds a space, and cargo is
+  // a real executable that takes it as one argument.
   const output = run(
     "cargo",
     ["tree", "--edges", "normal,build", "--prefix", "none", "--format", "{p} {l}", "--target", CARGO_TARGET],
     "the cargo tree",
+    { shell: false },
   );
   const crates = new Map();
   for (const line of output.split(/\r?\n/)) {
@@ -141,10 +151,14 @@ function deriveCrates() {
  * differs per platform. The rest is the same on every machine.
  */
 function derivePackages() {
+  // A shell, on Windows only: pnpm is a `.cmd` file there and cannot be
+  // spawned without one. None of these arguments holds a space, so the shell
+  // has nothing to split.
   const output = run(
     "pnpm",
     ["--dir", "apps/web", "licenses", "list", "--prod", "--json"],
     "the pnpm licence list",
+    { shell: process.platform === "win32" },
   );
   const listing = JSON.parse(output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1));
   const packages = new Map();
@@ -400,13 +414,14 @@ function cell(text) {
  *
  * A dependency that enters the build gets one new row; a dependency that
  * leaves gets its row deleted. The licence in a row is the licence the
- * source states, not a paraphrase of it.
+ * source states, not a paraphrase of it. The status is `ok`: the item's
+ * licence is known and compatible, which is what a shipped item is.
  */
 function renderRows(components) {
   return components
     .map(
       (component) =>
-        `| ${cell(component.name)} | ${component.kind} | ${cell(component.licence)} | shipped |`,
+        `| ${cell(component.name)} | ${component.kind} | ${cell(component.licence)} | ok |`,
     )
     .join("\n");
 }
