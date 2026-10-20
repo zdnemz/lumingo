@@ -16,14 +16,21 @@
 // a derived list that comes out empty, throws: this script never writes an
 // empty list, because a NOTICE that lists nothing is a false claim.
 //
+// The notices the build cannot prove by itself are read from the licence
+// register: the register is the project's record, and the one place where
+// wording is allowed. The build says which licences the shipped components
+// carry; it cannot say what the MPL-2.0 and CC-BY-4.0 components ask the
+// reader to be told. So the register carries those words and this script
+// renders them under the component's own line.
+//
 // Exit codes:
 //   0  the files were written, or --check found them already correct
 //   1  --check found a committed file that differs from what it would write
 //   2  internal error
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // The repository root, found from this script's own path, so the script works
 // from any working directory.
@@ -32,6 +39,15 @@ const ROOT = fileURLToPath(new URL("../", import.meta.url));
 // The files this script owns.
 const NOTICE_PATH = "NOTICE";
 const DATA_PATH = "apps/web/src/about/notices.json";
+
+// The licence register, and the section of it that holds the shipped set.
+const REGISTER_PATH = "docs/LICENSE_REGISTER.md";
+const REGISTER_SECTION = 10;
+
+// The width the NOTICE's prose is wrapped at. A notice under a component's
+// own line is indented by two spaces, so its text is wrapped two columns
+// narrower and the whole line stays inside the same measure.
+const NOTICE_WIDTH = 68;
 
 // The target the release artifact is built for.
 //
@@ -314,13 +330,210 @@ function ofKind(components, kind) {
 }
 
 /**
+ * A section of the register, from its heading to the next one.
+ *
+ * The section is found by its number, because the numbers are what the rest
+ * of the repository refers to. A register without that section returns null.
+ */
+export function registerSection(register, number) {
+  const lines = register.split(/\r?\n/);
+  const start = lines.findIndex((line) => new RegExp(`^## ${number}\\.\\s`).test(line));
+  if (start === -1) return null;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start + 1, end).join("\n");
+}
+
+/** The cells of a markdown table row, with the escaped pipes unescaped. */
+function tableCells(line) {
+  const body = line.trim();
+  const inner = body.slice(1, body.endsWith("|") ? -1 : undefined);
+  const cells = [];
+  let current = "";
+  let escaped = false;
+  for (const character of inner) {
+    if (escaped) {
+      current += character;
+      escaped = false;
+    } else if (character === "\\") {
+      current += character;
+      escaped = true;
+    } else if (character === "|") {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  cells.push(current.trim());
+  return cells.map((cell) => cell.replace(/\\\|/g, "|"));
+}
+
+/** Whether a line is a markdown table row. */
+function isTableRow(line) {
+  return /^\s*\|.*\|\s*$/.test(line);
+}
+
+/** Whether a row of cells is the separator under a header. */
+function isSeparator(cells) {
+  return cells.length > 0 && cells.every((cell) => /^:?-{2,}:?$/.test(cell));
+}
+
+/**
+ * A markdown table, found by its header row.
+ *
+ * The header names the columns, so two tables in the same section are told
+ * apart by their columns and not by their position. A row that does not have
+ * the header's number of cells is a broken table and throws: a table the
+ * reader cannot read is a broken source, not a table with fewer rows.
+ */
+export function findTable(markdown, header) {
+  const lines = markdown.split(/\r?\n/);
+  const wanted = header.map((name) => name.trim().toLowerCase());
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isTableRow(lines[index])) continue;
+    const cells = tableCells(lines[index]);
+    if (cells.length !== wanted.length) continue;
+    if (!cells.every((cell, column) => cell.toLowerCase() === wanted[column])) continue;
+    const rows = [];
+    for (let row = index + 1; row < lines.length; row += 1) {
+      if (!isTableRow(lines[row])) break;
+      const rowCells = tableCells(lines[row]);
+      if (isSeparator(rowCells)) continue;
+      if (rowCells.length !== wanted.length) {
+        throw new Error(`the table with the columns ${header.join(", ")} has a row with ${rowCells.length} cells`);
+      }
+      rows.push(rowCells);
+    }
+    return { header, rows };
+  }
+  return null;
+}
+
+/**
+ * The key a shipped component is looked up by: its kind and its name.
+ *
+ * The name alone is not enough: `semver` is in the shipped set twice, once as
+ * a crate and once as a package, so a table that is keyed on the name alone
+ * cannot say which of the two a row is for.
+ */
+export function shippedKey(kind, name) {
+  return JSON.stringify([kind, name]);
+}
+
+/**
+ * The register's attribution table: the notices the build cannot prove.
+ *
+ * The table is the one place where wording is allowed, so it is read from the
+ * register and not invented here. A table that is missing, that cannot be
+ * read, or that is empty throws: the shipped set holds MPL-2.0 components,
+ * so an empty table is a broken source, not a pass.
+ *
+ * A row is keyed on the item's name and its kind, the way the machine table
+ * is: one row per shipped item of one kind.
+ */
+export function readAttributions() {
+  const register = read(REGISTER_PATH);
+  const section = registerSection(register, REGISTER_SECTION);
+  if (section === null) throw new Error(`the register has no section ${REGISTER_SECTION}`);
+  const table = findTable(section, ["Item", "Kind", "Notice"]);
+  if (table === null) {
+    throw new Error(`the register's section ${REGISTER_SECTION} has no attribution table`);
+  }
+  const rows = [];
+  for (const row of table.rows) {
+    const item = row[0].trim();
+    const kind = row[1].trim();
+    const notice = row[2].trim();
+    if (item === "") throw new Error("the attribution table has a row with no item");
+    if (kind === "") throw new Error(`the attribution row for ${item} has no kind`);
+    if (notice === "") throw new Error(`the attribution row for ${item} has no notice`);
+    rows.push({ name: item, kind, notice });
+  }
+  if (rows.length === 0) throw new Error("the register's attribution table is empty");
+  return rows;
+}
+
+/**
+ * The notices of the attribution table, and what is wrong with the rest.
+ *
+ * A row is matched to a shipped component by its name and its kind. A row
+ * that matches no component is a notice that goes nowhere, and two rows for
+ * the same component are two notices for one component: both are reported
+ * here, and the caller decides what to do about them. The generator refuses
+ * to write a NOTICE from a table in that state; the check names the rows.
+ */
+export function resolveNotices(components, rows) {
+  const shipped = new Set(components.map((component) => shippedKey(component.kind, component.name)));
+  const notices = new Map();
+  const unmatched = [];
+  const duplicates = [];
+  for (const row of rows) {
+    const key = shippedKey(row.kind, row.name);
+    if (!shipped.has(key)) {
+      unmatched.push(row);
+      continue;
+    }
+    if (notices.has(key)) {
+      duplicates.push(row);
+      continue;
+    }
+    notices.set(key, row.notice);
+  }
+  return { notices, unmatched, duplicates };
+}
+
+/**
+ * A paragraph, wrapped to a width.
+ *
+ * The words are the ones the register carries; only the line breaks are
+ * added here.
+ */
+function wrap(text, width) {
+  const words = text.split(/\s+/).filter((word) => word !== "");
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    if (line === "") {
+      line = word;
+    } else if (`${line} ${word}`.length <= width) {
+      line = `${line} ${word}`;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line !== "") lines.push(line);
+  return lines;
+}
+
+/**
+ * A notice, indented under the component's own line.
+ *
+ * The text is the register's, verbatim; the indent and the line breaks are
+ * the NOTICE's.
+ */
+function noticeLines(notice) {
+  if (notice === undefined) return [];
+  return wrap(notice, NOTICE_WIDTH - 2).map((line) => `  ${line}`);
+}
+
+/**
  * The NOTICE.
  *
  * The file states the project's own two licences, then lists what the build
  * ships, one line per component. It names no directory the release zip does
  * not hold, and no component the artifact does not contain.
+ *
+ * A component the register's attribution table names gets its notice on an
+ * indented line directly beneath its own line.
  */
-function renderNotice(components, project) {
+function renderNotice(components, project, notices) {
   const lines = [];
   lines.push("Lumingo");
   lines.push("Copyright 2026 zdnemz and Lumingo contributors");
@@ -338,11 +551,17 @@ function renderNotice(components, project) {
   lines.push("");
   lines.push(`Rust crates in this build (${ofKind(components, "crate").length}):`);
   lines.push("");
-  for (const crate of ofKind(components, "crate")) lines.push(`- ${crate.name} — ${crate.licence}`);
+  for (const crate of ofKind(components, "crate")) {
+    lines.push(`- ${crate.name} — ${crate.licence}`);
+    lines.push(...noticeLines(notices.get(shippedKey(crate.kind, crate.name))));
+  }
   lines.push("");
   lines.push(`JavaScript packages in this build (${ofKind(components, "package").length}):`);
   lines.push("");
-  for (const pkg of ofKind(components, "package")) lines.push(`- ${pkg.name} — ${pkg.licence}`);
+  for (const pkg of ofKind(components, "package")) {
+    lines.push(`- ${pkg.name} — ${pkg.licence}`);
+    lines.push(...noticeLines(notices.get(shippedKey(pkg.kind, pkg.name))));
+  }
   lines.push("");
   lines.push(
     "Bundled fonts (SIL Open Font License 1.1; the license texts are served with the fonts from /fonts/licenses/):",
@@ -350,6 +569,7 @@ function renderNotice(components, project) {
   lines.push("");
   for (const font of ofKind(components, "font")) {
     lines.push(`- ${font.name} — ${font.licence} — ${font.attribution}`);
+    lines.push(...noticeLines(notices.get(shippedKey(font.kind, font.name))));
   }
   lines.push("");
   lines.push("Speech models:");
@@ -360,13 +580,17 @@ function renderNotice(components, project) {
     lines.push("by the user's own machine, under its own terms, once it has been");
     lines.push("checked at the source; none of them can be downloaded yet.");
   } else {
-    for (const model of models) lines.push(`- ${model.name} — ${model.licence}`);
+    for (const model of models) {
+      lines.push(`- ${model.name} — ${model.licence}`);
+      lines.push(...noticeLines(notices.get(shippedKey(model.kind, model.name))));
+    }
   }
   lines.push("");
   lines.push("Files in this release:");
   lines.push("");
   for (const member of ofKind(components, "release")) {
     lines.push(`- ${member.name} — ${member.licence}`);
+    lines.push(...noticeLines(notices.get(shippedKey(member.kind, member.name))));
   }
   lines.push("");
   return lines.join("\n");
@@ -377,21 +601,26 @@ function renderNotice(components, project) {
  *
  * It is data, not prose: the page imports it at build time, so the file adds
  * no server feature and no file the release zip does not already hold.
+ *
+ * The `attribution` field carries the notice of every component the
+ * register's attribution table names, and the font's own OFL line. It is the
+ * notice verbatim: this is JSON, not a letter.
  */
-function renderData(components, models, project) {
+function renderData(components, models, project, notices) {
   return `${JSON.stringify(
     {
       project: { code: project.code, content: project.content },
-      components: components.map((component) =>
-        component.attribution === undefined
+      components: components.map((component) => {
+        const attribution = notices.get(shippedKey(component.kind, component.name)) ?? component.attribution;
+        return attribution === undefined
           ? { name: component.name, kind: component.kind, licence: component.licence }
           : {
               name: component.name,
               kind: component.kind,
               licence: component.licence,
-              attribution: component.attribution,
-            },
-      ),
+              attribution,
+            };
+      }),
       models: models.map((model) => ({
         id: model.id,
         licence: model.licence,
@@ -473,9 +702,21 @@ function main() {
     return 0;
   }
 
+  const rows = readAttributions();
+  const { notices, unmatched, duplicates } = resolveNotices(components, rows);
+  if (unmatched.length > 0) {
+    const row = unmatched[0];
+    throw new Error(
+      `the attribution row for ${row.name} as a ${row.kind} names nothing the build ships`,
+    );
+  }
+  if (duplicates.length > 0) {
+    const row = duplicates[0];
+    throw new Error(`the attribution table has two rows for ${row.name} as a ${row.kind}`);
+  }
   const files = [
-    { path: NOTICE_PATH, text: renderNotice(components, project) },
-    { path: DATA_PATH, text: renderData(components, models, project) },
+    { path: NOTICE_PATH, text: renderNotice(components, project, notices) },
+    { path: DATA_PATH, text: renderData(components, models, project, notices) },
   ];
 
   if (options.check) {
@@ -503,9 +744,21 @@ function main() {
   return 0;
 }
 
-try {
-  process.exitCode = main();
-} catch (error) {
-  console.error(`gen-notices: internal error: ${error.message}`);
-  process.exitCode = 2;
+// The derivation and the renderers are exported, so the register check reads
+// the build the same way this script does and the two cannot disagree about
+// what the artifact contains.
+export { derive, renderData, renderNotice, renderRows };
+
+// This script runs only when it is the entry point. The check imports it, and
+// an import must not write the files.
+const invokedDirectly =
+  process.argv[1] !== undefined && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
+
+if (invokedDirectly) {
+  try {
+    process.exitCode = main();
+  } catch (error) {
+    console.error(`gen-notices: internal error: ${error.message}`);
+    process.exitCode = 2;
+  }
 }

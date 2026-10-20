@@ -24,6 +24,7 @@ anything marked `review`, read the full license text before use.
 5. **Evaluation data.** Datasets used only to measure are downloaded by script, never committed, and never shipped.
 6. **Tooling.** `cargo deny check licenses` (configured in `deny.toml`) and `pnpm run check:licenses` (in `apps/web`) run in CI. Their allowlists mirror rule 2.
 7. **Attribution.** `NOTICE` lists the attribution lines that the licenses below require.
+8. **Notices.** Two licences in the shipped set need a notice of their own: `MPL-2.0` and `CC-BY-4.0`. Every shipped item whose licence is one of those has a row in the attribution table of section 10, and `scripts/gen-notices.mjs` renders that row's notice under the item's own line in `NOTICE`.
 
 ## 3. Rust crates in the build
 
@@ -235,3 +236,432 @@ Checked 2026-10-21.
 
 | Item | Kind | Licence | Status |
 |---|---|---|---|
+| adler2 | crate | 0BSD OR MIT OR Apache-2.0 | ok |
+| ahash | crate | MIT OR Apache-2.0 | ok |
+| aho-corasick | crate | Unlicense OR MIT | ok |
+| allocator-api2 | crate | MIT OR Apache-2.0 | ok |
+| ammonia | crate | MIT OR Apache-2.0 | ok |
+| anstream | crate | MIT OR Apache-2.0 | ok |
+| anstyle | crate | MIT OR Apache-2.0 | ok |
+| anstyle-parse | crate | MIT OR Apache-2.0 | ok |
+| anstyle-query | crate | MIT OR Apache-2.0 | ok |
+| anstyle-wincon | crate | MIT OR Apache-2.0 | ok |
+| anyhow | crate | MIT OR Apache-2.0 | ok |
+| async-trait | crate | MIT OR Apache-2.0 | ok |
+| atoi | crate | MIT | ok |
+| atomic-waker | crate | Apache-2.0 OR MIT | ok |
+| atomic_float | crate | Apache-2.0 OR MIT OR Unlicense | ok |
+| audio-codec-algorithms | crate | 0BSD OR Apache-2.0 | ok |
+| audioadapter | crate | MIT OR Apache-2.0 | ok |
+| audioadapter-buffers | crate | MIT OR Apache-2.0 | ok |
+| audioadapter-sample | crate | MIT OR Apache-2.0 | ok |
+| autocfg | crate | Apache-2.0 OR MIT | ok |
+| axum | crate | MIT | ok |
+| axum-core | crate | MIT | ok |
+| base64 | crate | MIT OR Apache-2.0 | ok |
+| bincode | crate | MIT | ok |
+| bit-set | crate | Apache-2.0 OR MIT | ok |
+| bit-vec | crate | Apache-2.0 OR MIT | ok |
+| bitflags | crate | MIT OR Apache-2.0 | ok |
+| blanket | crate | MIT | ok |
+| block-buffer | crate | MIT OR Apache-2.0 | ok |
+| borrow-or-share | crate | MIT-0 | ok |
+| burn | crate | MIT OR Apache-2.0 | ok |
+| burn-common | crate | MIT OR Apache-2.0 | ok |
+| burn-core | crate | MIT OR Apache-2.0 | ok |
+| burn-derive | crate | MIT OR Apache-2.0 | ok |
+| burn-ir | crate | MIT OR Apache-2.0 | ok |
+| burn-ndarray | crate | MIT OR Apache-2.0 | ok |
+| burn-tensor | crate | MIT OR Apache-2.0 | ok |
+| bytecount | crate | Apache-2.0/MIT | ok |
+| bytemuck | crate | Zlib OR Apache-2.0 OR MIT | ok |
+| bytemuck_derive | crate | Zlib OR Apache-2.0 OR MIT | ok |
+| bytes | crate | MIT | ok |
+| cached | crate | MIT | ok |
+| cached_proc_macro | crate | MIT | ok |
+| cached_proc_macro_types | crate | MIT | ok |
+| cc | crate | MIT OR Apache-2.0 | ok |
+| cfg-if | crate | MIT OR Apache-2.0 | ok |
+| chrono | crate | MIT OR Apache-2.0 | ok |
+| clap | crate | MIT OR Apache-2.0 | ok |
+| clap_builder | crate | MIT OR Apache-2.0 | ok |
+| clap_derive | crate | MIT OR Apache-2.0 | ok |
+| clap_lex | crate | MIT OR Apache-2.0 | ok |
+| colorchoice | crate | MIT OR Apache-2.0 | ok |
+| colored | crate | MPL-2.0 | ok |
+| const-oid | crate | Apache-2.0 OR MIT | ok |
+| convert_case | crate | MIT | ok |
+| cpufeatures | crate | MIT OR Apache-2.0 | ok |
+| crc | crate | MIT OR Apache-2.0 | ok |
+| crc-catalog | crate | MIT OR Apache-2.0 | ok |
+| crc32fast | crate | MIT OR Apache-2.0 | ok |
+| crossbeam-queue | crate | MIT OR Apache-2.0 | ok |
+| crossbeam-utils | crate | MIT OR Apache-2.0 | ok |
+| crypto-common | crate | MIT OR Apache-2.0 | ok |
+| cssparser | crate | MPL-2.0 | ok |
+| cubecl-common | crate | MIT OR Apache-2.0 | ok |
+| darling | crate | MIT | ok |
+| darling_core | crate | MIT | ok |
+| darling_macro | crate | MIT | ok |
+| data-encoding | crate | MIT | ok |
+| deranged | crate | MIT OR Apache-2.0 | ok |
+| derive-new | crate | MIT | ok |
+| derive_more | crate | MIT | ok |
+| derive_more-impl | crate | MIT | ok |
+| digest | crate | MIT OR Apache-2.0 | ok |
+| displaydoc | crate | MIT OR Apache-2.0 | ok |
+| dtoa | crate | MIT OR Apache-2.0 | ok |
+| dtoa-short | crate | MPL-2.0 | ok |
+| either | crate | MIT OR Apache-2.0 | ok |
+| email_address | crate | MIT | ok |
+| embassy-futures | crate | MIT OR Apache-2.0 | ok |
+| equivalent | crate | Apache-2.0 OR MIT | ok |
+| event-listener | crate | Apache-2.0 OR MIT | ok |
+| fancy-regex | crate | MIT | ok |
+| fastrand | crate | Apache-2.0 OR MIT | ok |
+| find-msvc-tools | crate | MIT OR Apache-2.0 | ok |
+| flate2 | crate | MIT OR Apache-2.0 | ok |
+| fluent-uri | crate | MIT | ok |
+| flume | crate | Apache-2.0/MIT | ok |
+| fnv | crate | Apache-2.0 / MIT | ok |
+| foldhash | crate | Zlib | ok |
+| form_urlencoded | crate | MIT OR Apache-2.0 | ok |
+| fraction | crate | MIT OR Apache-2.0 | ok |
+| fst | crate | Unlicense/MIT | ok |
+| futures-channel | crate | MIT OR Apache-2.0 | ok |
+| futures-core | crate | MIT OR Apache-2.0 | ok |
+| futures-executor | crate | MIT OR Apache-2.0 | ok |
+| futures-intrusive | crate | MIT OR Apache-2.0 | ok |
+| futures-io | crate | MIT OR Apache-2.0 | ok |
+| futures-lite | crate | Apache-2.0 OR MIT | ok |
+| futures-macro | crate | MIT OR Apache-2.0 | ok |
+| futures-sink | crate | MIT OR Apache-2.0 | ok |
+| futures-task | crate | MIT OR Apache-2.0 | ok |
+| futures-util | crate | MIT OR Apache-2.0 | ok |
+| generic-array | crate | MIT | ok |
+| getopts | crate | MIT OR Apache-2.0 | ok |
+| getrandom | crate | MIT OR Apache-2.0 | ok |
+| half | crate | MIT OR Apache-2.0 | ok |
+| harper-brill | crate | Apache-2.0 | ok |
+| harper-core | crate | Apache-2.0 | ok |
+| harper-pos-utils | crate | Apache-2.0 | ok |
+| hashbrown | crate | MIT OR Apache-2.0 | ok |
+| hashlink | crate | MIT OR Apache-2.0 | ok |
+| heck | crate | MIT OR Apache-2.0 | ok |
+| html5ever | crate | MIT OR Apache-2.0 | ok |
+| http | crate | MIT OR Apache-2.0 | ok |
+| http-body | crate | MIT | ok |
+| http-body-util | crate | MIT | ok |
+| httparse | crate | MIT OR Apache-2.0 | ok |
+| httpdate | crate | MIT OR Apache-2.0 | ok |
+| hybrid-array | crate | MIT OR Apache-2.0 | ok |
+| hyper | crate | MIT | ok |
+| hyper-tls | crate | MIT/Apache-2.0 | ok |
+| hyper-util | crate | MIT | ok |
+| icu_collections | crate | Unicode-3.0 | ok |
+| icu_locale_core | crate | Unicode-3.0 | ok |
+| icu_normalizer | crate | Unicode-3.0 | ok |
+| icu_normalizer_data | crate | Unicode-3.0 | ok |
+| icu_properties | crate | Unicode-3.0 | ok |
+| icu_properties_data | crate | Unicode-3.0 | ok |
+| icu_provider | crate | Unicode-3.0 | ok |
+| ident_case | crate | MIT/Apache-2.0 | ok |
+| idna | crate | MIT OR Apache-2.0 | ok |
+| idna_adapter | crate | Apache-2.0 OR MIT | ok |
+| indexmap | crate | Apache-2.0 OR MIT | ok |
+| ipnet | crate | MIT OR Apache-2.0 | ok |
+| is-macro | crate | Apache-2.0 | ok |
+| is_terminal_polyfill | crate | MIT OR Apache-2.0 | ok |
+| itertools | crate | MIT OR Apache-2.0 | ok |
+| itoa | crate | MIT OR Apache-2.0 | ok |
+| jsonschema | crate | MIT | ok |
+| jsonschema-regex | crate | MIT | ok |
+| jsonschema-value | crate | MIT | ok |
+| lazy_static | crate | MIT OR Apache-2.0 | ok |
+| levenshtein_automata | crate | MIT | ok |
+| libc | crate | MIT OR Apache-2.0 | ok |
+| libm | crate | MIT | ok |
+| libsqlite3-sys | crate | MIT | ok |
+| litemap | crate | Unicode-3.0 | ok |
+| lock_api | crate | MIT OR Apache-2.0 | ok |
+| log | crate | MIT OR Apache-2.0 | ok |
+| lru | crate | MIT | ok |
+| maplit | crate | MIT/Apache-2.0 | ok |
+| markup5ever | crate | MIT OR Apache-2.0 | ok |
+| matchers | crate | MIT | ok |
+| matchit | crate | MIT AND BSD-3-Clause | ok |
+| matrixmultiply | crate | MIT/Apache-2.0 | ok |
+| memchr | crate | Unlicense OR MIT | ok |
+| micromap | crate | MIT | ok |
+| mime | crate | MIT OR Apache-2.0 | ok |
+| mime_guess | crate | MIT | ok |
+| miniz_oxide | crate | MIT OR Zlib OR Apache-2.0 | ok |
+| mio | crate | MIT | ok |
+| native-tls | crate | MIT OR Apache-2.0 | ok |
+| ndarray | crate | MIT OR Apache-2.0 | ok |
+| new_debug_unreachable | crate | MIT | ok |
+| ntapi | crate | Apache-2.0 OR MIT | ok |
+| nu-ansi-term | crate | MIT | ok |
+| num | crate | MIT OR Apache-2.0 | ok |
+| num-bigint | crate | MIT OR Apache-2.0 | ok |
+| num-cmp | crate | MIT/Apache-2.0 | ok |
+| num-complex | crate | MIT OR Apache-2.0 | ok |
+| num-conv | crate | MIT OR Apache-2.0 | ok |
+| num-integer | crate | MIT OR Apache-2.0 | ok |
+| num-iter | crate | MIT OR Apache-2.0 | ok |
+| num-rational | crate | MIT OR Apache-2.0 | ok |
+| num-traits | crate | MIT OR Apache-2.0 | ok |
+| once_cell | crate | MIT OR Apache-2.0 | ok |
+| once_cell_polyfill | crate | MIT OR Apache-2.0 | ok |
+| ordered-float | crate | MIT | ok |
+| outref | crate | MIT | ok |
+| parking | crate | Apache-2.0 OR MIT | ok |
+| parking_lot | crate | MIT OR Apache-2.0 | ok |
+| parking_lot_core | crate | MIT OR Apache-2.0 | ok |
+| paste | crate | MIT OR Apache-2.0 | ok |
+| percent-encoding | crate | MIT OR Apache-2.0 | ok |
+| phf | crate | MIT | ok |
+| phf_codegen | crate | MIT | ok |
+| phf_generator | crate | MIT | ok |
+| phf_shared | crate | MIT | ok |
+| pin-project-lite | crate | Apache-2.0 OR MIT | ok |
+| pkg-config | crate | MIT OR Apache-2.0 | ok |
+| portable-atomic | crate | Apache-2.0 OR MIT | ok |
+| potential_utf | crate | Unicode-3.0 | ok |
+| powerfmt | crate | MIT OR Apache-2.0 | ok |
+| ppv-lite86 | crate | MIT OR Apache-2.0 | ok |
+| precomputed-hash | crate | MIT | ok |
+| primal-check | crate | MIT OR Apache-2.0 | ok |
+| proc-macro2 | crate | MIT OR Apache-2.0 | ok |
+| pulldown-cmark | crate | MIT | ok |
+| pulldown-cmark-escape | crate | MIT | ok |
+| quote | crate | MIT OR Apache-2.0 | ok |
+| rand | crate | MIT OR Apache-2.0 | ok |
+| rand_chacha | crate | MIT OR Apache-2.0 | ok |
+| rand_core | crate | MIT OR Apache-2.0 | ok |
+| rand_distr | crate | MIT OR Apache-2.0 | ok |
+| rawpointer | crate | MIT/Apache-2.0 | ok |
+| realfft | crate | MIT | ok |
+| ref-cast | crate | MIT OR Apache-2.0 | ok |
+| ref-cast-impl | crate | MIT OR Apache-2.0 | ok |
+| referencing | crate | MIT | ok |
+| regex | crate | MIT OR Apache-2.0 | ok |
+| regex-automata | crate | MIT OR Apache-2.0 | ok |
+| regex-syntax | crate | MIT OR Apache-2.0 | ok |
+| reqwest | crate | MIT OR Apache-2.0 | ok |
+| rmp | crate | MIT | ok |
+| rmp-serde | crate | MIT | ok |
+| rs-conllu | crate | MIT OR Apache-2.0 | ok |
+| rtrb | crate | MIT OR Apache-2.0 | ok |
+| rubato | crate | MIT OR Apache-2.0 | ok |
+| rust-embed | crate | MIT | ok |
+| rust-embed-impl | crate | MIT | ok |
+| rust-embed-utils | crate | MIT | ok |
+| rustc_version | crate | MIT OR Apache-2.0 | ok |
+| rustfft | crate | MIT OR Apache-2.0 | ok |
+| rustls-pki-types | crate | MIT OR Apache-2.0 | ok |
+| ryu | crate | Apache-2.0 OR BSL-1.0 | ok |
+| same-file | crate | Unlicense/MIT | ok |
+| schannel | crate | MIT | ok |
+| scopeguard | crate | MIT OR Apache-2.0 | ok |
+| semver | crate | MIT OR Apache-2.0 | ok |
+| serde | crate | MIT OR Apache-2.0 | ok |
+| serde_bytes | crate | MIT OR Apache-2.0 | ok |
+| serde_core | crate | MIT OR Apache-2.0 | ok |
+| serde_derive | crate | MIT OR Apache-2.0 | ok |
+| serde_json | crate | MIT OR Apache-2.0 | ok |
+| serde_path_to_error | crate | MIT OR Apache-2.0 | ok |
+| serde_spanned | crate | MIT OR Apache-2.0 | ok |
+| serde_urlencoded | crate | MIT/Apache-2.0 | ok |
+| sha1 | crate | MIT OR Apache-2.0 | ok |
+| sha2 | crate | MIT OR Apache-2.0 | ok |
+| sharded-slab | crate | MIT | ok |
+| shlex | crate | MIT OR Apache-2.0 | ok |
+| simd-adler32 | crate | MIT | ok |
+| siphasher | crate | MIT OR Apache-2.0 | ok |
+| slab | crate | MIT | ok |
+| smallvec | crate | MIT OR Apache-2.0 | ok |
+| socket2 | crate | MIT OR Apache-2.0 | ok |
+| spin | crate | MIT | ok |
+| sqlx | crate | MIT OR Apache-2.0 | ok |
+| sqlx-core | crate | MIT OR Apache-2.0 | ok |
+| sqlx-sqlite | crate | MIT OR Apache-2.0 | ok |
+| stable_deref_trait | crate | MIT OR Apache-2.0 | ok |
+| strength_reduce | crate | MIT OR Apache-2.0 | ok |
+| string_cache | crate | MIT OR Apache-2.0 | ok |
+| string_cache_codegen | crate | MIT OR Apache-2.0 | ok |
+| strsim | crate | MIT | ok |
+| strum | crate | MIT | ok |
+| strum_macros | crate | MIT | ok |
+| syn | crate | MIT OR Apache-2.0 | ok |
+| sync_wrapper | crate | Apache-2.0 | ok |
+| synstructure | crate | MIT | ok |
+| sysinfo | crate | MIT | ok |
+| tendril | crate | MIT OR Apache-2.0 | ok |
+| termcolor | crate | Unlicense OR MIT | ok |
+| thiserror | crate | MIT OR Apache-2.0 | ok |
+| thiserror-impl | crate | MIT OR Apache-2.0 | ok |
+| thread_local | crate | MIT OR Apache-2.0 | ok |
+| time | crate | MIT OR Apache-2.0 | ok |
+| time-core | crate | MIT OR Apache-2.0 | ok |
+| tinystr | crate | Unicode-3.0 | ok |
+| tokio | crate | MIT | ok |
+| tokio-macros | crate | MIT | ok |
+| tokio-native-tls | crate | MIT | ok |
+| tokio-stream | crate | MIT | ok |
+| tokio-tungstenite | crate | MIT | ok |
+| tokio-util | crate | MIT | ok |
+| toml | crate | MIT OR Apache-2.0 | ok |
+| toml_datetime | crate | MIT OR Apache-2.0 | ok |
+| toml_parser | crate | MIT OR Apache-2.0 | ok |
+| toml_writer | crate | MIT OR Apache-2.0 | ok |
+| tower | crate | MIT | ok |
+| tower-http | crate | MIT | ok |
+| tower-layer | crate | MIT | ok |
+| tower-service | crate | MIT | ok |
+| tracing | crate | MIT | ok |
+| tracing-attributes | crate | MIT | ok |
+| tracing-core | crate | MIT | ok |
+| tracing-log | crate | MIT | ok |
+| tracing-subscriber | crate | MIT | ok |
+| transpose | crate | MIT OR Apache-2.0 | ok |
+| try-lock | crate | MIT | ok |
+| ts-rs | crate | MIT | ok |
+| ts-rs-macros | crate | MIT | ok |
+| tungstenite | crate | MIT OR Apache-2.0 | ok |
+| typenum | crate | MIT OR Apache-2.0 | ok |
+| unicase | crate | MIT OR Apache-2.0 | ok |
+| unicode-blocks | crate | MIT | ok |
+| unicode-general-category | crate | Apache-2.0 | ok |
+| unicode-ident | crate | (MIT OR Apache-2.0) AND Unicode-3.0 | ok |
+| unicode-script | crate | MIT OR Apache-2.0 | ok |
+| unicode-segmentation | crate | MIT OR Apache-2.0 | ok |
+| unicode-width | crate | MIT OR Apache-2.0 | ok |
+| unicode-xid | crate | MIT OR Apache-2.0 | ok |
+| unty | crate | MIT OR Apache-2.0 | ok |
+| url | crate | MIT OR Apache-2.0 | ok |
+| utf8_iter | crate | Apache-2.0 OR MIT | ok |
+| utf8parse | crate | Apache-2.0 OR MIT | ok |
+| uuid | crate | Apache-2.0 OR MIT | ok |
+| uuid-simd | crate | MIT | ok |
+| vcpkg | crate | MIT/Apache-2.0 | ok |
+| version_check | crate | MIT/Apache-2.0 | ok |
+| visibility | crate | Zlib OR MIT OR Apache-2.0 | ok |
+| vsimd | crate | MIT | ok |
+| walkdir | crate | Unlicense/MIT | ok |
+| want | crate | MIT | ok |
+| web-time | crate | MIT OR Apache-2.0 | ok |
+| web_atoms | crate | MIT OR Apache-2.0 | ok |
+| webbrowser | crate | MIT OR Apache-2.0 | ok |
+| winapi | crate | MIT/Apache-2.0 | ok |
+| winapi-util | crate | Unlicense OR MIT | ok |
+| windowfunctions | crate | MIT | ok |
+| windows | crate | MIT OR Apache-2.0 | ok |
+| windows-collections | crate | MIT OR Apache-2.0 | ok |
+| windows-core | crate | MIT OR Apache-2.0 | ok |
+| windows-future | crate | MIT OR Apache-2.0 | ok |
+| windows-implement | crate | MIT OR Apache-2.0 | ok |
+| windows-interface | crate | MIT OR Apache-2.0 | ok |
+| windows-link | crate | MIT OR Apache-2.0 | ok |
+| windows-numerics | crate | MIT OR Apache-2.0 | ok |
+| windows-result | crate | MIT OR Apache-2.0 | ok |
+| windows-strings | crate | MIT OR Apache-2.0 | ok |
+| windows-sys | crate | MIT OR Apache-2.0 | ok |
+| windows-threading | crate | MIT OR Apache-2.0 | ok |
+| winnow | crate | MIT | ok |
+| writeable | crate | Unicode-3.0 | ok |
+| yoke | crate | Unicode-3.0 | ok |
+| yoke-derive | crate | Unicode-3.0 | ok |
+| zerocopy | crate | BSD-2-Clause OR Apache-2.0 OR MIT | ok |
+| zerocopy-derive | crate | BSD-2-Clause OR Apache-2.0 OR MIT | ok |
+| zerofrom | crate | Unicode-3.0 | ok |
+| zerofrom-derive | crate | Unicode-3.0 | ok |
+| zeroize | crate | Apache-2.0 OR MIT | ok |
+| zerotrie | crate | Unicode-3.0 | ok |
+| zerovec | crate | Unicode-3.0 | ok |
+| zerovec-derive | crate | Unicode-3.0 | ok |
+| zmij | crate | MIT | ok |
+| @babel/code-frame | package | MIT | ok |
+| @babel/compat-data | package | MIT | ok |
+| @babel/core | package | MIT | ok |
+| @babel/generator | package | MIT | ok |
+| @babel/helper-compilation-targets | package | MIT | ok |
+| @babel/helper-globals | package | MIT | ok |
+| @babel/helper-module-imports | package | MIT | ok |
+| @babel/helper-module-transforms | package | MIT | ok |
+| @babel/helper-string-parser | package | MIT | ok |
+| @babel/helper-validator-identifier | package | MIT | ok |
+| @babel/helper-validator-option | package | MIT | ok |
+| @babel/helpers | package | MIT | ok |
+| @babel/parser | package | MIT | ok |
+| @babel/template | package | MIT | ok |
+| @babel/traverse | package | MIT | ok |
+| @babel/types | package | MIT | ok |
+| @jridgewell/gen-mapping | package | MIT | ok |
+| @jridgewell/remapping | package | MIT | ok |
+| @jridgewell/resolve-uri | package | MIT | ok |
+| @jridgewell/sourcemap-codec | package | MIT | ok |
+| @jridgewell/trace-mapping | package | MIT | ok |
+| @next/env | package | MIT | ok |
+| @swc/helpers | package | Apache-2.0 | ok |
+| baseline-browser-mapping | package | Apache-2.0 | ok |
+| browserslist | package | MIT | ok |
+| caniuse-lite | package | CC-BY-4.0 | ok |
+| client-only | package | MIT | ok |
+| convert-source-map | package | MIT | ok |
+| debug | package | MIT | ok |
+| electron-to-chromium | package | ISC | ok |
+| escalade | package | MIT | ok |
+| gensync | package | MIT | ok |
+| js-tokens | package | MIT | ok |
+| jsesc | package | MIT | ok |
+| json5 | package | MIT | ok |
+| lru-cache | package | ISC | ok |
+| ms | package | MIT | ok |
+| nanoid | package | MIT | ok |
+| next | package | MIT | ok |
+| node-releases | package | MIT | ok |
+| picocolors | package | ISC | ok |
+| postcss | package | MIT | ok |
+| react | package | MIT | ok |
+| react-dom | package | MIT | ok |
+| scheduler | package | MIT | ok |
+| semver | package | ISC | ok |
+| source-map-js | package | BSD-3-Clause | ok |
+| styled-jsx | package | MIT | ok |
+| tslib | package | 0BSD | ok |
+| update-browserslist-db | package | MIT | ok |
+| yallist | package | ISC | ok |
+| Noto Sans Mono | font | OFL-1.1 | ok |
+| Pixelify Sans | font | OFL-1.1 | ok |
+| Press Start 2P | font | OFL-1.1 | ok |
+| .env.example | release | Apache-2.0 | ok |
+| LICENSE | release | Apache-2.0 | ok |
+| NOTICE | release | Apache-2.0 | ok |
+| README.md | release | Apache-2.0 | ok |
+| lumingo.exe | release | Apache-2.0 | ok |
+
+The attribution table below has one row per shipped item whose licence asks
+for something the package's own metadata cannot carry: the notice is written
+here, in this project's own words, and `scripts/gen-notices.mjs` reads it from
+this table and renders it under the item's own line in `NOTICE`. An item whose
+licence needs no notice gets no row, because the licence the build states is
+the whole of the permission. A row here for an item the build does not ship
+is a false claim, and a shipped item that needs a notice but has no row here
+is a notice that was left out; `scripts/check-license-register.mjs` fails on
+both.
+
+The columns are `Item`, `Kind` and `Notice`, and a row is keyed on the item's
+name **and** its kind, the way the machine table is. The name alone is not
+enough: `semver` is in the shipped set twice, once as a crate and once as a
+package, so a row that named only the item could not say which of the two it
+was for. A row whose name and kind name nothing the build ships is a notice
+that goes nowhere, and two rows for the same name and kind are two notices for
+one component; the check fails on both.
+
+| Item | Kind | Notice |
+|---|---|---|
+| caniuse-lite | package | caniuse-lite, browser support data used by the Next.js build, is licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). It is not part of the shipped application. |
+| colored | crate | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/colored and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
+| cssparser | crate | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/cssparser and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
+| dtoa-short | crate | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/dtoa-short and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
