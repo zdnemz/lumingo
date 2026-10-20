@@ -146,6 +146,52 @@ const OVER_CLAIMS = [
   { pattern: /\bnothing\s+else\s+is\s+contacted\b/i, wording: '"nothing else is contacted"' },
 ];
 
+// The false shapes about the provider's scheme. The code requires HTTPS and
+// allows plain HTTP only for the loopback address, so a document that says
+// otherwise is wrong. A sentence that carries a conditional marker is exempt:
+// "the models can be downloaded once the manifest is filled in" is a true
+// conditional, not a false claim.
+//
+// The ban is needed because a positive rule alone does not catch the false
+// claim: "plain HTTP is allowed for any address and HTTPS is not required"
+// still contains the words HTTPS and HTTP, so a rule that asks for them
+// passes it. The positive rule catches the scheme rule being REMOVED; this
+// ban catches the false claim being ADDED.
+const SCHEME_FALSE_CLAIMS = [
+  { pattern: /`?https`?\s+is\s+not\s+required\b/i, wording: '"https is not required"' },
+  { pattern: /`?https`?\s+is\s+not\s+needed\b/i, wording: '"https is not needed"' },
+  { pattern: /`?https`?\s+is\s+not\s+enforced\b/i, wording: '"https is not enforced"' },
+  { pattern: /`?https`?\s+is\s+not\s+mandatory\b/i, wording: '"https is not mandatory"' },
+  { pattern: /`?plain\s+`?http`?\s+is\s+allowed\s+for\s+any\b/i, wording: '"plain http is allowed for any"' },
+  { pattern: /`?plain\s+`?http`?\s+is\s+allowed\s+for\s+every\b/i, wording: '"plain http is allowed for every"' },
+  { pattern: /`?plain\s+`?http`?\s+is\s+allowed\s+for\s+all\b/i, wording: '"plain http is allowed for all"' },
+];
+
+// The false shapes about the models. They assert a total claim — every
+// model, all of the models, any model, the models — so a sentence that
+// carries a conditional marker is exempt, for the same reason as above.
+//
+// The ban is needed for the same reason too: a positive rule alone does not
+// catch "Every model is ready to download now", because that sentence is
+// ADDED to a document that already carries the true one, so the true
+// sentence is still there and the positive rule passes it.
+const DOWNLOAD_FALSE_CLAIMS = [
+  /\bevery\s+model\b[^.]{0,80}?\b(?:can\s+be\s+(?:downloaded|fetched)|is\s+ready|ready\s+to\s+download)\b/i,
+  /\ball\s+of\s+the\s+models\b[^.]{0,80}?\b(?:can\s+be\s+(?:downloaded|fetched)|is\s+ready|ready\s+to\s+download)\b/i,
+  /\bany\s+model\b[^.]{0,80}?\bcan\s+be\s+(?:downloaded|fetched)\b/i,
+  /\bthe\s+models\b[^.]{0,80}?\bcan\s+be\s+downloaded\b/i,
+];
+
+// The shape a sentence states that no model can be downloaded. The wording
+// varies — "no model can be downloaded yet" and "no entry in the model
+// manifest can be downloaded yet" say the same thing — so the shape is read
+// as a negation of the downloadability of a model.
+const INERTNESS_CLAIM = /\bno\s+(?:model|entry)\b[^.]{0,80}?\bcan\s+be\s+downloaded\b/i;
+
+// The markers that make a sentence conditional. What a sentence says happens
+// later is not a claim about what is true now.
+const CONDITIONAL_MARKER = /\b(?:once|until|when|after|if|unless|whenever)\b/i;
+
 // The gate script's quick guard: the line that opens the part of the gate that
 // runs only in the full mode. The line that closes it is a `fi` in column 0 —
 // the `fi`s of the conditions inside the guard are indented, so only a guard's
@@ -351,6 +397,17 @@ function deriveFacts() {
     "the word the code uses for a redirect in crates/model-manager/src/manifest.rs",
   )[1];
 
+  // The provider allowlist, from the HTTP client that guards every provider
+  // request: the shape the allowlist holds and the scheme rule it enforces.
+  // A document that states the allowlist has to state that rule in the code's
+  // own words, so both are derived from the client.
+  const providerScheme = deriveProviderScheme(read("crates/llm-client/src/http.rs"));
+
+  // The state of the manifest: the entries that pass the code's own download
+  // check. It is empty while every entry is a candidate, and the documents'
+  // inertness claims follow it.
+  const downloadableIds = deriveDownloadableIds(manifest, urlPolicy);
+
   // The paths CONTRIBUTING.md must point at. The gate is the one the commit
   // hook runs, the licence register is the one the model manifest names, and
   // the environment record is the one the owner keeps the toolchain versions
@@ -410,6 +467,9 @@ function deriveFacts() {
     manifestPath: MANIFEST_PATH,
     scheme,
     redirectWord,
+    hostPair: providerScheme.hostPair,
+    schemeTokens: providerScheme.schemeTokens,
+    downloadableIds,
     verifyScript,
     gateCommands,
   };
@@ -493,6 +553,159 @@ function stepCommand(body) {
     return collapsed.startsWith("node ") ? collapsed.slice("node ".length) : collapsed;
   }
   return null;
+}
+
+/**
+ * The provider allowlist's shape and the scheme rule it enforces, read out of
+ * the HTTP client.
+ *
+ * The allowlist holds a host and a port, and its own `Display` writes them
+ * as `host:port` — that is the shape a document names when it talks about
+ * the allowlist. The scheme rule is the arms of the `match` on the URL's
+ * scheme: `https` is always allowed and `http` only behind the loopback
+ * guard, and the word for that guard is its own name, so the rule is asked
+ * for in the code's own words.
+ *
+ * A source this cannot read is a broken source, so it throws rather than
+ * passing: a client with no scheme arm would allow any scheme.
+ */
+function deriveProviderScheme(httpClient) {
+  const hostPair = matches(
+    httpClient,
+    /write!\(f, "\{\}:\{\}", self\.(\w+), self\.(\w+)\)/,
+    "the host:port shape from crates/llm-client/src/http.rs",
+  );
+  const arms = [
+    ...matches(
+      httpClient,
+      /match url\.scheme\(\) \{([\s\S]*?)\n        \}/,
+      "the scheme arms from crates/llm-client/src/http.rs",
+    )[1].matchAll(/^\s*"([^"]+)"\s*(?:if\s+([a-z_][a-z0-9_]*)\([^)]*\)\s*)?=>/gm),
+  ];
+  const schemes = [...new Set(arms.map((arm) => arm[1]))];
+  if (schemes.length === 0) {
+    throw new Error("no scheme arm in crates/llm-client/src/http.rs");
+  }
+  const guard = arms.find((arm) => arm[2]);
+  if (!guard) {
+    throw new Error("no guarded scheme arm in crates/llm-client/src/http.rs");
+  }
+  return {
+    hostPair: `${hostPair[1]}:${hostPair[2]}`,
+    schemeTokens: [...schemes, longestWord(guard[2])],
+  };
+}
+
+/**
+ * The word a snake_case name names: its longest segment.
+ *
+ * The guard that allows plain HTTP is `is_loopback_url`, so the word the
+ * scheme rule is about is `loopback`.
+ */
+function longestWord(name) {
+  const parts = name.split("_").filter((part) => part !== "");
+  if (parts.length === 0) throw new Error(`cannot read a word from ${name}`);
+  return parts.reduce((longest, part) => (part.length > longest.length ? part : longest));
+}
+
+/**
+ * The manifest entries that can be downloaded.
+ *
+ * The conditions are the ones the code's own `check_downloadable` uses: a
+ * licence that is not empty and not the word `unknown`, a licence URL, a
+ * file list that is not empty, and a checksum of 64 hexadecimal characters
+ * on every file. An entry that fails any of them is refused before the
+ * downloader makes a request, so the entries that pass them are the entries
+ * that can be downloaded.
+ */
+function deriveDownloadableIds(manifest, urlPolicy) {
+  const shaLength = matches(
+    urlPolicy,
+    /text\.len\(\) == (\d+) && text\.bytes\(\)\.all\(\|b\| b\.is_ascii_hexdigit\(\)\)/,
+    "the checksum length from crates/model-manager/src/manifest.rs",
+  )[1];
+  const unknownLicence = matches(
+    urlPolicy,
+    /eq_ignore_ascii_case\("([^"]+)"\)/,
+    "the word the code uses for an unread licence in crates/model-manager/src/manifest.rs",
+  )[1];
+  const ids = [];
+  for (const entry of manifestEntries(manifest)) {
+    const licence = entry.license.trim();
+    if (licence === "" || licence.toLowerCase() === unknownLicence) continue;
+    if (entry.licenseUrl.trim() === "") continue;
+    if (entry.files.length === 0) continue;
+    if (!entry.files.every((file) => isChecksum(file, shaLength))) continue;
+    ids.push(entry.id);
+  }
+  return ids;
+}
+
+/**
+ * The manifest entries, with the fields the download check reads.
+ *
+ * The manifest is read as text, not parsed as TOML: an entry is a `[[model]]`
+ * block, and the fields are the ones the code checks.
+ */
+function manifestEntries(manifest) {
+  const entries = [];
+  for (const block of manifest.split(/^\[\[model\]\]$/m).slice(1)) {
+    entries.push({
+      id: stringField(block, "id"),
+      license: stringField(block, "license"),
+      licenseUrl: stringField(block, "license_url"),
+      files: fileEntries(block),
+    });
+  }
+  return entries;
+}
+
+/** A string field of a manifest block, or an empty string when it has none. */
+function stringField(block, key) {
+  const found = block.match(new RegExp(`^\\s*${key}\\s*=\\s*"([^"]*)"`, "m"));
+  return found ? found[1] : "";
+}
+
+/** The file entries of a manifest block: the inline tables of its `files`. */
+function fileEntries(block) {
+  const array = arrayField(block, "files");
+  if (array === null) return [];
+  const files = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < array.length; i += 1) {
+    if (array[i] === "{") {
+      if (depth === 0) start = i;
+      depth += 1;
+    } else if (array[i] === "}") {
+      depth -= 1;
+      if (depth === 0) files.push(array.slice(start, i + 1));
+    }
+  }
+  return files;
+}
+
+/** The text of an array field of a manifest block, brackets included. */
+function arrayField(block, key) {
+  const at = block.search(new RegExp(`^\\s*${key}\\s*=\\s*\\[`, "m"));
+  if (at === -1) return null;
+  const open = block.indexOf("[", at);
+  let depth = 0;
+  for (let i = open; i < block.length; i += 1) {
+    if (block[i] === "[") depth += 1;
+    else if (block[i] === "]") {
+      depth -= 1;
+      if (depth === 0) return block.slice(open, i + 1);
+    }
+  }
+  return null;
+}
+
+/** A file's checksum: the hexadecimal characters the code requires. */
+function isChecksum(file, length) {
+  const found = file.match(/sha256\s*=\s*"([^"]*)"/);
+  if (!found) return false;
+  return new RegExp(`^[0-9a-f]{${length}}$`, "i").test(found[1].trim());
 }
 
 /** Which facts each document must state. The values live in `facts`. */
@@ -702,6 +915,28 @@ function paragraphs(text) {
 }
 
 /**
+ * The sentences of a document, with the table rows left out.
+ *
+ * A table cell is a list, not a statement, so a line that carries a table
+ * separator is not prose: the scan leaves it out, and a gap table cannot
+ * stand in for the sentence a rule asks for. The lines of a paragraph are
+ * joined first, because a sentence can wrap over several of them.
+ */
+function sentences(text) {
+  const found = [];
+  for (const block of paragraphs(text)) {
+    const prose = block
+      .split(/\r?\n/)
+      .filter((line) => !line.includes("|"))
+      .join(" ");
+    for (const sentence of prose.split(/(?<=[.!?])\s+/)) {
+      if (sentence.trim() !== "") found.push(sentence);
+    }
+  }
+  return found;
+}
+
+/**
  * The over-claims in a paragraph that names a download host.
  *
  * The scope is the paragraph, not the document: `docs/PRIVACY.md` says "the
@@ -746,6 +981,84 @@ function checkGateCommands(path, text, derived) {
   return violations;
 }
 
+/**
+ * The provider allowlist a document states, and the scheme rule it misses.
+ *
+ * A document that names the allowlist's shape has to state the scheme rule
+ * the client enforces, in the code's own words: every scheme the arms accept
+ * and the word for the loopback guard. The rule is positive, so it fires
+ * only when a document stops saying the rule, never on a change of wording
+ * around it.
+ *
+ * The ban is the other half of the rule: a document may not say a falsehood
+ * about the scheme. A positive rule alone does not catch that — "plain HTTP
+ * is allowed for any address and HTTPS is not required" still contains the
+ * words HTTPS and HTTP, so the rule above passes it. The rule catches the
+ * scheme rule being REMOVED; the ban catches the false claim being ADDED.
+ */
+function checkProviderScheme(path, text, derived) {
+  const violations = [];
+  for (const block of paragraphs(text)) {
+    if (!occurrences(block, derived.hostPair).includes(derived.hostPair)) continue;
+    for (const token of derived.schemeTokens) {
+      if (!wordPattern(token).test(block)) {
+        violations.push(`${path}: states the provider allowlist but does not state the ${token} rule`);
+      }
+    }
+  }
+  for (const sentence of sentences(text)) {
+    if (CONDITIONAL_MARKER.test(sentence)) continue;
+    for (const claim of SCHEME_FALSE_CLAIMS) {
+      if (claim.pattern.test(sentence)) {
+        violations.push(`${path}: says ${claim.wording}, which the code does not allow`);
+      }
+    }
+  }
+  return violations;
+}
+
+/**
+ * The state of the manifest, and what a document says about it.
+ *
+ * Nothing in the manifest can be downloaded yet: every entry is a candidate
+ * with an empty file list, and the model manager refuses such an entry before
+ * it makes a request. A document that names a download host or the manifest
+ * has to say so — a reader who finds the host list in a document should not
+ * walk away believing a download is one click away.
+ *
+ * The rule follows the manifest. The moment the owner fills in `files` and
+ * `sha256`, the derived set is no longer empty, the documents' inertness
+ * claims become false, and the rule reports them instead. That half is
+ * document-wide, because a document that makes the claim need not name a
+ * host.
+ */
+function checkManifestState(path, text, derived) {
+  const violations = [];
+  const said = sentences(text).filter((sentence) => INERTNESS_CLAIM.test(sentence));
+  if (derived.downloadableIds.length === 0) {
+    if (mentionsDownloadHost(text, derived) && said.length === 0) {
+      violations.push(
+        `${path}: names a download host but does not state that no model can be downloaded yet`,
+      );
+    }
+    for (const claim of DOWNLOAD_FALSE_CLAIMS) {
+      const saidIt = sentences(text).some(
+        (sentence) => !CONDITIONAL_MARKER.test(sentence) && claim.test(sentence),
+      );
+      if (saidIt) {
+        violations.push(
+          `${path}: says a model can be downloaded, but no entry in the manifest is downloadable`,
+        );
+      }
+    }
+  } else if (said.length > 0) {
+    violations.push(
+      `${path}: says no model can be downloaded yet, but the manifest has ${derived.downloadableIds.join(", ")}`,
+    );
+  }
+  return violations;
+}
+
 function main() {
   const derived = deriveFacts();
   const required = requiredFacts(derived);
@@ -760,6 +1073,8 @@ function main() {
     violations.push(...checkRedirectRule(path, text, derived));
     violations.push(...checkOverClaims(path, text, derived));
     violations.push(...checkGateCommands(path, text, derived));
+    violations.push(...checkProviderScheme(path, text, derived));
+    violations.push(...checkManifestState(path, text, derived));
   }
   if (violations.length > 0) {
     console.error("The release documents must match the code. These do not:");
