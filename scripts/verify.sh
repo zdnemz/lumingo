@@ -8,8 +8,9 @@
 #
 #   sh scripts/verify.sh                      # everything, like CI
 #   LUMINGO_PRECOMMIT=quick sh scripts/verify.sh
-#       the path case check, format, lint and typecheck only. clippy, the tests,
-#       the build and the license checks are skipped and CI may still fail.
+#       the path case check, the export-only check, the document check,
+#       the format check, lint and typecheck only. clippy, the tests, the
+#       build and the license checks are skipped and CI may still fail.
 set -eu
 
 # Run from the repository root, whatever the caller's directory was. A clear
@@ -50,7 +51,7 @@ step() {
 }
 
 if [ "$quick" = 1 ]; then
-    printf 'pre-commit: LUMINGO_PRECOMMIT=quick — running format, lint, typecheck and the path case check only.\n'
+    printf 'pre-commit: LUMINGO_PRECOMMIT=quick — running the path case check, the export-only check, the document check, the format check, lint and typecheck.\n'
     printf 'pre-commit: clippy, the tests, the build and the license checks are skipped.\n'
 fi
 
