@@ -22,7 +22,7 @@
 //   0  clean
 //   1  violations found (one line per offender on stderr, `<path>: <what>`)
 //   2  internal error
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,6 +33,10 @@ const ROOT = fileURLToPath(new URL("../", import.meta.url));
 // The manifest path. It is the file that names the download hosts, so a
 // document that names it names the hosts too.
 const MANIFEST_PATH = "models/manifest.toml";
+
+// The web app's router. A folder that holds a `page.tsx` is a screen, and
+// the folder's path under the router is that screen's route.
+const APP_ROUTER = "apps/web/src/app";
 
 // The documents, in the order they are reported.
 const DOCUMENTS = [
@@ -458,6 +462,10 @@ function deriveFacts() {
   // its step list is read out of the script, never written down here.
   const gateCommands = deriveGateCommands(verifyScript);
 
+  // The routes the web app has. The router folder is the source: its folders
+  // are read out of the filesystem, never written down here.
+  const routes = deriveRoutes();
+
   return {
     facts,
     envNames,
@@ -472,7 +480,42 @@ function deriveFacts() {
     downloadableIds,
     verifyScript,
     gateCommands,
+    routes,
   };
+}
+
+/**
+ * The routes the web app has, read out of the app router.
+ *
+ * A folder that holds a `page.tsx` is a screen, and the route's path is that
+ * folder's path under the router — the router's own `page.tsx` is the root.
+ * Two folder shapes are not part of a URL and are not walked: a route group,
+ * a folder in parentheses, only groups the folders beside it, and a dynamic
+ * segment, a folder in brackets, names a parameter rather than a fixed path,
+ * so the screens below it have no URL a document could name.
+ *
+ * The list is derived from the filesystem and never written down here, so a
+ * screen added to the app is a route the README has to name from that moment
+ * on — which is the whole point of the rule.
+ */
+function deriveRoutes() {
+  const routes = [];
+  const walk = (folder, path) => {
+    const entries = readdirSync(join(ROOT, APP_ROUTER, folder), { withFileTypes: true });
+    if (entries.some((entry) => entry.isFile() && entry.name === "page.tsx")) {
+      routes.push({
+        route: path === "" ? "/" : path,
+        page: join(APP_ROUTER, folder, "page.tsx"),
+      });
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith("(") || entry.name.startsWith("[")) continue;
+      walk(join(folder, entry.name), `${path}/${entry.name}`);
+    }
+  };
+  walk("", "");
+  return routes;
 }
 
 /**
@@ -1059,6 +1102,34 @@ function checkManifestState(path, text, derived) {
   return violations;
 }
 
+/**
+ * The routes the README has to name.
+ *
+ * Every screen of the web app is a route, and the README is where a reader
+ * learns which screens there are — a screen the README does not name is a
+ * screen nobody was told about. So the README has to name every route the
+ * router holds. The root route is left out: the README says the app opens on
+ * the home page, and that is not a route name.
+ *
+ * The rule is positive — it asks for the route to be present — so it fires
+ * only when the README stops naming a route, never on a change of wording
+ * around it. The routes come from the filesystem, so the rule moves with the
+ * app: a screen added to the router is a route the README has to name from
+ * that moment on.
+ */
+function checkRoutes(path, text, derived) {
+  const violations = [];
+  if (path !== "README.md") return violations; // only the README lists the screens
+  for (const route of derived.routes) {
+    if (route.route === "/") continue;
+    const name = `${route.route}/`;
+    if (!text.includes(name)) {
+      violations.push(`${path}: does not name the route "${name}" (the page ${route.page})`);
+    }
+  }
+  return violations;
+}
+
 function main() {
   const derived = deriveFacts();
   const required = requiredFacts(derived);
@@ -1075,6 +1146,7 @@ function main() {
     violations.push(...checkGateCommands(path, text, derived));
     violations.push(...checkProviderScheme(path, text, derived));
     violations.push(...checkManifestState(path, text, derived));
+    violations.push(...checkRoutes(path, text, derived));
   }
   if (violations.length > 0) {
     console.error("The release documents must match the code. These do not:");
