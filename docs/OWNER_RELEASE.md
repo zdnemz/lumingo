@@ -8,11 +8,14 @@ for, and what to write down. Nothing below has been done for you.
 - **The run pushed nothing, tagged nothing, and created no release.** There is
   no `v1.0.0` tag and no draft release anywhere. The four steps below are
   yours to run.
-- The local `development` branch is **15 commits ahead of `origin/development`**:
-  the local tip is `6d7b91c`, and `origin/development` is at `b6102bf`. Those
-  are the numbers as of writing — check your own clone before you trust them.
-- **Pushing is the owner's decision**, so the run did not push. The fifteen
-  commits sit on this machine until you push them.
+- The local `development` branch is **ahead of `origin/development`** by the
+  commits this run produced. Read the state in your own clone rather than
+  trusting a number written down here:
+  `git log --oneline origin/development..development` lists the commits that
+  are not on the remote yet, and `git status -sb` shows the ahead count next
+  to the branch.
+- **Pushing is the owner's decision**, so the run did not push. Those commits
+  sit on this machine until you push them.
 - **The Windows build has never been executed by an agent.** The release
   workflow runs on `windows-latest` in GitHub CI, and this run could not run
   CI. The Windows half of this release is therefore **reviewable but
@@ -29,9 +32,11 @@ happened in this work, and none of the four steps below has been carried out.
 
 ## Step 1 — push
 
-Push the **fifteen** commits that are sitting on this machine.
+Push the commits on `development` that are not yet on `origin/development`.
+List them first:
 
 ```sh
+git log --oneline origin/development..development
 git push origin development
 ```
 
@@ -42,8 +47,8 @@ Look for:
 - `git status -sb` shows `## development...origin/development` with **no**
   ahead count.
 
-Write down: the commit you pushed (`git rev-parse --short HEAD`, expect
-`6d7b91c`) and the date.
+Write down: the commit you pushed (`git rev-parse --short HEAD` prints the
+current tip — record what it prints) and the date.
 
 ## Step 2 — tag v1.0.0
 
