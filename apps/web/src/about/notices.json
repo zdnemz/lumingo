@@ -1,0 +1,2093 @@
+{
+  "project": {
+    "code": "Apache-2.0",
+    "content": "Creative Commons Attribution-ShareAlike 4.0 International"
+  },
+  "components": [
+    {
+      "name": "adler2",
+      "kind": "crate",
+      "licence": "0BSD OR MIT OR Apache-2.0"
+    },
+    {
+      "name": "ahash",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "aho-corasick",
+      "kind": "crate",
+      "licence": "Unlicense OR MIT"
+    },
+    {
+      "name": "allocator-api2",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "ammonia",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstream",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstyle",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstyle-parse",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstyle-query",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstyle-wincon",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anyhow",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "async-trait",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "atoi",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "atomic-waker",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "atomic_float",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT OR Unlicense"
+    },
+    {
+      "name": "audio-codec-algorithms",
+      "kind": "crate",
+      "licence": "0BSD OR Apache-2.0"
+    },
+    {
+      "name": "audioadapter",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "audioadapter-buffers",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "audioadapter-sample",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "autocfg",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "axum",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "axum-core",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "base64",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "bincode",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "bit-set",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "bit-vec",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "bitflags",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "blanket",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "block-buffer",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "borrow-or-share",
+      "kind": "crate",
+      "licence": "MIT-0"
+    },
+    {
+      "name": "burn",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "burn-common",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "burn-core",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "burn-derive",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "burn-ir",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "burn-ndarray",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "burn-tensor",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "bytecount",
+      "kind": "crate",
+      "licence": "Apache-2.0/MIT"
+    },
+    {
+      "name": "bytemuck",
+      "kind": "crate",
+      "licence": "Zlib OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "bytemuck_derive",
+      "kind": "crate",
+      "licence": "Zlib OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "bytes",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "cached",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "cached_proc_macro",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "cached_proc_macro_types",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "cc",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "cfg-if",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "chrono",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "clap",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "clap_builder",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "clap_derive",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "clap_lex",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "colorchoice",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "colored",
+      "kind": "crate",
+      "licence": "MPL-2.0"
+    },
+    {
+      "name": "const-oid",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "convert_case",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "cpufeatures",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "crc",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "crc-catalog",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "crc32fast",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "crossbeam-queue",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "crossbeam-utils",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "crypto-common",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "cssparser",
+      "kind": "crate",
+      "licence": "MPL-2.0"
+    },
+    {
+      "name": "cubecl-common",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "darling",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "darling_core",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "darling_macro",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "data-encoding",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "deranged",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "derive-new",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "derive_more",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "derive_more-impl",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "digest",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "displaydoc",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "dtoa",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "dtoa-short",
+      "kind": "crate",
+      "licence": "MPL-2.0"
+    },
+    {
+      "name": "either",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "email_address",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "embassy-futures",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "equivalent",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "event-listener",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "fancy-regex",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "fastrand",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "find-msvc-tools",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "flate2",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "fluent-uri",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "flume",
+      "kind": "crate",
+      "licence": "Apache-2.0/MIT"
+    },
+    {
+      "name": "fnv",
+      "kind": "crate",
+      "licence": "Apache-2.0 / MIT"
+    },
+    {
+      "name": "foldhash",
+      "kind": "crate",
+      "licence": "Zlib"
+    },
+    {
+      "name": "form_urlencoded",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "fraction",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "fst",
+      "kind": "crate",
+      "licence": "Unlicense/MIT"
+    },
+    {
+      "name": "futures-channel",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "futures-core",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "futures-executor",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "futures-intrusive",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "futures-io",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "futures-lite",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "futures-macro",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "futures-sink",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "futures-task",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "futures-util",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "generic-array",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "getopts",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "getrandom",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "half",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "harper-brill",
+      "kind": "crate",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "harper-core",
+      "kind": "crate",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "harper-pos-utils",
+      "kind": "crate",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "hashbrown",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "hashlink",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "heck",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "html5ever",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "http",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "http-body",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "http-body-util",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "httparse",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "httpdate",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "hybrid-array",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "hyper",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "hyper-tls",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "hyper-util",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "icu_collections",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "icu_locale_core",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "icu_normalizer",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "icu_normalizer_data",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "icu_properties",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "icu_properties_data",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "icu_provider",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "ident_case",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "idna",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "idna_adapter",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "indexmap",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "ipnet",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "is-macro",
+      "kind": "crate",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "is_terminal_polyfill",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "itertools",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "itoa",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "jsonschema",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "jsonschema-regex",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "jsonschema-value",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "lazy_static",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "levenshtein_automata",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "libc",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "libm",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "libsqlite3-sys",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "litemap",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "lock_api",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "log",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "lru",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "maplit",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "markup5ever",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "matchers",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "matchit",
+      "kind": "crate",
+      "licence": "MIT AND BSD-3-Clause"
+    },
+    {
+      "name": "matrixmultiply",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "memchr",
+      "kind": "crate",
+      "licence": "Unlicense OR MIT"
+    },
+    {
+      "name": "micromap",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "mime",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "mime_guess",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "miniz_oxide",
+      "kind": "crate",
+      "licence": "MIT OR Zlib OR Apache-2.0"
+    },
+    {
+      "name": "mio",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "native-tls",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "ndarray",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "new_debug_unreachable",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "ntapi",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "nu-ansi-term",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "num",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "num-bigint",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "num-cmp",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "num-complex",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "num-conv",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "num-integer",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "num-iter",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "num-rational",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "num-traits",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "once_cell",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "once_cell_polyfill",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "ordered-float",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "outref",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "parking",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "parking_lot",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "parking_lot_core",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "paste",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "percent-encoding",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "phf",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "phf_codegen",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "phf_generator",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "phf_shared",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "pin-project-lite",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "pkg-config",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "portable-atomic",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "potential_utf",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "powerfmt",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "ppv-lite86",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "precomputed-hash",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "primal-check",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "proc-macro2",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "pulldown-cmark",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "pulldown-cmark-escape",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "quote",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rand",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rand_chacha",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rand_core",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rand_distr",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rawpointer",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "realfft",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "ref-cast",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "ref-cast-impl",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "referencing",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "regex",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "regex-automata",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "regex-syntax",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "reqwest",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rmp",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "rmp-serde",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "rs-conllu",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rtrb",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rubato",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rust-embed",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "rust-embed-impl",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "rust-embed-utils",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "rustc_version",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rustfft",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rustls-pki-types",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "ryu",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR BSL-1.0"
+    },
+    {
+      "name": "same-file",
+      "kind": "crate",
+      "licence": "Unlicense/MIT"
+    },
+    {
+      "name": "schannel",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "scopeguard",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "semver",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_bytes",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_core",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_derive",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_json",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_path_to_error",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_spanned",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_urlencoded",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "sha1",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "sha2",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "sharded-slab",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "shlex",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "simd-adler32",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "siphasher",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "slab",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "smallvec",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "socket2",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "spin",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "sqlx",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "sqlx-core",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "sqlx-sqlite",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "stable_deref_trait",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "strength_reduce",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "string_cache",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "string_cache_codegen",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "strsim",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "strum",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "strum_macros",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "syn",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "sync_wrapper",
+      "kind": "crate",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "synstructure",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "sysinfo",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tendril",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "termcolor",
+      "kind": "crate",
+      "licence": "Unlicense OR MIT"
+    },
+    {
+      "name": "thiserror",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "thiserror-impl",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "thread_local",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "time",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "time-core",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "tinystr",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "tokio",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tokio-macros",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tokio-native-tls",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tokio-stream",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tokio-tungstenite",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tokio-util",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "toml",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "toml_datetime",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "toml_parser",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "toml_writer",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "tower",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tower-http",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tower-layer",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tower-service",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tracing",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tracing-attributes",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tracing-core",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tracing-log",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tracing-subscriber",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "transpose",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "try-lock",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "ts-rs",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "ts-rs-macros",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "tungstenite",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "typenum",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "unicase",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "unicode-blocks",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "unicode-general-category",
+      "kind": "crate",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "unicode-ident",
+      "kind": "crate",
+      "licence": "(MIT OR Apache-2.0) AND Unicode-3.0"
+    },
+    {
+      "name": "unicode-script",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "unicode-segmentation",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "unicode-width",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "unicode-xid",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "unty",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "url",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "utf8_iter",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "utf8parse",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "uuid",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "uuid-simd",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "vcpkg",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "version_check",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "visibility",
+      "kind": "crate",
+      "licence": "Zlib OR MIT OR Apache-2.0"
+    },
+    {
+      "name": "vsimd",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "walkdir",
+      "kind": "crate",
+      "licence": "Unlicense/MIT"
+    },
+    {
+      "name": "want",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "web-time",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "web_atoms",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "webbrowser",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "winapi",
+      "kind": "crate",
+      "licence": "MIT/Apache-2.0"
+    },
+    {
+      "name": "winapi-util",
+      "kind": "crate",
+      "licence": "Unlicense OR MIT"
+    },
+    {
+      "name": "windowfunctions",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "windows",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-collections",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-core",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-future",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-implement",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-interface",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-link",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-numerics",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-result",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-strings",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-sys",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-threading",
+      "kind": "crate",
+      "licence": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "winnow",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "writeable",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "yoke",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "yoke-derive",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "zerocopy",
+      "kind": "crate",
+      "licence": "BSD-2-Clause OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "zerocopy-derive",
+      "kind": "crate",
+      "licence": "BSD-2-Clause OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "zerofrom",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "zerofrom-derive",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "zeroize",
+      "kind": "crate",
+      "licence": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "zerotrie",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "zerovec",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "zerovec-derive",
+      "kind": "crate",
+      "licence": "Unicode-3.0"
+    },
+    {
+      "name": "zmij",
+      "kind": "crate",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/code-frame",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/compat-data",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/core",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/generator",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/helper-compilation-targets",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/helper-globals",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/helper-module-imports",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/helper-module-transforms",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/helper-string-parser",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/helper-validator-identifier",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/helper-validator-option",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/helpers",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/parser",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/template",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/traverse",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@babel/types",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@jridgewell/gen-mapping",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@jridgewell/remapping",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@jridgewell/resolve-uri",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@jridgewell/sourcemap-codec",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@jridgewell/trace-mapping",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@next/env",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "@swc/helpers",
+      "kind": "package",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "baseline-browser-mapping",
+      "kind": "package",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "browserslist",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "caniuse-lite",
+      "kind": "package",
+      "licence": "CC-BY-4.0"
+    },
+    {
+      "name": "client-only",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "convert-source-map",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "debug",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "electron-to-chromium",
+      "kind": "package",
+      "licence": "ISC"
+    },
+    {
+      "name": "escalade",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "gensync",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "js-tokens",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "jsesc",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "json5",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "lru-cache",
+      "kind": "package",
+      "licence": "ISC"
+    },
+    {
+      "name": "ms",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "nanoid",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "next",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "node-releases",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "picocolors",
+      "kind": "package",
+      "licence": "ISC"
+    },
+    {
+      "name": "postcss",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "react",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "react-dom",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "scheduler",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "semver",
+      "kind": "package",
+      "licence": "ISC"
+    },
+    {
+      "name": "source-map-js",
+      "kind": "package",
+      "licence": "BSD-3-Clause"
+    },
+    {
+      "name": "styled-jsx",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "tslib",
+      "kind": "package",
+      "licence": "0BSD"
+    },
+    {
+      "name": "update-browserslist-db",
+      "kind": "package",
+      "licence": "MIT"
+    },
+    {
+      "name": "yallist",
+      "kind": "package",
+      "licence": "ISC"
+    },
+    {
+      "name": "Noto Sans Mono",
+      "kind": "font",
+      "licence": "OFL-1.1",
+      "attribution": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic)"
+    },
+    {
+      "name": "Pixelify Sans",
+      "kind": "font",
+      "licence": "OFL-1.1",
+      "attribution": "Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans)"
+    },
+    {
+      "name": "Press Start 2P",
+      "kind": "font",
+      "licence": "OFL-1.1",
+      "attribution": "Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name \"Press Start 2P\""
+    },
+    {
+      "name": ".env.example",
+      "kind": "release",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "LICENSE",
+      "kind": "release",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "NOTICE",
+      "kind": "release",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "README.md",
+      "kind": "release",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "lumingo.exe",
+      "kind": "release",
+      "licence": "Apache-2.0"
+    }
+  ],
+  "models": [
+    {
+      "id": "vad-silero",
+      "licence": "MIT",
+      "licenceUrl": "https://github.com/snakers4/silero-vad/blob/master/LICENSE",
+      "downloadable": false
+    },
+    {
+      "id": "stt-whisper-base-en",
+      "licence": "MIT",
+      "licenceUrl": "https://github.com/openai/whisper/blob/main/LICENSE",
+      "downloadable": false
+    },
+    {
+      "id": "stt-whisper-small-en",
+      "licence": "MIT",
+      "licenceUrl": "https://github.com/openai/whisper/blob/main/LICENSE",
+      "downloadable": false
+    },
+    {
+      "id": "stt-moonshine-english",
+      "licence": "MIT",
+      "licenceUrl": "https://github.com/moonshine-ai/moonshine",
+      "downloadable": false
+    },
+    {
+      "id": "stt-parakeet-tdt",
+      "licence": "CC-BY-4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "downloadable": false
+    },
+    {
+      "id": "tts-supertonic-3",
+      "licence": "OpenRAIL-M",
+      "licenceUrl": "",
+      "downloadable": false
+    },
+    {
+      "id": "tts-kokoro",
+      "licence": "Apache-2.0",
+      "licenceUrl": "https://www.apache.org/licenses/LICENSE-2.0",
+      "downloadable": false
+    },
+    {
+      "id": "tts-kitten",
+      "licence": "Apache-2.0",
+      "licenceUrl": "https://www.apache.org/licenses/LICENSE-2.0",
+      "downloadable": false
+    },
+    {
+      "id": "pron-wav2vec2-lv-60-espeak",
+      "licence": "Apache-2.0",
+      "licenceUrl": "https://www.apache.org/licenses/LICENSE-2.0",
+      "downloadable": false
+    },
+    {
+      "id": "pron-zipa-small",
+      "licence": "unknown",
+      "licenceUrl": "",
+      "downloadable": false
+    }
+  ]
+}
