@@ -67,7 +67,8 @@ implemented and tested in the engine, and are reachable through the server API;
 text chat and the unit player also through the command-line client. In the
 browser, every screen of the interface is a route today: the home screen plus
 `/onboarding/`, `/unit/`, `/talk/`, `/write/`, `/read/`, `/progress/`,
-`/settings/`, `/settings/privacy/`, `/settings/diagnostics/` and `/styleguide/`,
+`/settings/`, `/settings/privacy/`, `/settings/diagnostics/`, `/about/` and
+`/styleguide/`,
 with the quest map on `/unit/`. The voice half — the microphone and the speech
 engines — and the model downloads are what the browser does not have yet; the
 next paragraph gives the limit on each.
