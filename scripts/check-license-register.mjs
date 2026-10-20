@@ -47,9 +47,10 @@ const REGISTER_PATH = "docs/LICENSE_REGISTER.md";
 const MACHINE_SECTION = 10;
 const RULES_SECTION = 2;
 
-// The columns of the machine table, and of the attribution table.
+// The columns of the machine table. The attribution table's columns are the
+// generator's business: it reads that table, and a table it cannot read is a
+// broken source it reports.
 const MACHINE_COLUMNS = ["Item", "Kind", "Licence", "Status"];
-const ATTRIBUTION_COLUMNS = ["Item", "Notice"];
 
 // The files the generator writes, and the ones the register has to agree with.
 const NOTICE_PATH = "NOTICE";
@@ -66,12 +67,14 @@ function read(path) {
 }
 
 /**
- * Split an expression on a word, at the top level only.
+ * Split an expression on a word.
  *
- * The top level is the part of the expression that is not inside brackets, so
- * a bracket that groups alternatives is not split apart.
+ * `topLevel` says whether the split only happens outside brackets: the `AND`
+ * of a licence expression binds its groups, so it is read at the top level
+ * only, while the `OR` of a group lists its alternatives whatever brackets
+ * they are written in.
  */
-function splitTopLevel(text, word) {
+function splitOn(text, word, topLevel) {
   const parts = [];
   let depth = 0;
   let current = "";
@@ -81,7 +84,7 @@ function splitTopLevel(text, word) {
     const character = text[index];
     if (character === "(") depth += 1;
     else if (character === ")") depth -= 1;
-    if (depth === 0 && text.startsWith(word, index)) {
+    if ((!topLevel || depth === 0) && text.startsWith(word, index)) {
       const before = index === 0 ? "" : text[index - 1];
       const after = index + word.length < text.length ? text[index + word.length] : "";
       const boundaryBefore = before === "" || !isWordCharacter(before);
@@ -108,14 +111,14 @@ function splitTopLevel(text, word) {
  * expression is split on `AND` into groups, each group is split on `OR` into
  * alternatives, and the alternatives of a group are a set.
  *
- * `/` reads as `OR`, because that is how some packages write it, and every
- * space is dropped, because `MIT OR Apache-2.0` and `MIT OR Apache-2.0` with
- * other spacing name the same licences.
+ * `/` reads as `OR`, because that is how some packages write it, and the
+ * spaces are dropped, because the spacing a package writes is not part of the
+ * licence it names.
  */
 function licenceGroups(expression) {
   const normalised = expression.replace(/\//g, " OR ");
-  return splitTopLevel(normalised, "AND").map((group) => {
-    const alternatives = splitTopLevel(group, "OR")
+  return splitOn(normalised, "AND", true).map((group) => {
+    const alternatives = splitOn(group, "OR", false)
       .map((alternative) => alternative.replace(/[()]/g, "").replace(/\s+/g, ""))
       .filter((alternative) => alternative !== "");
     return [...new Set(alternatives)].sort();
@@ -193,6 +196,11 @@ function committed(path) {
   return readFileSync(full, "utf8");
 }
 
+/** The key a shipped component is looked up by: its kind and its name. */
+function shippedKey(kind, name) {
+  return JSON.stringify([kind, name]);
+}
+
 /**
  * The register against the build.
  *
@@ -207,6 +215,7 @@ function compare(components, notices, register) {
     licence: row[2].trim(),
     status: row[3].trim(),
   }));
+
   // The rows, by the item they are for. Two rows can carry the same item when
   // one is a crate and the other a package, so the kind tells them apart.
   const rowsByItem = new Map();
@@ -215,7 +224,9 @@ function compare(components, notices, register) {
     rowsByItem.get(row.item).push(row);
   }
 
-  const shipped = new Map(components.map((component) => [`${component.kind} ${component.name}`, component]));
+  const shipped = new Map(
+    components.map((component) => [shippedKey(component.kind, component.name), component]),
+  );
   const shippedNames = new Set(components.map((component) => component.name));
 
   // Rule 1, 2, 3 and 4: every shipped dependency has a row, and the row says
@@ -245,7 +256,7 @@ function compare(components, notices, register) {
   // Rule 5: every row is for something the build ships, and no item has two
   // rows of the same kind.
   for (const row of rows) {
-    if (!shipped.has(`${row.kind} ${row.item}`)) {
+    if (!shipped.has(shippedKey(row.kind, row.item))) {
       offenders.push(`${row.item} has a row but is not in the build`);
     }
     const same = rows.filter((other) => other.item === row.item && other.kind === row.kind);
@@ -275,8 +286,8 @@ function compare(components, notices, register) {
   // attribution table is a notice that was left out.
   for (const component of components) {
     const alternatives = licenceAlternatives(component.licence);
-    const wanted = [...needing].filter((licence) => alternatives.has(licence));
-    if (wanted.length === 0) continue;
+    const wants = [...needing].some((licence) => alternatives.has(licence));
+    if (!wants) continue;
     if (notices.has(component.name)) continue;
     offenders.push(
       `${component.name} is licensed ${component.licence} and needs a notice, but has no row in the attribution table`,
