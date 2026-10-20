@@ -146,6 +146,24 @@ const OVER_CLAIMS = [
   { pattern: /\bnothing\s+else\s+is\s+contacted\b/i, wording: '"nothing else is contacted"' },
 ];
 
+// The gate script's quick guard: the line that opens the part of the gate that
+// runs only in the full mode. The line that closes it is a `fi` in column 0 —
+// the `fi`s of the conditions inside the guard are indented, so only a guard's
+// own closing line sits in column 0.
+const QUICK_GUARD = 'if [ "$quick" = 0 ]; then';
+const GUARD_CLOSE = "fi";
+
+// A step of the gate: the line that names the step. The steps inside a guard
+// are indented, so the match tolerates leading whitespace.
+const STEP_LINE = /^\s*step\s+"/;
+
+// The shell keywords. A step whose first word is one of them is a condition
+// and not a command, so it names nothing a document could name.
+const SHELL_KEYWORDS = new Set([
+  "if", "then", "elif", "else", "fi", "for", "while", "until", "do", "done",
+  "case", "esac", "select", "function", "{", "}", "(", ")", "!", "&&", "||",
+]);
+
 /** A file's text, read from the repository root. */
 function read(path) {
   return readFileSync(join(ROOT, path), "utf8");
@@ -379,7 +397,102 @@ function deriveFacts() {
     throw new Error("a derived list came out empty");
   }
 
-  return { facts, envNames, modelIds, zipMembers, downloadHosts, manifestPath: MANIFEST_PATH, scheme, redirectWord };
+  // The commands the gate's quick mode runs. The gate script is the source:
+  // its step list is read out of the script, never written down here.
+  const gateCommands = deriveGateCommands(verifyScript);
+
+  return {
+    facts,
+    envNames,
+    modelIds,
+    zipMembers,
+    downloadHosts,
+    manifestPath: MANIFEST_PATH,
+    scheme,
+    redirectWord,
+    verifyScript,
+    gateCommands,
+  };
+}
+
+/**
+ * The commands the gate's quick mode runs, read out of the gate script.
+ *
+ * The gate script is split into segments at its quick guards: what is outside
+ * a guard runs in the quick mode, what is inside runs only in the full mode.
+ * A step is a `step "…"` line and the lines under it, and a step's command is
+ * the first line of its body that says something. The list is derived, so a
+ * step added to the gate is a step the documents have to name — and a gate
+ * this cannot read is a broken source, so it throws rather than passing.
+ */
+function deriveGateCommands(gatePath) {
+  const lines = read(gatePath).split(/\r?\n/);
+  const segments = [];
+  let segment = [];
+  let inside = false;
+  for (const line of lines) {
+    if (!inside) {
+      if (line === QUICK_GUARD) {
+        inside = true;
+        continue;
+      }
+      segment.push(line);
+    } else if (line === GUARD_CLOSE) {
+      inside = false;
+      segments.push(segment);
+      segment = [];
+    }
+  }
+  if (inside) throw new Error(`${gatePath} has a quick guard that is never closed`);
+  segments.push(segment);
+
+  const commands = [];
+  for (const block of segments) {
+    for (const body of stepBodies(block)) {
+      const command = stepCommand(body);
+      if (command) commands.push(command);
+    }
+  }
+  if (commands.length === 0) throw new Error(`${gatePath} has no step to read a command from`);
+  return commands;
+}
+
+/** The bodies of the steps in a block of the gate script. */
+function stepBodies(block) {
+  const bodies = [];
+  let index = 0;
+  while (index < block.length) {
+    if (!STEP_LINE.test(block[index])) {
+      index += 1;
+      continue;
+    }
+    let end = index + 1;
+    while (end < block.length && !STEP_LINE.test(block[end])) end += 1;
+    bodies.push(block.slice(index + 1, end));
+    index = end;
+  }
+  return bodies;
+}
+
+/**
+ * The command a step runs: the first line of its body that says something.
+ *
+ * A line that is blank or a comment says nothing. The rest is read as one
+ * line: the trailing backslash of a continued line is dropped and the
+ * whitespace is collapsed. A first word that is a shell keyword means the
+ * step is a condition and not a command, so it names nothing. A leading
+ * `node ` is dropped: the interpreter is not the program, and the file name
+ * is what a document names.
+ */
+function stepCommand(body) {
+  for (const line of body) {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#")) continue;
+    const collapsed = trimmed.replace(/\\\s*$/, "").replace(/\s+/g, " ").trim();
+    if (SHELL_KEYWORDS.has(collapsed.split(" ")[0])) return null;
+    return collapsed.startsWith("node ") ? collapsed.slice("node ".length) : collapsed;
+  }
+  return null;
 }
 
 /** Which facts each document must state. The values live in `facts`. */
@@ -612,6 +725,27 @@ function checkOverClaims(path, text, derived) {
   return violations;
 }
 
+/**
+ * The gate commands a document that names the gate has to name too.
+ *
+ * Wave 1 added the gate to the commit hook and the documents did not follow:
+ * a document that names the gate script and does not say what it runs sends
+ * the reader to a script whose steps they cannot know. So a document that
+ * names the gate has to name every command the quick mode runs. The rule is
+ * positive — it asks for the command to be present — so it fires only when a
+ * document stops naming a command, never on a change of wording around it.
+ */
+function checkGateCommands(path, text, derived) {
+  const violations = [];
+  if (occurrences(text, derived.verifyScript).length === 0) return violations;
+  for (const command of derived.gateCommands) {
+    if (!occurrences(text, command).includes(command)) {
+      violations.push(`${path}: does not name the gate command "${command}"`);
+    }
+  }
+  return violations;
+}
+
 function main() {
   const derived = deriveFacts();
   const required = requiredFacts(derived);
@@ -625,6 +759,7 @@ function main() {
     violations.push(...checkFacts(path, text, derived.facts, required[path]));
     violations.push(...checkRedirectRule(path, text, derived));
     violations.push(...checkOverClaims(path, text, derived));
+    violations.push(...checkGateCommands(path, text, derived));
   }
   if (violations.length > 0) {
     console.error("The release documents must match the code. These do not:");
