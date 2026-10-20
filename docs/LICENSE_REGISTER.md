@@ -17,7 +17,7 @@ anything marked `review`, read the full license text before use.
 
 ## 2. Rules
 
-1. **Status values.** `ok`: license known and compatible, checked on the date shown, against the package that was actually downloaded. `verify`: believed compatible, must be checked at the source before use. `review`: usable only under the conditions in the notes. `blocked`: must not be used.
+1. **Status values.** `ok`: license known and compatible, checked on the date shown. In the prose sections 3 to 7 that check is a human one: someone read the license text at the source, against the package that was actually downloaded. In the machine table of section 10 the check is a machine one, and it means exactly this: the license is the one the package's own metadata states, and it is on the allow list that `cargo deny` and `check-licenses.mjs` enforce, as of the date shown. `verify`: believed compatible, must be checked at the source before use. `review`: usable only under the conditions in the notes. `blocked`: must not be used.
 2. **Code.** Allowed without discussion: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, Unlicense, CC0-1.0, BSL-1.0, Unicode licenses. A row with status `review` is needed first for MPL-2.0 and LGPL. Blocked: GPL, AGPL, SSPL, and any license with a non-commercial or field-of-use limit on code.
 3. **Models.** A model may carry use restrictions (for example OpenRAIL-M) if the project does not redistribute it, the app shows the license before download, and the restrictions do not conflict with normal use of a language tutor. Non-commercial model licenses are blocked.
 4. **Content sources.** Authored content is original. Third-party text may enter authored files only if its license is compatible with CC BY-SA 4.0. Otherwise it stays in its own file under its own terms and is used as data.
@@ -150,6 +150,7 @@ upstream hosts. Each stays `verify` until someone reads the license at the sourc
 3. If the status is `review` or `blocked`, stop and ask the owner.
 4. If the item is a model, put its license and license URL in `models/manifest.toml` too.
 5. If the license needs attribution, add the line to `NOTICE`.
+6. A new row in the machine table of section 10 is not written by hand: run `scripts/gen-notices.mjs --print` to get the rows the build now has, read the license of each new item at the source, and keep the row's status `ok` only when the license is known and compatible. An item whose license is not known yet gets no `ok` row — it goes to the owner first, as step 3 says.
 
 ## 9. Promotional video
 
@@ -172,8 +173,65 @@ release, or the repository. Remotion's licence (free for individuals and
 companies of up to three people) therefore does not apply to this repository's
 distribution, and no row is needed for it.
 
-This section is deliberately last. Adding it as section 6 shifted every section
+This section is not the last one any more: section 10 came after it. The rule
+is the same as it was. Adding a section in the middle shifted every section
 after it, and five cross-references in the repository point at sections by
 number — `crates/speech/README.md`, `deny.toml`, `models/manifest.toml` and two
 rows above all broke silently. New sections go at the end, or the references
 need updating in the same commit.
+
+## 10. The shipped set
+
+The shipped set is what the Windows x64 default-feature build actually carries:
+the `lumingo.exe` the release zip holds. It is not the whole of `Cargo.lock` —
+the lock file and `cargo metadata`'s resolve graph carry roughly two hundred
+further crates that the default build never activates (the off-by-default
+`sherpa`, `ort` and `cpal-backend` stacks, and the dev-dependencies), and those
+keep their rows in the earlier sections with their own statuses:
+`webpki-roots` stays `review`, section 6's `verify` rows stay `verify`, and every
+`review` row stays `review`. Two of them are repo assets rather than build
+items — the promo video's audio in section 9 and the CEFR-J vocabulary profile
+in section 6 — and neither gets a row here. Section 3's sentence about reading
+the licenses from the crate metadata of the versions in `Cargo.lock` stays
+true, and this section does not contradict it: this section says which of those
+crates the default build links. Two groups are outside the set and get no row
+here: the 15 workspace crates are the project itself, and the project's own
+license is stated on its own in section 1; and the `@next/swc-*` compiler
+binaries are Next.js's native compiler, one optional package per platform, and
+they are build-time tooling that never reaches the exported UI or the release
+zip. The set is derived five ways: the crates by
+`cargo tree --edges normal,build --prefix none --format "{p} {l}" --target x86_64-pc-windows-msvc`,
+the packages by `pnpm licenses list --prod --json` run in `apps/web`
+(`pnpm --dir apps/web licenses list --prod --json`), minus the `@next/swc-*`
+family; the fonts by the families in `apps/web/src/styles/fonts.css`, matched
+to the OFL texts in `apps/web/public/fonts/licenses/`; the models by
+`models/manifest.toml`; and the release files by the `members` array in
+`scripts/package-release.mjs`. The target is pinned in the crate command, so
+the set is the same on the Linux development machine and on the Windows runner.
+Today that is 345 third-party crates, 51 packages, 3 font families, 0
+downloadable models and 5 release members: 404 components in all, every one of
+them rendered on the About page and listed in the `NOTICE`. The check proves
+the register-row dimension (NFR-L1) — that this table agrees with the build,
+and that the generated artifacts are complete — and it does **not** check
+licence compatibility: that is `cargo deny check licenses` for the Rust crates
+and `apps/web/scripts/check-licenses.mjs` for the JavaScript packages, both
+already wired into the gate. The check does not restate their allow list and
+does not claim that dimension.
+
+The table has one row per shipped item, sorted by kind and then by item. The
+columns are `Item`, `Kind`, `Licence` and `Status`. `Kind` is one of `crate`,
+`package`, `font`, `model` or `release`. `Status` is `ok`, the only value the
+check accepts for a shipped item, and rule 1 says what `ok` means for this
+table: the licence is the one the package's own metadata states, and it is on
+the allow list that `cargo deny` and `check-licenses.mjs` enforce, as of the
+date shown. A dependency that enters the build gets one new row, and a
+dependency that leaves gets its row deleted. A row's licence is the licence
+the source states, not a paraphrase of it.
+
+The rows are not written by hand. `scripts/gen-notices.mjs` writes them, and
+`scripts/check-license-register.mjs` checks them.
+
+Checked 2026-10-21.
+
+| Item | Kind | Licence | Status |
+|---|---|---|---|
