@@ -203,4 +203,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Lumingo $VERSION" --notes "Windows x64 build of Lumingo $VERSION. Drafted for review, not published." dist/lumingo-$VERSION-windows-x64.zip dist/checksums.txt
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Lumingo $VERSION" --notes-file docs/RELEASE_NOTES.md dist/lumingo-$VERSION-windows-x64.zip dist/checksums.txt
