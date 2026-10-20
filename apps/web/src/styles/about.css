@@ -1,0 +1,22 @@
+/* The About screen.
+ *
+ * The component lists are long: the crates alone are hundreds of names, so
+ * each list scrolls inside its own panel instead of making the page a wall of
+ * names. The reader can still reach every row.
+ */
+
+.about__scroll {
+  max-height: 26rem;
+  overflow: auto;
+}
+
+/* The heading of one group, next to its count: the panel's title style
+ * without the panel's bottom margin, so the badge sits beside it. */
+.about__kind {
+  margin: 0;
+}
+
+/* A note under a row's text: the block display keeps it on its own line. */
+.about__note {
+  display: block;
+}
