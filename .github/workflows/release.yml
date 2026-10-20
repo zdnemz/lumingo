@@ -1,0 +1,206 @@
+# The release build: the static export, the server with that export embedded,
+# the zip, the checks on the zip, the artifact and the draft release.
+#
+# The order of the steps is not free. The server embeds apps/web/out, so the
+# export has to exist before the server is compiled, or the binary serves the
+# "not built" page.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version to build. A tag push takes the tag name without its leading v."
+        required: false
+        type: string
+        default: "0.0.0-dev"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Resolve the version
+        id: version
+        shell: bash
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$DISPATCH_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "no version could be resolved" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # The export must not need a Node server at run time. The guard fails the
+      # build when it does, so it runs before anything is compiled.
+      - name: "Export guard: the web export must not need a server feature"
+        shell: bash
+        run: node scripts/check-export-only.mjs
+
+      - name: Install the web dependencies
+        working-directory: apps/web
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Static export builds
+        working-directory: apps/web
+        shell: bash
+        run: pnpm build
+
+      # The UI is embedded from apps/web/out, which the step above produced.
+      - name: Release build of the server with the UI embedded
+        shell: bash
+        run: cargo build --release --target x86_64-pc-windows-msvc -p tutor-server
+
+      - name: Package the release zip
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          node scripts/package-release.mjs --exe target/x86_64-pc-windows-msvc/release/tutor-server.exe --readme docs/RELEASE_README.md --out dist --version "$VERSION" --platform windows-x64
+
+      - name: The release zip is at or under 100 MB (NFR-P7)
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $zip = "dist/lumingo-$env:VERSION-windows-x64.zip"
+          $bytes = (Get-Item $zip).Length
+          Write-Host "the release zip is $bytes bytes"
+          if ($bytes -gt 100000000) {
+            Write-Error "the release zip is $bytes bytes, over the 100000000 byte limit"
+            exit 1
+          }
+
+      - name: Unpack the zip and check its members and checksums
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $zip = "dist/lumingo-$env:VERSION-windows-x64.zip"
+          $out = "dist/unpacked"
+          if (Test-Path $out) { Remove-Item -Recurse -Force $out }
+          Expand-Archive -Path $zip -DestinationPath $out -Force
+          $expected = @(".env.example", "LICENSE", "NOTICE", "README.md", "lumingo.exe")
+          $actual = @(Get-ChildItem -Path $out -File -Force | ForEach-Object { $_.Name })
+          if ($actual.Count -ne 5) {
+            Write-Error "the archive holds $($actual.Count) files, expected exactly 5"
+            exit 1
+          }
+          foreach ($name in $expected) {
+            if ($actual -notcontains $name) {
+              Write-Error "the archive does not hold $name"
+              exit 1
+            }
+          }
+          $sums = @{}
+          foreach ($line in (Get-Content "dist/checksums.txt")) {
+            if ($line -notmatch "^([0-9a-f]{64})  (.+)$") {
+              Write-Error "unreadable checksum line: $line"
+              exit 1
+            }
+            $sums[$Matches[2]] = $Matches[1]
+          }
+          if ($sums.Count -ne 5) {
+            Write-Error "the checksum file holds $($sums.Count) entries, expected exactly 5"
+            exit 1
+          }
+          foreach ($name in $expected) {
+            $want = $sums[$name]
+            if (-not $want) {
+              Write-Error "the checksum file has no line for $name"
+              exit 1
+            }
+            $got = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $out $name)).Hash.ToLowerInvariant()
+            if ($got -ne $want) {
+              Write-Error "the checksum of $name does not match the checksum file"
+              exit 1
+            }
+          }
+          Write-Host "the archive holds the five expected members and every checksum matches"
+
+      - name: "Smoke test: the release executable serves the embedded UI"
+        shell: pwsh
+        run: |
+          $port = 8765
+          $data = Join-Path $env:RUNNER_TEMP "lumingo-smoke-data"
+          if (Test-Path $data) { Remove-Item -Recurse -Force $data }
+          New-Item -ItemType Directory -Force -Path $data | Out-Null
+          $exe = (Resolve-Path "dist/unpacked/lumingo.exe").Path
+          $proc = Start-Process -FilePath $exe -ArgumentList @("--no-open", "--port", "$port", "--data-dir", $data, "--curriculum-dir", "curriculum/examples", "--models-manifest", "models/manifest.toml") -WorkingDirectory $PWD.Path -PassThru -NoNewWindow -RedirectStandardOutput "$env:RUNNER_TEMP\lumingo-smoke.out" -RedirectStandardError "$env:RUNNER_TEMP\lumingo-smoke.err"
+          $body = $null
+          $deadline = (Get-Date).AddSeconds(60)
+          while ((Get-Date) -lt $deadline) {
+            $proc.Refresh()
+            if ($proc.HasExited) {
+              Write-Error "the server exited with code $($proc.ExitCode) before answering"
+              break
+            }
+            $raw = & curl.exe --silent --fail --max-time 5 "http://127.0.0.1:$port/" 2>$null
+            if ($LASTEXITCODE -eq 0) {
+              $body = ($raw -join "`n")
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          if (-not $body) {
+            Write-Error "the server did not answer on http://127.0.0.1:$port/ within 60 s"
+            exit 1
+          }
+          if ($body -notmatch "/_next/static/") {
+            Write-Error "the page does not reference the built static assets"
+            exit 1
+          }
+          if ($body -match "has not been built") {
+            Write-Error "the server served the page for an unbuilt UI"
+            exit 1
+          }
+          Write-Host "the release executable served the embedded UI"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lumingo-${{ steps.version.outputs.version }}-windows-x64
+          path: |
+            dist/lumingo-${{ steps.version.outputs.version }}-windows-x64.zip
+            dist/checksums.txt
+          if-no-files-found: error
+
+      # Only a tag push publishes anything. A manual run builds and uploads the
+      # artifact and stops there.
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Lumingo $VERSION" --notes "Windows x64 build of Lumingo $VERSION. Drafted for review, not published." dist/lumingo-$VERSION-windows-x64.zip dist/checksums.txt
