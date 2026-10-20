@@ -6,6 +6,7 @@ import { settingsId } from "./parts/settings.id";
 import { talkId } from "./parts/talk.id";
 import { writeId } from "./parts/write.id";
 import { readId } from "./parts/read.id";
+import { aboutId } from "./parts/about.id";
 
 // Indonesian strings. Same keys as `en.ts`; the type below makes a missing key a compile error.
 export const id = {
@@ -16,4 +17,5 @@ export const id = {
   ...talkId,
   ...writeId,
   ...readId,
+  ...aboutId,
 } as const satisfies Record<MessageKey, string>;

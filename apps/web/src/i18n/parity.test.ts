@@ -14,7 +14,7 @@ import { en } from "./en";
  * screens may be written at the same time, so the checks run per pair, and the
  * cross-pair duplicate check below keeps the composed dictionary honest.
  */
-const AREAS = ["shell", "unit", "progress", "settings", "talk", "write", "read"] as const;
+const AREAS = ["shell", "unit", "progress", "settings", "talk", "write", "read", "about"] as const;
 
 function keysOf(file: string): string[] {
   const path = fileURLToPath(new URL(file, import.meta.url));

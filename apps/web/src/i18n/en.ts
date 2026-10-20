@@ -14,6 +14,7 @@ import { settingsEn } from "./parts/settings.en";
 import { talkEn } from "./parts/talk.en";
 import { writeEn } from "./parts/write.en";
 import { readEn } from "./parts/read.en";
+import { aboutEn } from "./parts/about.en";
 
 export const en = {
   ...shellEn,
@@ -23,6 +24,7 @@ export const en = {
   ...talkEn,
   ...writeEn,
   ...readEn,
+  ...aboutEn,
 } as const;
 
 export type MessageKey = keyof typeof en;
