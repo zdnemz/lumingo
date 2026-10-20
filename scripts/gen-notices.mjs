@@ -416,31 +416,76 @@ export function findTable(markdown, header) {
 }
 
 /**
+ * The key a shipped component is looked up by: its kind and its name.
+ *
+ * The name alone is not enough: `semver` is in the shipped set twice, once as
+ * a crate and once as a package, so a table that is keyed on the name alone
+ * cannot say which of the two a row is for.
+ */
+export function shippedKey(kind, name) {
+  return JSON.stringify([kind, name]);
+}
+
+/**
  * The register's attribution table: the notices the build cannot prove.
  *
  * The table is the one place where wording is allowed, so it is read from the
  * register and not invented here. A table that is missing, that cannot be
  * read, or that is empty throws: the shipped set holds MPL-2.0 components,
  * so an empty table is a broken source, not a pass.
+ *
+ * A row is keyed on the item's name and its kind, the way the machine table
+ * is: one row per shipped item of one kind.
  */
 export function readAttributions() {
   const register = read(REGISTER_PATH);
   const section = registerSection(register, REGISTER_SECTION);
   if (section === null) throw new Error(`the register has no section ${REGISTER_SECTION}`);
-  const table = findTable(section, ["Item", "Notice"]);
+  const table = findTable(section, ["Item", "Kind", "Notice"]);
   if (table === null) {
     throw new Error(`the register's section ${REGISTER_SECTION} has no attribution table`);
   }
-  const notices = new Map();
+  const rows = [];
   for (const row of table.rows) {
     const item = row[0].trim();
-    const notice = row[1].trim();
+    const kind = row[1].trim();
+    const notice = row[2].trim();
     if (item === "") throw new Error("the attribution table has a row with no item");
+    if (kind === "") throw new Error(`the attribution row for ${item} has no kind`);
     if (notice === "") throw new Error(`the attribution row for ${item} has no notice`);
-    notices.set(item, notice);
+    rows.push({ name: item, kind, notice });
   }
-  if (notices.size === 0) throw new Error("the register's attribution table is empty");
-  return notices;
+  if (rows.length === 0) throw new Error("the register's attribution table is empty");
+  return rows;
+}
+
+/**
+ * The notices of the attribution table, and what is wrong with the rest.
+ *
+ * A row is matched to a shipped component by its name and its kind. A row
+ * that matches no component is a notice that goes nowhere, and two rows for
+ * the same component are two notices for one component: both are reported
+ * here, and the caller decides what to do about them. The generator refuses
+ * to write a NOTICE from a table in that state; the check names the rows.
+ */
+export function resolveNotices(components, rows) {
+  const shipped = new Set(components.map((component) => shippedKey(component.kind, component.name)));
+  const notices = new Map();
+  const unmatched = [];
+  const duplicates = [];
+  for (const row of rows) {
+    const key = shippedKey(row.kind, row.name);
+    if (!shipped.has(key)) {
+      unmatched.push(row);
+      continue;
+    }
+    if (notices.has(key)) {
+      duplicates.push(row);
+      continue;
+    }
+    notices.set(key, row.notice);
+  }
+  return { notices, unmatched, duplicates };
 }
 
 /**
@@ -508,14 +553,14 @@ function renderNotice(components, project, notices) {
   lines.push("");
   for (const crate of ofKind(components, "crate")) {
     lines.push(`- ${crate.name} — ${crate.licence}`);
-    lines.push(...noticeLines(notices.get(crate.name)));
+    lines.push(...noticeLines(notices.get(shippedKey(crate.kind, crate.name))));
   }
   lines.push("");
   lines.push(`JavaScript packages in this build (${ofKind(components, "package").length}):`);
   lines.push("");
   for (const pkg of ofKind(components, "package")) {
     lines.push(`- ${pkg.name} — ${pkg.licence}`);
-    lines.push(...noticeLines(notices.get(pkg.name)));
+    lines.push(...noticeLines(notices.get(shippedKey(pkg.kind, pkg.name))));
   }
   lines.push("");
   lines.push(
@@ -524,7 +569,7 @@ function renderNotice(components, project, notices) {
   lines.push("");
   for (const font of ofKind(components, "font")) {
     lines.push(`- ${font.name} — ${font.licence} — ${font.attribution}`);
-    lines.push(...noticeLines(notices.get(font.name)));
+    lines.push(...noticeLines(notices.get(shippedKey(font.kind, font.name))));
   }
   lines.push("");
   lines.push("Speech models:");
@@ -537,7 +582,7 @@ function renderNotice(components, project, notices) {
   } else {
     for (const model of models) {
       lines.push(`- ${model.name} — ${model.licence}`);
-      lines.push(...noticeLines(notices.get(model.name)));
+      lines.push(...noticeLines(notices.get(shippedKey(model.kind, model.name))));
     }
   }
   lines.push("");
@@ -545,7 +590,7 @@ function renderNotice(components, project, notices) {
   lines.push("");
   for (const member of ofKind(components, "release")) {
     lines.push(`- ${member.name} — ${member.licence}`);
-    lines.push(...noticeLines(notices.get(member.name)));
+    lines.push(...noticeLines(notices.get(shippedKey(member.kind, member.name))));
   }
   lines.push("");
   return lines.join("\n");
@@ -566,7 +611,7 @@ function renderData(components, models, project, notices) {
     {
       project: { code: project.code, content: project.content },
       components: components.map((component) => {
-        const attribution = notices.get(component.name) ?? component.attribution;
+        const attribution = notices.get(shippedKey(component.kind, component.name)) ?? component.attribution;
         return attribution === undefined
           ? { name: component.name, kind: component.kind, licence: component.licence }
           : {
@@ -657,7 +702,18 @@ function main() {
     return 0;
   }
 
-  const notices = readAttributions();
+  const rows = readAttributions();
+  const { notices, unmatched, duplicates } = resolveNotices(components, rows);
+  if (unmatched.length > 0) {
+    const row = unmatched[0];
+    throw new Error(
+      `the attribution row for ${row.name} as a ${row.kind} names nothing the build ships`,
+    );
+  }
+  if (duplicates.length > 0) {
+    const row = duplicates[0];
+    throw new Error(`the attribution table has two rows for ${row.name} as a ${row.kind}`);
+  }
   const files = [
     { path: NOTICE_PATH, text: renderNotice(components, project, notices) },
     { path: DATA_PATH, text: renderData(components, models, project, notices) },

@@ -9,6 +9,11 @@
 // the generated NOTICE and the About page's data are what the generator
 // writes, so the artifacts are complete.
 //
+// Both tables are keyed on the item's name and its kind. The name alone is
+// not enough: `semver` is in the shipped set twice, once as a crate and once
+// as a package, so a row that named only the item could not say which of the
+// two it was for.
+//
 // What this check does NOT prove: licence compatibility. `cargo deny check
 // licenses` (the Rust crates) and `apps/web/scripts/check-licenses.mjs` (the
 // JavaScript packages) own that dimension, and their allow list is not
@@ -36,6 +41,8 @@ import {
   registerSection,
   renderData,
   renderNotice,
+  resolveNotices,
+  shippedKey,
 } from "./gen-notices.mjs";
 
 // The repository root, found from this script's own path, so the script works
@@ -197,8 +204,9 @@ function committed(path) {
 }
 
 /** The key a shipped component is looked up by: its kind and its name. */
-function shippedKey(kind, name) {
-  return JSON.stringify([kind, name]);
+function needsNotice(licence, needing) {
+  const alternatives = licenceAlternatives(licence);
+  return [...needing].some((name) => alternatives.has(name));
 }
 
 /**
@@ -206,10 +214,16 @@ function shippedKey(kind, name) {
  *
  * Every rule below is one thing the register has to say about the build, and
  * every offender is one thing it says wrong.
+ *
+ * The attribution table is keyed on the item's name and its kind, the way the
+ * machine table is: `semver` is in the shipped set twice, once as a crate and
+ * once as a package, and a row that named only the item could not say which
+ * of the two it was for.
  */
-function compare(components, notices, register) {
+function compare(components, attributions, register) {
   const offenders = [];
-  const rows = machineRows(register).map((row) => ({
+  const { notices, unmatched, duplicates } = resolveNotices(components, attributions);
+  const machine = machineRows(register).map((row) => ({
     item: row[0].trim(),
     kind: row[1].trim(),
     licence: row[2].trim(),
@@ -219,7 +233,7 @@ function compare(components, notices, register) {
   // The rows, by the item they are for. Two rows can carry the same item when
   // one is a crate and the other a package, so the kind tells them apart.
   const rowsByItem = new Map();
-  for (const row of rows) {
+  for (const row of machine) {
     if (!rowsByItem.has(row.item)) rowsByItem.set(row.item, []);
     rowsByItem.get(row.item).push(row);
   }
@@ -227,7 +241,6 @@ function compare(components, notices, register) {
   const shipped = new Map(
     components.map((component) => [shippedKey(component.kind, component.name), component]),
   );
-  const shippedNames = new Set(components.map((component) => component.name));
 
   // Rule 1, 2, 3 and 4: every shipped dependency has a row, and the row says
   // what the build says.
@@ -255,11 +268,11 @@ function compare(components, notices, register) {
 
   // Rule 5: every row is for something the build ships, and no item has two
   // rows of the same kind.
-  for (const row of rows) {
+  for (const row of machine) {
     if (!shipped.has(shippedKey(row.kind, row.item))) {
       offenders.push(`${row.item} has a row but is not in the build`);
     }
-    const same = rows.filter((other) => other.item === row.item && other.kind === row.kind);
+    const same = machine.filter((other) => other.item === row.item && other.kind === row.kind);
     if (same.length > 1 && row === same[0]) {
       offenders.push(`${row.item} has ${same.length} rows of kind ${row.kind}`);
     }
@@ -274,27 +287,42 @@ function compare(components, notices, register) {
     }
   }
 
-  // Rule 8: a notice for a component the artifact does not contain is a
-  // false claim.
-  for (const item of notices.keys()) {
-    if (!shippedNames.has(item)) {
-      offenders.push(`${item} has an attribution notice but is not in the build`);
-    }
+  // Rule 8: a notice for a component the artifact does not contain is a false
+  // claim. The key is the name and the kind, so a row cannot slip onto the
+  // other kind of the same name.
+  for (const row of unmatched) {
+    offenders.push(
+      `${row.name} has an attribution notice but is not in the build as a ${row.kind}`,
+    );
+  }
+
+  // A row for a component whose licence needs no notice is a claim that the
+  // component needs one, and it is the other half of rule 9.
+  for (const row of attributions) {
+    const component = shipped.get(shippedKey(row.kind, row.name));
+    if (component === undefined) continue;
+    if (needsNotice(component.licence, needing)) continue;
+    offenders.push(
+      `${row.name} has an attribution notice as a ${row.kind}, but its licence ${component.licence} does not need a notice`,
+    );
+  }
+
+  // Two notices for one component is ambiguous: which one is the notice?
+  for (const row of duplicates) {
+    offenders.push(`${row.name} has two attribution notices as a ${row.kind}`);
   }
 
   // Rule 9: a component whose licence needs a notice and has no row in the
   // attribution table is a notice that was left out.
   for (const component of components) {
-    const alternatives = licenceAlternatives(component.licence);
-    const wants = [...needing].some((licence) => alternatives.has(licence));
-    if (!wants) continue;
-    if (notices.has(component.name)) continue;
+    if (!needsNotice(component.licence, needing)) continue;
+    if (notices.has(shippedKey(component.kind, component.name))) continue;
     offenders.push(
       `${component.name} is licensed ${component.licence} and needs a notice, but has no row in the attribution table`,
     );
   }
 
-  return { offenders, rowCount: rows.length };
+  return { offenders, rowCount: machine.length, notices };
 }
 
 function main() {
@@ -308,9 +336,9 @@ function main() {
     return 0;
   }
 
-  const notices = readAttributions();
+  const attributions = readAttributions();
   const register = read(REGISTER_PATH);
-  const { offenders, rowCount } = compare(components, notices, register);
+  const { offenders, rowCount, notices } = compare(components, attributions, register);
 
   // Rule 6: the generated artifacts are what the generator writes.
   const files = [

@@ -651,9 +651,17 @@ is a false claim, and a shipped item that needs a notice but has no row here
 is a notice that was left out; `scripts/check-license-register.mjs` fails on
 both.
 
-| Item | Notice |
-|---|---|
-| caniuse-lite | caniuse-lite, browser support data used by the Next.js build, is licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). It is not part of the shipped application. |
-| colored | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/colored and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
-| cssparser | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/cssparser and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
-| dtoa-short | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/dtoa-short and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
+The columns are `Item`, `Kind` and `Notice`, and a row is keyed on the item's
+name **and** its kind, the way the machine table is. The name alone is not
+enough: `semver` is in the shipped set twice, once as a crate and once as a
+package, so a row that named only the item could not say which of the two it
+was for. A row whose name and kind name nothing the build ships is a notice
+that goes nowhere, and two rows for the same name and kind are two notices for
+one component; the check fails on both.
+
+| Item | Kind | Notice |
+|---|---|---|
+| caniuse-lite | package | caniuse-lite, browser support data used by the Next.js build, is licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). It is not part of the shipped application. |
+| colored | crate | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/colored and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
+| cssparser | crate | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/cssparser and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
+| dtoa-short | crate | Unmodified, used as a dependency of harper-core 0.68.0. Its source is at https://crates.io/crates/dtoa-short and the Mozilla Public License 2.0 text is at https://www.mozilla.org/MPL/2.0/ |
